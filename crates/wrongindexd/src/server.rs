@@ -852,9 +852,10 @@ async fn dispatch_inner(
                 .await?;
             // Opening the index through the WrongStack engine runs its schema
             // initializer (a potential write), so reads also require ownership.
-            if ownership.state != wrongindex_contracts::Ownership::Owned
-                || !shared.owners.holds(&pid)
-            {
+            // The run guard also keeps ownership (and the engine's handle on
+            // the store) from being released while this read is in flight.
+            let in_use = shared.owners.begin_run(&pid);
+            if ownership.state != wrongindex_contracts::Ownership::Owned || in_use.is_none() {
                 return Err(ErrorBody::new(
                     ErrorCode::OwnerConflict,
                     "queries through the preview engine require ownership; claim the project first",
@@ -876,6 +877,7 @@ async fn dispatch_inner(
                     Duration::from_secs(60),
                 )
                 .await?;
+            drop(in_use);
             Ok(json!({
                 "projectId": pid,
                 "daemonInstanceId": shared.instance_id,

@@ -236,6 +236,15 @@ pub async fn release(
         return Ok(status);
     };
     let epoch = guard.info().epoch;
+    // No run is in flight (take_when_idle); close the engine's pooled handle
+    // before the lock is handed back so no handle outlives ownership.
+    let pid = project_id.to_string();
+    if let Ok(project) = shared.registry(move |r| r.get_project(&pid)).await {
+        shared
+            .engine
+            .release_store(&project.checkout_root, &project.index_dir)
+            .await;
+    }
     tokio::task::spawn_blocking(move || guard.release())
         .await
         .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;

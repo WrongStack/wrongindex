@@ -238,6 +238,23 @@ impl Engine {
         result
     }
 
+    /// Make the worker close any store it holds for this index. Never starts
+    /// a worker; if the running one cannot confirm, it is killed so the OS
+    /// closes its handles. Called before ownership is handed back.
+    pub async fn release_store(&self, project_root: &str, index_dir: &str) {
+        let mut guard = self.worker.lock().await;
+        let Some(w) = guard.as_mut() else { return };
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let args = json!({"projectRoot": project_root, "indexDir": index_dir});
+        if let Err(e) = Self::exchange(w, id, "release", args, Duration::from_secs(10)).await {
+            warn!("engine_release_failed", {"error": e.to_string()});
+            if let Some(mut dead) = guard.take() {
+                let _ = dead.child.kill().await;
+                let _ = dead.child.wait().await;
+            }
+        }
+    }
+
     pub async fn hello(&self) -> Option<Value> {
         self.worker.lock().await.as_ref().map(|w| w.hello.clone())
     }
