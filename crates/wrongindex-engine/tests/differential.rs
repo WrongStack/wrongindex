@@ -446,12 +446,295 @@ fn native_matches_wrongstack_on_generated_projects() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// A Rust crate with its documentation and schema files: README/CHANGELOG/
+/// docs with relative, anchored, wiki and external links, SQL with foreign
+/// keys, Protobuf with imports and RPC types, GraphQL with interfaces and
+/// field types, and the build/infra files the regex extractor reads
+/// (Dockerfile, Makefile, CMakeLists.txt, Terraform).
+fn scenario_documented_crate(root: &Path) {
+    write(
+        root,
+        "Cargo.toml",
+        "[package]\nname = \"documented\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = \"1\"\n",
+    );
+    write(
+        root,
+        "src/lib.rs",
+        "//! Documented crate.\npub mod db;\n\npub use db::Store;\n\npub fn open() -> Store {\n    Store::default()\n}\n",
+    );
+    write(
+        root,
+        "src/db.rs",
+        "use crate::open;\n\n#[derive(Default)]\npub struct Store;\n\nimpl Store {\n    pub fn users(&self) {}\n}\n",
+    );
+    write(
+        root,
+        "README.md",
+        "# Documented\n\nSee the [guide](docs/guide.md), the [API](./docs/api.md#store) and the\n[changelog](CHANGELOG.md). ![logo](assets/logo.png)\n[Home](https://example.com) [[Glossary]] [[docs/api|API docs]]\n\n## Install\n\n```bash\n# not a heading\ncargo add documented\n```\n\n## Usage\n[missing](./nope.md) [src](src/lib.rs)\n",
+    );
+    write(
+        root,
+        "CHANGELOG.md",
+        "# Changelog\n\n## [0.1.0] - 2026-01-01\n### Added\n- Initial release ([#1](https://github.com/x/y/pull/1))\n- See [README](README.md)\n",
+    );
+    write(
+        root,
+        "docs/guide.md",
+        "---\ntitle: Guide\n---\n# Guide\n\nBack to [README](../README.md). Next: [API](api.md).\n\n## Store\n\n~~~sql\n# inside tilde fence\n~~~\n",
+    );
+    write(
+        root,
+        "docs/api.md",
+        "# API\r\n\r\n## Store\r\n\r\n[Guide](guide.md#store) [schema](../db/schema.sql)\r\n",
+    );
+    write(
+        root,
+        "docs/Glossary.md",
+        "# Glossary\n\n## Store\nA [[Guide]] term.\n",
+    );
+    write(
+        root,
+        "db/schema.sql",
+        "-- schema\nCREATE TABLE teams (id INTEGER PRIMARY KEY);\nCREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  team_id INTEGER REFERENCES teams(id)\n);\nCREATE VIEW active AS SELECT * FROM users;\nCREATE INDEX idx_team ON users(team_id);\n",
+    );
+    write(
+        root,
+        "db/migrations/002_audit.sql",
+        "create table if not exists audit (user_id int references users(id), team int REFERENCES \"teams\"(id));\n",
+    );
+    write(
+        root,
+        "proto/store.proto",
+        "syntax = \"proto3\";\npackage store.v1;\nimport \"proto/common.proto\";\n\nmessage User {\n  string name = 1;\n}\nmessage GetUserRequest { string id = 1; }\nservice StoreService {\n  rpc GetUser (GetUserRequest) returns (User);\n  rpc Ping (string) returns (store.v1.Pong);\n}\n",
+    );
+    write(
+        root,
+        "proto/common.proto",
+        "syntax = \"proto3\";\nimport \"proto/store.proto\";\nmessage Pong {}\nenum Status { OK = 0; }\n",
+    );
+    write(
+        root,
+        "graphql/schema.graphql",
+        "scalar DateTime\ninterface Node {\n  id: ID!\n}\ntype User implements Node {\n  id: ID!\n  team: Team\n  created: DateTime\n}\ntype Team implements Node & Entity {\n  id: ID!\n  members(first: Int): [User!]!\n}\ntype Query {\n  user(id: ID!): User\n}\n",
+    );
+    write(
+        root,
+        "graphql/ops.gql",
+        "query GetUser($id: ID!) {\n  user(id: $id) { id }\n}\n",
+    );
+    write(
+        root,
+        "Dockerfile",
+        "FROM rust:1.80 AS build\nARG PROFILE=release\nCOPY . .\nRUN cargo build\nFROM debian:stable-slim\nCOPY --from=build /app /app\nEXPOSE 8080\n",
+    );
+    write(
+        root,
+        "Makefile",
+        ".PHONY: all\nall: build test\nbuild:\n\tcargo build\ntest: build\n\tcargo test\n",
+    );
+    write(
+        root,
+        "native/CMakeLists.txt",
+        "project(native)\nadd_library(shim STATIC shim.c)\n",
+    );
+    write(
+        root,
+        "infra/main.tf",
+        "module \"net\" {\n  source = \"./modules/net\"\n}\nresource \"aws_s3_bucket\" \"logs\" {\n  bucket = var.bucket\n}\nvariable \"bucket\" {}\noutput \"arn\" { value = module.net.arn }\n",
+    );
+    write(root, "infra/prod.tfvars", "bucket = \"logs\"\n");
+}
+
+/// A static site: HTML pages linking scripts/styles, CSS/SCSS/LESS with
+/// imports between them, and Markdown content.
+fn scenario_static_site(root: &Path) {
+    write(
+        root,
+        "index.html",
+        "<!doctype html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"css/site.css\">\n  <link rel=\"icon\" href=\"favicon.ico\">\n  <script src=\"js/app.js\" defer></script>\n</head>\n<body>\n  <nav id=\"main-nav\"></nav>\n  <section id='hero'></section>\n  <a href=\"about.html\" id=\"about-link\">About</a>\n</body>\n</html>\n",
+    );
+    write(
+        root,
+        "about.html",
+        "<html><head><link href=\"css/site.css\" rel=\"stylesheet\"></head>\n<body><div id=\"about\"></div><div id=\"main-nav\"></div></body></html>\n",
+    );
+    write(
+        root,
+        "blog/post.htm",
+        "<link rel=\"stylesheet\" href=\"../css/site.css\">\n<article id=\"post\"></article>\n",
+    );
+    write(
+        root,
+        "css/site.css",
+        "@import \"reset.css\";\n@import url(\"theme.css\");\n.btn {\n  color: red;\n}\n#main-nav {\n}\n@media screen and (max-width: 600px) {\n  .btn { }\n}\n@keyframes spin {\n}\n",
+    );
+    write(root, "css/reset.css", "html {\n}\nbody {\n}\n");
+    write(
+        root,
+        "css/theme.css",
+        "@import \"site.css\";\n:root {\n}\n.theme-dark {\n}\n",
+    );
+    write(
+        root,
+        "scss/main.scss",
+        "@use 'sass:math';\n@use \"partials/base\";\n@forward \"partials/mixins\";\n.card {\n  .title {\n  }\n}\n",
+    );
+    write(root, "scss/partials/base.scss", ".base {\n}\n");
+    write(
+        root,
+        "less/theme.less",
+        "@import \"vars.less\";\n.box {\n}\n",
+    );
+    write(
+        root,
+        "content/index.md",
+        "# Welcome\n\nRead [about](../about.html) and the [post](posts/first.md).\n",
+    );
+    write(
+        root,
+        "content/posts/first.md",
+        "# First post\n\n## Details\n[home](../index.md) [[index]]\n",
+    );
+}
+
+/// The remaining regex-extracted languages, each with symbols and imports.
+fn scenario_misc_languages(root: &Path) {
+    write(
+        root,
+        "scala/Main.scala",
+        "package demo\nimport demo.util.Helper\nimport scala.collection.mutable\nobject Main {\n  def main(args: Array[String]): Unit = Helper.run()\n}\n",
+    );
+    write(
+        root,
+        "scala/util/Helper.scala",
+        "package demo.util\nobject Helper {\n  def run(): Unit = {}\n}\ntrait Runner\n",
+    );
+    write(
+        root,
+        "dart/main.dart",
+        "import 'src/util.dart';\nimport 'package:flutter/material.dart';\nclass App {\n  void build() {\n    helper();\n  }\n}\n",
+    );
+    write(
+        root,
+        "dart/src/util.dart",
+        "void helper() {\n}\nclass Util {}\n",
+    );
+    write(
+        root,
+        "lua/init.lua",
+        "local util = require(\"lua.util\")\nfunction start() end\nlocal function private() end\n",
+    );
+    write(root, "lua/util.lua", "function M.helper() end\n");
+    write(
+        root,
+        "r/analysis.R",
+        "library(dplyr)\nsource(\"r/helpers.R\")\nclean <- function(df) {}\n",
+    );
+    write(root, "r/helpers.R", "helper = function(x) {}\n");
+    write(
+        root,
+        "zig/main.zig",
+        "const std = @import(\"std\");\nconst util = @import(\"util.zig\");\npub fn main() void {}\n",
+    );
+    write(
+        root,
+        "zig/util.zig",
+        "pub fn helper() void {}\nconst X = 1;\n",
+    );
+    write(
+        root,
+        "hs/Main.hs",
+        "module Main where\n\nimport Data.Shapes\nimport qualified Data.Map as M\n\nmain :: IO ()\nmain = pure ()\n",
+    );
+    write(
+        root,
+        "hs/Data/Shapes.hs",
+        "module Data.Shapes (Shape(..), area) where\n\ndata Shape = Circle\narea :: Shape -> Double\nclass HasArea a where\n",
+    );
+    write(
+        root,
+        "perl/tool.pl",
+        "sub helper { }\nfunction js_like() {}\n",
+    );
+    write(root, "Procfile", "web: ./run\n");
+    write(
+        root,
+        "justfile",
+        "default: build\nbuild:\n    cargo build\n",
+    );
+}
+
+/// Vue/Svelte single-file components (JS family: their imports go through
+/// the JavaScript module resolver).
+fn scenario_components(root: &Path) {
+    write(root, "package.json", "{\"name\": \"widgets\"}");
+    write(
+        root,
+        "src/App.vue",
+        "<template><div id=\"app\"></div></template>\n<script>\nimport Button from './components/Button.svelte'\nimport Card from \"./components/Card.vue\"\nimport { x } from 'external-lib'\nexport default {}\nfunction helper() {}\nconst state = 1\n</script>\n",
+    );
+    write(
+        root,
+        "src/components/Card.vue",
+        "<script>\nimport Button from './Button.svelte'\nexport const card = 1\n</script>\n",
+    );
+    write(
+        root,
+        "src/components/Button.svelte",
+        "<script>\n  import Card from './Card.vue';\n  export let label = 'x';\n  function click() {}\n</script>\n",
+    );
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+fn native_matches_wrongstack_on_generic_language_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    type Scenario = fn(&Path);
+    let scenarios: [(&str, Scenario); 4] = [
+        ("documented-crate", scenario_documented_crate),
+        ("static-site", scenario_static_site),
+        ("misc-languages", scenario_misc_languages),
+        ("components", scenario_components),
+    ];
+    for (name, build) in scenarios {
+        let s = base.join(name);
+        let root = s.join("project");
+        build(&root);
+        failures.extend(compare(name, &root, &s));
+        let idx = s.join("idx-native");
+        let langs = scalar(
+            &idx,
+            "SELECT group_concat(lang) FROM (SELECT DISTINCT lang FROM files ORDER BY lang)",
+        );
+        let refs = scalar(&idx, "SELECT count(*) FROM refs");
+        let resolved = scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''");
+        let bound = scalar(&idx, "SELECT count(*) FROM refs WHERE to_id IS NOT NULL");
+        eprintln!(
+            "{name}: langs {langs}; {refs} refs, {resolved} resolved to a file, {bound} bound to a symbol"
+        );
+    }
+    // The documented crate in a clean Git checkout (blob trust stamps).
+    let s = base.join("documented-git");
+    let root = s.join("project");
+    scenario_documented_crate(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("documented-git", &root, &s));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Real-world projects: `WRONGINDEX_DIFF_PROJECTS` lists directories
 /// (separated by `;`) that are copied and indexed both ways.
 #[test]
 #[ignore = "needs WRONGINDEX_TEST_ENGINE and WRONGINDEX_DIFF_PROJECTS"]
 fn native_matches_wrongstack_on_listed_projects() {
-    let list = std::env::var("WRONGINDEX_DIFF_PROJECTS").expect("WRONGINDEX_DIFF_PROJECTS");
+    let Ok(list) = std::env::var("WRONGINDEX_DIFF_PROJECTS") else {
+        eprintln!("NOT RUN: set WRONGINDEX_DIFF_PROJECTS to compare real projects");
+        return;
+    };
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
     let mut failures = Vec::new();

@@ -716,7 +716,7 @@ async fn dispatch_inner(
                     json!({
                         "backend": "native",
                         "selection": shared.backend.as_str(),
-                        "writes": "JSON/YAML-only projects (full runs; no-op when unchanged)",
+                        "writes": "projects whose files are all JSON, YAML, Rust or regex-extracted languages (md, toml, html, css, sql, proto, graphql, scala, vue, svelte, dart, lua, r, zig, haskell, other) (full runs; no-op when unchanged)",
                         "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),

@@ -1,5 +1,8 @@
 //! Port of WrongStack `import-extractor.ts` (`extractImports`,
-//! `hasImportPatterns`), Rust branch only.
+//! `hasImportPatterns`) for the natively parsed languages: Rust (hand-written
+//! matchers below) and the languages of the regex extractor
+//! (`generic-parser.ts`), whose patterns are the TypeScript source text run
+//! by [`crate::jsre`].
 //!
 //! The two `rs` patterns are reimplemented as deterministic matchers with the
 //! exact semantics of the JS regexes (`gm` flags, no `u`): multiline `^`
@@ -17,8 +20,12 @@
 //! match the characters they consumed. The lazy `[\w:]+?` is expanded one
 //! unit at a time, testing the terminator alternatives in order.
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use super::ParsedRef;
 use crate::js::{self, U16};
+use crate::jsre::Regex;
 
 /// (capture start, capture end, match end).
 type Hit = (usize, usize, usize);
@@ -30,9 +37,103 @@ pub const IMPORT_MAX_FILE_CHARS: usize = 512 * 1024;
 /// Upper bound on imports recorded per file (`IMPORT_MAX_PER_FILE`).
 pub const IMPORT_MAX_PER_FILE: usize = 400;
 
+/// `LANG_IMPORTS` for the generic languages: (source, flags, `name: 'full'`).
+/// (source, flags, `name: 'full'`).
+type ImportPattern = (&'static str, &'static str, bool);
+
+const GENERIC_IMPORTS: &[(&str, &[ImportPattern])] = &[
+    (
+        "scala",
+        &[(r"^[ \t]*import\s+([\w.]+(?:\.[_*])?)\s*$", "gm", false)],
+    ),
+    (
+        "dart",
+        &[(
+            r#"^[ \t]*(?:import|export|part)\s+['"]([^'"]+)['"]"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "lua",
+        &[(r#"\brequire\s*\(?\s*['"]([^'"]+)['"]"#, "g", false)],
+    ),
+    (
+        "haskell",
+        &[(r"^[ \t]*import\s+(?:qualified\s+)?([\w.]+)", "gm", true)],
+    ),
+    ("zig", &[(r#"@import\s*\(\s*"([^"]+)"\s*\)"#, "g", false)]),
+    (
+        "proto",
+        &[(
+            r#"^[ \t]*import\s+(?:public\s+|weak\s+)?"([^"]+)"\s*;"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "css",
+        &[(
+            r#"^[ \t]*@(?:import|use|forward)\s+(?:url\()?\s*['"]([^'"]+)['"]"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "vue",
+        &[(
+            r#"^[ \t]*import\s[^'"]*from\s*['"]([^'"]+)['"]"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "svelte",
+        &[(
+            r#"^[ \t]*import\s[^'"]*from\s*['"]([^'"]+)['"]"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "html",
+        &[
+            (r#"<script[^>]+src\s*=\s*['"]([^'"]+)['"]"#, "g", false),
+            (r#"<link[^>]+href\s*=\s*['"]([^'"]+)['"]"#, "g", false),
+        ],
+    ),
+    (
+        "r",
+        &[(
+            r#"\b(?:source|library|require)\s*\(\s*['"]?([\w./-]+)['"]?\s*\)"#,
+            "g",
+            false,
+        )],
+    ),
+];
+
+type CompiledImports = HashMap<&'static str, Vec<(Regex, bool)>>;
+
+fn generic_imports() -> &'static CompiledImports {
+    static C: OnceLock<CompiledImports> = OnceLock::new();
+    C.get_or_init(|| {
+        GENERIC_IMPORTS
+            .iter()
+            .map(|(lang, ps)| {
+                (
+                    *lang,
+                    ps.iter()
+                        .map(|(src, flags, full)| (Regex::new(src, flags), *full))
+                        .collect(),
+                )
+            })
+            .collect()
+    })
+}
+
 /// `hasImportPatterns(lang)`, restricted to the ported languages.
 pub fn has_import_patterns(lang: &str) -> bool {
-    lang == "rs"
+    lang == "rs" || GENERIC_IMPORTS.iter().any(|(l, _)| *l == lang)
 }
 
 fn at(s: &U16, p: usize, lit: &str) -> bool {
@@ -229,10 +330,34 @@ fn strip_extension(last: &str) -> &str {
 /// `extractImports({ content, lang })` for the ported languages; refs are
 /// returned already stamped with `lang`, as `withRelations` leaves them.
 pub fn extract_imports(content: &U16, lang: &'static str) -> Vec<ParsedRef> {
-    if lang != "rs" || content.is_empty() {
+    if !has_import_patterns(lang) || content.is_empty() {
         return Vec::new();
     }
     let content = &content[..content.len().min(IMPORT_MAX_FILE_CHARS)];
+    // (match index, capture start, capture end) per pattern, plus whether
+    // the referenced name is the whole specifier.
+    let patterns: Vec<(Vec<Hit>, bool)> = if lang == "rs" {
+        let matchers: [Matcher; 2] = [match_use, match_mod];
+        matchers
+            .into_iter()
+            .map(|m| (match_all_lines(content, m), false))
+            .collect()
+    } else {
+        generic_imports()[lang]
+            .iter()
+            .map(|(re, full)| {
+                let hits = re
+                    .match_all(content)
+                    .into_iter()
+                    .map(|m| {
+                        let (a, b) = m.get(1).unwrap_or((m.start(), m.start()));
+                        (m.start(), a, b)
+                    })
+                    .collect();
+                (hits, *full)
+            })
+            .collect()
+    };
     let newlines: Vec<usize> = content
         .iter()
         .enumerate()
@@ -241,18 +366,21 @@ pub fn extract_imports(content: &U16, lang: &'static str) -> Vec<ParsedRef> {
         .collect();
     let mut refs: Vec<ParsedRef> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let patterns: [Matcher; 2] = [match_use, match_mod];
-    for pattern in patterns {
-        for (index, c0, c1) in match_all_lines(content, pattern) {
+    for (hits, full) in patterns {
+        for (index, c0, c1) in hits {
             if refs.len() >= IMPORT_MAX_PER_FILE {
                 return refs;
             }
-            // The captures hold only `[\w:]`, so `trim()` is the identity.
-            let module = js::string(&content[c0..c1]);
+            // `match[1]?.trim()`; an empty specifier is skipped.
+            let module = js::string(js::trim(&content[c0..c1]));
             if module.is_empty() {
                 continue;
             }
-            let to_name = last_segment(&module);
+            let to_name = if full {
+                module.clone()
+            } else {
+                last_segment(&module)
+            };
             if to_name.is_empty() {
                 continue;
             }

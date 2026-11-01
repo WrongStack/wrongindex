@@ -1,7 +1,10 @@
 //! Native full-index writer (WI-502).
 //!
 //! Writes a WrongStack v5 `index.db` for a project whose indexable files are
-//! all JSON, YAML, TOML or Rust, reproducing one full WrongStack run
+//! all JSON, YAML, Rust or a language WrongStack parses with its regex
+//! extractor (md, toml, html, css, sql, proto, graphql, scala, vue, svelte,
+//! dart, lua, r, zig, haskell, other; see [`crate::parse::parse_file`]),
+//! reproducing one full WrongStack run
 //! (`runIndexerWithStore`, first run into an empty index directory): batch
 //! writes with module owners and refs, then `finalizeIndexRun` - name
 //! resolution, the relation pass ([`crate::relations`],
@@ -9,9 +12,10 @@
 //! ([`crate::rank`]) and `PRAGMA optimize`. Every situation not ported is
 //! refused with [`NativeError::Unsupported`] before anything is written:
 //!
-//! - any other language, a YAML file that could carry infra references
-//!   (`infra-parser.ts`: compose, GitHub workflows, OpenAPI, Kubernetes), or
-//!   a TOML file named like an infra artifact (`dockerfile.*`, `.env.*`);
+//! - any other language (TS/JS, Go, Python and the tree-sitter languages),
+//!   a YAML file that could carry infra references (`infra-parser.ts`:
+//!   compose, GitHub workflows, OpenAPI, Kubernetes - not ported), or a
+//!   parser result flagged as not ported;
 //! - Git-listed symbolic links that resolve outside the checkout;
 //! - files over 5 MiB, incomplete discovery, or no indexable files;
 //! - an index directory that already holds an `index.db`.
@@ -22,7 +26,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::{Connection, params_from_iter};
 
 use crate::js::utf16;
-use crate::parse::{Parsed, ParsedRef, ParsedSymbol, json, rs, toml, yaml};
+use crate::parse::{self, Parsed, ParsedRef, ParsedSymbol};
 use crate::rows;
 
 pub const SCHEMA_SQL: &str =
@@ -233,7 +237,7 @@ fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), Nati
     let mut rows = Vec::with_capacity(d.files.len());
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
-            Some(l @ ("json" | "yaml" | "toml" | "rs")) => l,
+            Some(l) if parse::is_native_lang(l) => l,
             other => {
                 return Err(NativeError::Unsupported(format!(
                     "language {} ({path})",
@@ -259,18 +263,21 @@ fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), Nati
                 "YAML infra artifact references ({path})"
             )));
         }
-        if lang == "toml" && toml::is_infra_artifact(&path) {
-            return Err(NativeError::Unsupported(format!(
-                "TOML infra artifact ({path})"
-            )));
-        }
         let content = utf16(&text);
-        let parsed: Parsed = match lang {
-            "json" => json::parse(&path, &content, None),
-            "yaml" => yaml::parse(&content),
-            "toml" => toml::parse(&content),
-            _ => rs::parse(&content),
-        };
+        // A parser panic (e.g. a regex construct the JS-regex engine refuses
+        // to approximate) must never take the service down: the project is
+        // reported as unsupported and left to the compatibility worker.
+        let parsed: Parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            parse::parse_file(&path, lang, &content)
+        }))
+        .map_err(|p| {
+            let why = p
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "parser panic".into());
+            NativeError::Unsupported(format!("{lang} parser failed on {path}: {why}"))
+        })?;
         if let Some(why) = parsed.unsupported {
             return Err(NativeError::Unsupported(format!("{why} ({path})")));
         }

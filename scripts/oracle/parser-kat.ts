@@ -1,19 +1,26 @@
 /**
- * WI-501/502: known answers for the native JSON, YAML and Rust parser ports.
+ * WI-501/502: known answers for the native parser ports.
  *
- * Runs WrongStack's own `json-parser.ts` / `yaml-parser.ts` and, for Rust,
- * `parseFileContent(file, content, 'rs')` (`rs-parser.ts` plus the
- * `withRelations` import fallback from `import-extractor.ts`), from a clean
- * oracle prepared by `prepare-clean-wrongstack.ts`, over a corpus of edge
- * cases plus every JSON/YAML/Rust file under `tests/fixtures/projects`, and writes
+ * Runs WrongStack's own `json-parser.ts` / `yaml-parser.ts` and, for Rust and
+ * every language routed to the regex extractor (`generic-parser.ts` with
+ * `infra-parser.ts`: scala, sql, md, toml, html, css, vue, svelte, dart, lua,
+ * r, proto, graphql, zig, haskell, other), `parseFileContent(file, content,
+ * lang)` (the parser plus the `withRelations` import fallback from
+ * `import-extractor.ts`), from a clean oracle prepared by
+ * `prepare-clean-wrongstack.ts`, over a corpus of edge cases plus every file
+ * of those languages under `tests/fixtures/projects`, and writes
  * `contracts/fixtures/parser-kat.json`. The Rust engine crate is tested
  * against that file; never hand-edit it.
  *
  * Usage: bun scripts/oracle/parser-kat.ts --wrongstack <clean oracle dir>
  *        [--corpus <dir> --out <file>]   (real-world corpus, not committed)
  *
- * JSON/YAML cases record `refs` as a count (those parsers emit none); Rust
- * cases record the refs themselves.
+ * A corpus written to a `.jsonl` file holds one case per line and no file
+ * contents (the test re-reads each file by its absolute path), so corpora of
+ * hundreds of megabytes stay streamable.
+ *
+ * JSON/YAML cases record `refs` as a count (YAML infra refs are not ported);
+ * every other case records the refs themselves.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -40,8 +47,14 @@ const base = `${resolve(wrongstack)}/packages/tools/src/codebase-index`;
 const json = await import(`${base}/json-parser.ts`);
 const yaml = await import(`${base}/yaml-parser.ts`);
 const dispatch = await import(`${base}/parser-dispatch.ts`);
+const languages = await import(`${base}/languages.ts`);
 
-type Lang = 'json' | 'yaml' | 'rs';
+/** Languages `parseFileContent` hands to `generic-parser.ts` (its `default` branch). */
+const GENERIC = new Set([
+  'scala', 'sql', 'md', 'toml', 'html', 'css', 'vue', 'svelte', 'dart', 'lua', 'r', 'proto',
+  'graphql', 'zig', 'haskell', 'other',
+]);
+type Lang = string;
 type Case = { lang: Lang; file: string; content: string; source: string };
 const cases: Case[] = [];
 const J = (name: string, content: string, file = `C:\\kat\\${name}.json`) =>
@@ -132,15 +145,23 @@ if (corpus) {
       const p = join(dir, n);
       const st = statSync(p);
       if (st.isDirectory()) visit(p);
-      else if (/\.(json|ya?ml|rs)$/i.test(n) && st.size < 2_000_000) files.push(p);
+      else if (corpusLang(p) && st.size < 2_000_000) files.push(p);
     }
   };
   visit(resolve(corpus));
   cases.length = 0;
   for (const p of files.sort()) {
-    const lang: Lang = /\.json$/i.test(p) ? 'json' : /\.rs$/i.test(p) ? 'rs' : 'yaml';
-    cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `corpus:${p}` });
+    cases.push({ lang: corpusLang(p)!, file: p, content: readFileSync(p, 'utf8'), source: `corpus:${p}` });
   }
+}
+
+/** JSON/YAML/Rust as before, plus every generic-routed language (WrongStack's `detectLang`). */
+function corpusLang(p: string): Lang | null {
+  if (/\.json$/i.test(p)) return 'json';
+  if (/\.ya?ml$/i.test(p)) return 'yaml';
+  if (/\.rs$/i.test(p)) return 'rs';
+  const lang = languages.detectLang(p);
+  return lang && GENERIC.has(lang) ? lang : null;
 }
 
 // ── Real fixture files ──────────────────────────────────────────────────────
@@ -150,7 +171,8 @@ function walk(dir: string): string[] {
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
 }
-for (const p of corpus ? [] : walk(join(repo, 'tests/fixtures/projects')).sort()) {
+const fixtureFiles = corpus ? [] : walk(join(repo, 'tests/fixtures/projects')).sort();
+for (const p of fixtureFiles) {
   const lower = p.toLowerCase();
   const lang: Lang | null = lower.endsWith('.json')
     ? 'json'
@@ -164,30 +186,51 @@ for (const p of corpus ? [] : walk(join(repo, 'tests/fixtures/projects')).sort()
   cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `fixture:${relative(repo, p).split('\\').join('/')}` });
 }
 
+// ── Generic-routed languages (appended so earlier cases stay byte-identical) ──
+if (!corpus) {
+  const { addGenericCases } = await import('./parser-kat-generic.ts');
+  addGenericCases(cases);
+  for (const p of fixtureFiles) {
+    const lang = languages.detectLang(p);
+    if (!lang || !GENERIC.has(lang)) continue;
+    cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `fixture:${relative(repo, p).split('\\').join('/')}` });
+  }
+}
+
+const outFile = arg('--out') ?? join(repo, 'contracts/fixtures/parser-kat.json');
+const streaming = corpus !== undefined && outFile.endsWith('.jsonl');
+const lines: string[] = [];
 const out = [];
 for (const c of cases) {
   const r = c.lang === 'json'
     ? json.parseSymbols({ file: c.file, content: c.content, lang: 'json' })
     : c.lang === 'yaml'
       ? yaml.parseSymbols({ file: c.file, content: c.content, lang: 'yaml' })
-      : await dispatch.parseFileContent(c.file, c.content, 'rs');
-  out.push({
+      : await dispatch.parseFileContent(c.file, c.content, c.lang);
+  const entry = {
     source: c.source,
     lang: c.lang,
     // Fixture files are referenced by path relative to the repo, so the KAT
     // does not embed a machine-specific absolute path.
     file: c.source.startsWith('fixture:') ? `<repo>/${c.source.slice(8)}` : c.file,
-    content: c.content,
+    ...(streaming ? {} : { content: c.content }),
     symbols: r.symbols.map((s: Record<string, unknown>) => ({
       kind: s.kind, name: s.name, line: s.line, col: s.col, signature: s.signature,
       docComment: s.docComment, scope: s.scope, text: s.text,
     })),
-    refs: c.lang === 'rs'
+    refs: c.lang !== 'json' && c.lang !== 'yaml'
       ? (r.refs ?? []).map((x: Record<string, unknown>) => ({
           toName: x.toName, callType: x.callType, line: x.line, lang: x.lang, module: x.module,
         }))
       : (r.refs ?? []).length,
-  });
+  };
+  if (streaming) lines.push(JSON.stringify(entry));
+  else out.push(entry);
+}
+if (streaming) {
+  writeFileSync(outFile, `${lines.join('\n')}\n`);
+  console.log(`parser-kat corpus: ${lines.length} cases -> ${outFile}`);
+  process.exit(0);
 }
 
 const doc = {
@@ -199,11 +242,15 @@ const doc = {
     'rs-parser.ts': createHash('sha256').update(readFileSync(`${base}/rs-parser.ts`)).digest('hex'),
     'import-extractor.ts': createHash('sha256').update(readFileSync(`${base}/import-extractor.ts`)).digest('hex'),
     'parser-dispatch.ts': createHash('sha256').update(readFileSync(`${base}/parser-dispatch.ts`)).digest('hex'),
+    'generic-parser.ts': createHash('sha256').update(readFileSync(`${base}/generic-parser.ts`)).digest('hex'),
+    'infra-parser.ts': createHash('sha256').update(readFileSync(`${base}/infra-parser.ts`)).digest('hex'),
   },
   cases: out,
 };
-writeFileSync(arg('--out') ?? join(repo, 'contracts/fixtures/parser-kat.json'), `${JSON.stringify(doc, null, 2)}\n`);
+writeFileSync(outFile, `${JSON.stringify(doc, null, 2)}\n`);
 const refCount = out.reduce((n, c) => n + (Array.isArray(c.refs) ? c.refs.length : 0), 0);
+const byLang = new Map<string, number>();
+for (const c of out) byLang.set(c.lang, (byLang.get(c.lang) ?? 0) + 1);
 console.log(
-  `parser-kat: ${out.length} cases (${out.filter((c) => c.lang === 'rs').length} rs), ${out.reduce((n, c) => n + c.symbols.length, 0)} symbols, ${refCount} refs`,
+  `parser-kat: ${out.length} cases (${[...byLang].map(([l, n]) => `${l} ${n}`).join(', ')}), ${out.reduce((n, c) => n + c.symbols.length, 0)} symbols, ${refCount} refs`,
 );
