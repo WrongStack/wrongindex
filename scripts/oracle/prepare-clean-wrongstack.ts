@@ -25,6 +25,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -75,7 +76,8 @@ run(
   checkout,
 );
 const archiveSha256 = sha256(readFileSync(tarPath));
-run(['tar', '-xf', tarPath, '-C', out], out);
+// Relative paths: GNU tar treats a drive-letter prefix (`C:`) as a remote host.
+run(['tar', '-xf', `../wrongstack-${commit.slice(0, 12)}.tar`], out);
 rmSync(tarPath);
 
 // 2. node_modules: third-party entries junctioned, @wrongstack/* -> archive.
@@ -100,15 +102,7 @@ function mirrorNodeModules(srcDir: string, dstDir: string) {
       }
       continue;
     }
-    junction(lstatSync(src).isSymbolicLink() ? resolve(srcDir, readlinkSafe(src)) : src, dst);
-  }
-}
-
-function readlinkSafe(p: string): string {
-  try {
-    return require('node:fs').realpathSync(p);
-  } catch {
-    return p;
+    junction(lstatSync(src).isSymbolicLink() ? realpathSync(src) : src, dst);
   }
 }
 

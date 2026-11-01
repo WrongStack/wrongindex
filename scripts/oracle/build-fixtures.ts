@@ -11,10 +11,11 @@
  * It also writes the storage profile manifest and the content-hash known-answer
  * fixtures that the Rust storage crate is tested against.
  *
- * Fixtures are labelled `provisional` unless the WrongStack checkout has no
- * dirty contract files AND its built `@wrongstack/core` dist matches HEAD; this
- * script cannot prove the latter, so it always records the evidence instead of
- * claiming a clean oracle.
+ * `--wrongstack` should be a clean oracle prepared by
+ * `prepare-clean-wrongstack.ts` (identified by `.wrongindex-oracle.json`):
+ * archived from the baseline commit with workspace dists built from that
+ * source. A plain working-tree checkout is still accepted for quick local
+ * experiments, but its fixtures are labelled `provisional`.
  *
  * Usage: bun scripts/oracle/build-fixtures.ts --wrongstack <path> [--work-root <dir>]
  */
@@ -44,7 +45,13 @@ const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
   commit: string;
   contractFilesDirty: string[];
 };
-const head = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: wrongstack }).stdout.toString().trim();
+const cleanMarker = join(resolve(wrongstack), '.wrongindex-oracle.json');
+const clean = existsSync(cleanMarker)
+  ? (JSON.parse(readFileSync(cleanMarker, 'utf8')) as { commit: string; [k: string]: unknown })
+  : null;
+const head = clean
+  ? clean.commit
+  : Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd: wrongstack }).stdout.toString().trim();
 if (head !== baseline.commit) {
   console.error(`WrongStack HEAD ${head} does not match baseline ${baseline.commit}; re-export the baseline`);
   process.exit(1);
@@ -171,13 +178,19 @@ const sha256 = (data: string | Uint8Array) => createHash('sha256').update(data).
 const coreDist = join(resolve(wrongstack), 'packages/core/dist/utils/index.js');
 const provenance = {
   wrongstackCommit: baseline.commit,
-  contractFilesDirty: baseline.contractFilesDirty,
+  oracle: clean
+    ? { kind: 'clean-archive', archiveSha256: clean.archiveSha256, bunLockSha256: clean.bunLockSha256, distSha256: clean.distSha256 }
+    : { kind: 'working-tree', contractFilesDirty: baseline.contractFilesDirty },
   coreUtilsDistSha256: existsSync(coreDist) ? sha256(readFileSync(coreDist)) : null,
   bun: Bun.version,
   sqlite: (new DatabaseSync(':memory:').prepare('select sqlite_version() v').get() as { v: string }).v,
-  provisional: true,
-  provisionalReason:
-    'Oracle imports @wrongstack/core from its built dist and the working tree; a clean archived+built baseline is WI-006 follow-up.',
+  provisional: !clean,
+  ...(clean
+    ? {}
+    : {
+        provisionalReason:
+          'Built from a working tree whose @wrongstack/* dists are not proven to match the baseline commit; use prepare-clean-wrongstack.ts.',
+      }),
 };
 
 const fixtures = readdirSync(join(repo, 'tests/fixtures/projects'), { withFileTypes: true })
@@ -286,4 +299,4 @@ const kat = {
 };
 mkdirSync(join(repo, 'contracts/fixtures'), { recursive: true });
 writeFileSync(join(repo, 'contracts/fixtures/content-hash-kat.json'), `${JSON.stringify(kat, null, 2)}\n`);
-console.error(`wrote profile manifest, ${fixtures.length} oracle fixtures, ${cases.length} hash KATs (provisional)`);
+console.error(`wrote profile manifest, ${fixtures.length} oracle fixtures, ${cases.length} hash KATs (${clean ? 'clean oracle' : 'provisional'})`);

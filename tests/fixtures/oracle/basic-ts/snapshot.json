@@ -2,18 +2,23 @@
   "fixture": "basic-ts",
   "provenance": {
     "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
-    "contractFilesDirty": [
-      "packages/core/src/utils/context-evidence.ts",
-      "packages/core/src/utils/glob-expand.ts",
-      "packages/core/src/utils/index.ts",
-      "packages/core/src/utils/ip-guard.ts",
-      "packages/core/src/utils/next-steps.ts"
-    ],
-    "coreUtilsDistSha256": "e37f7ca2e98a6c430d29e8eb9b8a06cf4734fc0c3c3bafba08470dfe64952fbd",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
     "bun": "1.4.4",
     "sqlite": "3.53.4",
-    "provisional": true,
-    "provisionalReason": "Oracle imports @wrongstack/core from its built dist and the working tree; a clean archived+built baseline is WI-006 follow-up."
+    "provisional": false
   },
   "result": {
     "filesIndexed": 4,

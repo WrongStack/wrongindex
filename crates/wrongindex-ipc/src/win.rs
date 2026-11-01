@@ -34,7 +34,8 @@ use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce,
     GetSecurityDescriptorControl, GetSecurityDescriptorDacl, GetTokenInformation,
     OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
-    SE_DACL_PROTECTED, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    SE_DACL_PROTECTED, SECURITY_ATTRIBUTES, TOKEN_OWNER, TOKEN_QUERY, TOKEN_USER, TokenOwner,
+    TokenUser,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CREATE_NEW, CreateDirectoryW, CreateFileW, FILE_ATTRIBUTE_NORMAL,
@@ -95,6 +96,51 @@ unsafe fn token_user_sid(token: HANDLE) -> io::Result<String> {
         }
         let user = &*(buf.as_ptr() as *const TOKEN_USER);
         sid_to_string(user.User.Sid)
+    }
+}
+
+/// Default owner SID the token stamps on objects it creates. For a normal
+/// user this is the user SID; for an elevated administrator it is usually
+/// BUILTIN\Administrators.
+///
+/// # Safety
+/// `token` must be a valid token handle opened with `TOKEN_QUERY`.
+unsafe fn token_default_owner_sid(token: HANDLE) -> io::Result<String> {
+    // SAFETY: as for token_user_sid.
+    unsafe {
+        let mut len = 0u32;
+        GetTokenInformation(token, TokenOwner, null_mut(), 0, &mut len);
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
+            return Err(err);
+        }
+        let mut buf = vec![0u64; (len as usize).div_ceil(8)];
+        if GetTokenInformation(token, TokenOwner, buf.as_mut_ptr().cast(), len, &mut len) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let owner = &*(buf.as_ptr() as *const TOKEN_OWNER);
+        sid_to_string(owner.Owner)
+    }
+}
+
+/// SIDs that legitimately own objects this process creates: the user SID and
+/// the token's default owner (they differ for an elevated administrator).
+pub fn self_owner_sids() -> io::Result<Vec<String>> {
+    // SAFETY: token handle checked and closed on all paths.
+    unsafe {
+        let mut token: HANDLE = null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let user = token_user_sid(token);
+        let owner = token_default_owner_sid(token);
+        CloseHandle(token);
+        let mut sids = vec![user?];
+        let owner = owner?;
+        if !sids.contains(&owner) {
+            sids.push(owner);
+        }
+        Ok(sids)
     }
 }
 
@@ -313,10 +359,10 @@ pub fn path_security(path: &Path) -> io::Result<PathSecurity> {
 }
 
 impl PathSecurity {
-    /// Owned by `me`, DACL protected from inheritance, and every allow ACE
-    /// names `me` or LocalSystem.
-    pub fn is_owner_only(&self, me: &str) -> bool {
-        self.owner_sid == me
+    /// Owned by one of `owners`, DACL protected from inheritance, and every
+    /// allow ACE names the user `me` or LocalSystem.
+    pub fn is_owner_only(&self, me: &str, owners: &[String]) -> bool {
+        owners.contains(&self.owner_sid)
             && self.dacl_protected
             && self
                 .allowed_sids
@@ -328,25 +374,27 @@ impl PathSecurity {
 /// Whether `path` is owned by the current user and only the current user and
 /// LocalSystem are granted access.
 pub fn is_owner_only(path: &Path) -> io::Result<bool> {
-    Ok(path_security(path)?.is_owner_only(&current_user_sid()?))
+    Ok(path_security(path)?.is_owner_only(&current_user_sid()?, &self_owner_sids()?))
 }
 
 /// Make an existing directory private. Refuses a directory owned by another
 /// account instead of trusting or silently re-owning it.
 pub fn harden_private_dir(dir: &Path) -> io::Result<()> {
     let me = current_user_sid()?;
+    let owners = self_owner_sids()?;
     let s = path_security(dir)?;
-    if s.owner_sid != me {
+    if !owners.contains(&s.owner_sid) {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             format!(
-                "{} is owned by {}, not the current user {me}; refusing to use it as a private WrongIndex directory",
+                "{} is owned by {}, not by the current user ({}); refusing to use it as a private WrongIndex directory",
                 dir.display(),
-                s.owner_sid
+                s.owner_sid,
+                owners.join(" / ")
             ),
         ));
     }
-    if s.is_owner_only(&me) {
+    if s.is_owner_only(&me, &owners) {
         return Ok(());
     }
     let sec = OwnerOnlySecurity::new(true)?;
@@ -496,6 +544,43 @@ pub async fn connect(name: &str, deadline: Duration) -> io::Result<NamedPipeClie
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn self_owner_sids_start_with_the_user() {
+        let sids = self_owner_sids().unwrap();
+        assert_eq!(sids[0], current_user_sid().unwrap());
+        assert!(sids.len() <= 2);
+    }
+
+    #[test]
+    fn foreign_owner_is_not_owner_only() {
+        let me = current_user_sid().unwrap();
+        let owners = vec![me.clone()];
+        let foreign = PathSecurity {
+            owner_sid: "S-1-5-21-1-2-3-1001".into(),
+            dacl_protected: true,
+            allowed_sids: vec![Some(me.clone())],
+        };
+        assert!(!foreign.is_owner_only(&me, &owners));
+        let broad = PathSecurity {
+            owner_sid: me.clone(),
+            dacl_protected: true,
+            allowed_sids: vec![Some(me.clone()), Some("S-1-1-0".into())],
+        };
+        assert!(!broad.is_owner_only(&me, &owners));
+        let unknown_ace = PathSecurity {
+            owner_sid: me.clone(),
+            dacl_protected: true,
+            allowed_sids: vec![None],
+        };
+        assert!(!unknown_ace.is_owner_only(&me, &owners));
+        let good = PathSecurity {
+            owner_sid: me.clone(),
+            dacl_protected: true,
+            allowed_sids: vec![Some(me.clone()), Some(SYSTEM_SID.into())],
+        };
+        assert!(good.is_owner_only(&me, &owners));
+    }
 
     #[test]
     fn sid_looks_like_a_sid() {

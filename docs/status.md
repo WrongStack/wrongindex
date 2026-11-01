@@ -14,7 +14,7 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | WI-003 | Not started | Writer/mutable-constructor inventory. |
 | WI-004 | Not started | Query/API request-response fixtures. |
 | WI-005 | Started | Two fixture projects (`basic-ts`: TS/TSX, non-ASCII identifier, import alias, default export; `config-only`: JSON/YAML/empty JSON). Go/Python/Rust/tree-sitter/encoding/path fixtures missing. |
-| WI-006 | Provisional | `scripts/oracle/build-fixtures.ts` runs WrongStack's real `IndexStore` + `runIndexerWithStore` under Bun. Fixtures are labeled `provisional`: the oracle imports `@wrongstack/core` from its built `dist` in a working tree with dirty contract files. A clean `git archive` + build oracle is still required. |
+| WI-006 | Done (seed corpus) | `scripts/oracle/prepare-clean-wrongstack.ts` `git archive`s the baseline commit (root manifests, `scripts/`, 8 workspace packages), junctions third-party `node_modules` (pinned by the archived `bun.lock`, hash recorded), redirects every `@wrongstack/*` into the archive, and rebuilds 6 workspace dists from archived source (~14 s). `build-fixtures.ts` detects `.wrongindex-oracle.json` and records archive/lock/dist hashes; fixtures are no longer provisional. The clean oracle reproduced the earlier working-tree fixtures exactly (metadata, files, symbols, refs, ranks, 17 KATs, profile manifest). Remaining: oracle covers only two fixture projects (see WI-005). |
 | WI-007 | Started | Storage profile manifest exists; semantic (parser/ranking/query) profile does not. |
 | WI-008 | Not started | Baseline performance/process tree. |
 | WI-009 | Partial | WrongIndex is MIT (same license and holder as WrongStack). No WrongStack code extracted yet; extraction review still required per file. |
@@ -49,7 +49,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 46 tests (contracts 4, storage 15, registry 11, ipc 12, daemon integration 4) |
+| `cargo test --workspace` | PASS — 48 tests (contracts 4, storage 15, registry 11, ipc 14, daemon integration 4) |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
 | Manual CLI smoke against a temp data root | start/idempotent start/add/conflict/check/rebuild-refused/status/doctor/stop/inspect behaved as specified |
@@ -67,10 +67,11 @@ An automated review of the first push flagged two issues; both are fixed:
 
 Hosted CI on the first push (run 41293608373, `windows-latest`): PASS.
 
+CI on the security fix (run 41294030531) FAILED, exposing a real environment case: the GitHub runner is an elevated administrator, whose token stamps new objects with owner `BUILTIN\Administrators` (S-1-5-32-544) rather than the user SID. The owner check now accepts the user SID or the token's default owner (`TokenOwner`); for a non-elevated user that is still only the user SID, so an Administrators-owned directory remains refused. Unit tests cover foreign owner, extra allow ACE, uninterpreted ACE, and the valid case.
+
 ## Next tasks
 
-1. WI-006: clean oracle from `git archive` of the baseline commit with a fresh build of `@wrongstack/core`; drop the `provisional` label.
-2. WI-002/003/004: language/helper inventory, writer inventory, query fixtures.
-3. WI-005: Go/Python/Rust/tree-sitter/encoding/path fixtures.
-4. Port WrongStack's index-path resolver (`wstack-paths.ts`) behind shared fixtures so `--index-dir` becomes optional.
-5. WI-109 ownership guard, then M2 (WI-200..209): leases, watcher, scheduler.
+1. WI-002/003/004: language/helper inventory, writer inventory, query fixtures.
+2. WI-005: Go/Python/Rust/tree-sitter/encoding/path fixtures.
+3. Port WrongStack's index-path resolver (`wstack-paths.ts`) behind shared fixtures so `--index-dir` becomes optional.
+4. WI-109 ownership guard, then M2 (WI-200..209): leases, watcher, scheduler.
