@@ -304,6 +304,14 @@ fn walk(
 mod tests {
     use super::*;
 
+    /// The canonical long-name spelling of a temp dir. CI temp paths contain
+    /// 8.3 short names (RUNNER~1); WrongStack compares the git top level with
+    /// the root without resolving those, so a short-name root takes the walk
+    /// path there too. Git-mode tests therefore start from the long path.
+    fn long_path(p: &Path) -> PathBuf {
+        PathBuf::from(strip_verbatim(&std::fs::canonicalize(p).unwrap()))
+    }
+
     fn write(p: &Path, s: &str) {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, s).unwrap();
@@ -342,7 +350,7 @@ mod tests {
     #[test]
     fn listed_symlink_leaving_the_checkout_is_never_read() {
         let tmp = tempfile::tempdir().unwrap();
-        let r = tmp.path().join("repo");
+        let r = long_path(tmp.path()).join("repo");
         let outside = tmp.path().join("secret.ts");
         write(&outside, "export const secret = 1;\n");
         write(&r.join("a.ts"), "export const a = 1;\n");
@@ -378,7 +386,8 @@ mod tests {
     #[test]
     fn git_listing_includes_untracked_and_clean_blobs() {
         let tmp = tempfile::tempdir().unwrap();
-        let r = tmp.path();
+        let long = long_path(tmp.path());
+        let r = long.as_path();
         let git = |args: &[&str]| {
             assert!(
                 std::process::Command::new("git")
