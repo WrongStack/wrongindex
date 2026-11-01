@@ -7,6 +7,9 @@
 //! (`tests/fixtures/oracle/*/queries.json`). Operations not ported yet return
 //! [`QueryError::Unsupported`] so a caller can fall back.
 
+mod graph;
+mod search;
+
 use std::path::Path;
 
 use rusqlite::{Connection, OpenFlags};
@@ -15,7 +18,17 @@ use serde_json::{Map, Value, json};
 pub const SCHEMA_VERSION: i64 = 5;
 
 /// Operations answered natively (the rest return `Unsupported`).
-pub const NATIVE_OPS: &[&str] = &["stats"];
+pub const NATIVE_OPS: &[&str] = &[
+    "stats",
+    "search",
+    "context",
+    "vectorSearch",
+    "packageGraph",
+    "fileGraph",
+    "symbolGraph",
+    "incomingCalls",
+    "outgoingCalls",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum QueryError {
@@ -29,8 +42,8 @@ pub enum QueryError {
 
 /// A read-only view of one index directory.
 pub struct Reader {
-    conn: Connection,
-    index_dir: String,
+    pub(crate) conn: Connection,
+    pub(crate) index_dir: String,
 }
 
 impl Reader {
@@ -53,11 +66,58 @@ impl Reader {
     /// Run `op` with WrongStack's argument shape (`projectRoot`/`indexDir`
     /// are ignored: the reader already knows its index).
     pub fn call(&self, op: &str, args: &Value) -> Result<Value, QueryError> {
-        let _ = args;
+        self.check_servable()?;
         match op {
             "stats" => self.stats(),
+            "search" => search::search(self, args),
+            "context" => search::context(self, args),
+            "vectorSearch" => search::vector_search(self, args),
+            "packageGraph" => graph::package_graph(self, args),
+            "fileGraph" => graph::file_graph(self, args),
+            "symbolGraph" => graph::symbol_graph(self, args),
+            "incomingCalls" => graph::incoming_calls(self, args),
+            "outgoingCalls" => graph::outgoing_calls(self, args),
             other => Err(QueryError::Unsupported(format!("query op '{other}'"))),
         }
+    }
+
+    /// WrongStack's store open runs a schema initializer that rewrites some
+    /// databases before answering (drops everything when the version is not
+    /// 5, rebuilds a missing or out-of-sync FTS table). A read-only reader
+    /// cannot reproduce that, so such an index is not served natively.
+    fn check_servable(&self) -> Result<(), QueryError> {
+        let c = &self.conn;
+        let version: Option<String> = c
+            .query_row(
+                "SELECT value FROM metadata WHERE key = 'version'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        if version.as_deref() != Some("5") {
+            return Err(QueryError::Unsupported(format!(
+                "index schema version {} (WrongStack would reset it on open)",
+                version.as_deref().unwrap_or("missing")
+            )));
+        }
+        let fts: i64 = c.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'symbols_fts'",
+            [],
+            |r| r.get(0),
+        )?;
+        if fts == 0 {
+            return Err(QueryError::Unsupported(
+                "no symbols_fts table (WrongStack would create and fill it on open)".into(),
+            ));
+        }
+        let symbols: i64 = c.query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0))?;
+        let indexed: i64 = c.query_row("SELECT COUNT(*) FROM symbols_fts", [], |r| r.get(0))?;
+        if symbols != indexed {
+            return Err(QueryError::Unsupported(format!(
+                "symbols_fts out of sync ({indexed} rows for {symbols} symbols; WrongStack would rebuild it on open)"
+            )));
+        }
+        Ok(())
     }
 
     /// `getStatsWithStatement` (`writer-admin.ts`).

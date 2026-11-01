@@ -126,7 +126,10 @@ fn native_queries_match_recorded_wrongstack_results() {
         {
             let name = op["op"].as_str().unwrap().to_string();
             let t = tally.entry(name.clone()).or_default();
-            let args = absolutize(&op["args"], &root);
+            let mut args = absolutize(&op["args"], &root);
+            // The recorder strips `projectRoot` (build-fixtures.ts); the
+            // recorded call carried it (`context` relativises against it).
+            args["projectRoot"] = json!(root);
             match (reader.call(&name, &args), op.get("result"), op.get("error")) {
                 (Err(QueryError::Unsupported(_)), _, _) => t.not_run += 1,
                 (Ok(v), Some(want), _) if normalize(&v, &root, &index_s, "") == *want => {
@@ -165,6 +168,18 @@ fn native_queries_match_recorded_wrongstack_results() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(tally["stats"].pass == 8, "stats must be served natively");
+    assert_eq!(tally["search"].pass, 178);
+    assert_eq!(tally["context"].pass, 16);
+    assert_eq!(tally["vectorSearch"].pass, 8);
+    for (op, n) in [
+        ("packageGraph", 8),
+        ("fileGraph", 18),
+        ("symbolGraph", 30),
+        ("incomingCalls", 243),
+        ("outgoingCalls", 162),
+    ] {
+        assert_eq!(tally[op].pass, n, "{op} must be served natively");
+    }
 }
 
 #[test]
@@ -181,4 +196,33 @@ fn reader_never_leaves_wal_files() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(names, vec!["index.db"]);
+}
+
+#[test]
+fn indexes_wrongstack_would_rewrite_on_open_are_not_served() {
+    let tmp = tempfile::tempdir().unwrap();
+    let src = repo().join("tests/fixtures/oracle/basic-ts/index.db");
+    let db = tmp.path().join("index.db");
+    std::fs::copy(&src, &db).unwrap();
+    {
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute("DELETE FROM symbols_fts WHERE rowid = 1", [])
+            .unwrap();
+    }
+    let r = Reader::open(tmp.path()).unwrap();
+    assert!(matches!(
+        r.call("search", &json!({"query": "greet"})),
+        Err(QueryError::Unsupported(_))
+    ));
+    drop(r);
+    {
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute("UPDATE metadata SET value = '4' WHERE key = 'version'", [])
+            .unwrap();
+    }
+    let r = Reader::open(tmp.path()).unwrap();
+    assert!(matches!(
+        r.call("stats", &json!({})),
+        Err(QueryError::Unsupported(_))
+    ));
 }

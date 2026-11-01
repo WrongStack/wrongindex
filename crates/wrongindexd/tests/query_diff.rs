@@ -218,7 +218,9 @@ async fn diff_fixture(c: &mut Client, name: &str, native: bool) -> (usize, Vec<S
             .await;
         let ok = match (&live, op.get("result"), op.get("error")) {
             (Ok(v), Some(expected), _) => {
-                normalize(&v["result"], &root_s, &index_s, "") == *expected
+                // Every recorded operation is served by the native reader.
+                v["backend"] == "native"
+                    && normalize(&v["result"], &root_s, &index_s, "") == *expected
             }
             (Err(e), None, Some(expected)) => {
                 let msg = normalize(&json!(e.to_string()), &root_s, &index_s, "");

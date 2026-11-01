@@ -20,6 +20,9 @@ thiserror.workspace = true
 
 [dev-dependencies]
 rusqlite.workspace = true
+# Parse recorded fixture floats exactly (shortest round-trip forms such as
+# 0.15361991840031813 otherwise come back one ulp off).
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 tempfile.workspace = true
 
 [lints]
