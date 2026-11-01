@@ -726,6 +726,185 @@ fn native_matches_wrongstack_on_generic_language_projects() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// npm workspace with two TypeScript packages and some JavaScript: relative
+/// and package imports, re-export barrels, classes/interfaces/enums, JSX,
+/// CommonJS, docs, `<module>` owners.
+fn scenario_npm_monorepo(root: &Path) {
+    write(
+        root,
+        "package.json",
+        "{\n  \"name\": \"demo-root\",\n  \"private\": true,\n  \"workspaces\": [\"packages/*\"]\n}\n",
+    );
+    write(
+        root,
+        "tsconfig.json",
+        "{\n  \"compilerOptions\": {\n    \"strict\": true,\n    \"jsx\": \"react-jsx\",\n    \"paths\": {\"@demo/*\": [\"packages/*/src\"]}\n  }\n}\n",
+    );
+    write(
+        root,
+        "packages/core/package.json",
+        "{\n  \"name\": \"@demo/core\",\n  \"version\": \"1.0.0\",\n  \"main\": \"src/index.ts\",\n  \"exports\": {\".\": \"./src/index.ts\", \"./model\": \"./src/model/index.ts\"}\n}\n",
+    );
+    write(
+        root,
+        "packages/core/src/index.ts",
+        "/** Core barrel. */\nexport * from './model';\nexport { Store, type StoreOptions } from './store';\nexport * as util from './util/strings';\nexport { default as createStore } from './store';\n",
+    );
+    write(
+        root,
+        "packages/core/src/model/index.ts",
+        "export * from './user';\nexport * from './team';\nexport type { Id } from './ids';\n",
+    );
+    write(
+        root,
+        "packages/core/src/model/ids.ts",
+        "/** Opaque identifier. */\nexport type Id = string & { readonly __brand: 'Id' };\n\nexport const enum Kind {\n  User = 'user',\n  Team = 'team',\n}\n\nexport function makeId(raw: string): Id {\n  return raw as Id;\n}\n",
+    );
+    write(
+        root,
+        "packages/core/src/model/user.ts",
+        "import { makeId, type Id } from './ids';\nimport { capitalize } from '../util/strings';\n\n/** Anything with a display name. */\nexport interface Named {\n  readonly name: string;\n  label(): string;\n}\n\nexport abstract class Entity<T extends Id = Id> {\n  constructor(public readonly id: T) {}\n  abstract describe(): string;\n}\n\n/**\n * A user of the system.\n */\nexport class User extends Entity implements Named {\n  static count = 0;\n  #secret = '';\n  constructor(id: string, public name: string) {\n    super(makeId(id));\n    User.count++;\n  }\n  label(): string {\n    return capitalize(this.name);\n  }\n  get initials(): string {\n    return this.name.slice(0, 2);\n  }\n  describe = (): string => `${this.id}:${this.label()}`;\n}\n",
+    );
+    write(
+        root,
+        "packages/core/src/model/team.ts",
+        "import { User, type Named } from './user';\n\nexport class Team implements Named {\n  private members: User[] = [];\n  constructor(public name: string) {}\n  add(user: User): this {\n    this.members.push(user);\n    return this;\n  }\n  label(): string {\n    return `${this.name} (${this.members.length})`;\n  }\n}\n\nexport namespace Team {\n  export const MAX = 10;\n}\n",
+    );
+    write(
+        root,
+        "packages/core/src/store.ts",
+        "import type { Id } from './model/ids';\nimport { User } from './model';\n\nexport interface StoreOptions {\n  capacity?: number;\n}\n\nexport class Store<T extends { id: Id }> {\n  private readonly items = new Map<Id, T>();\n  constructor(private options: StoreOptions = {}) {}\n  put(item: T): void {\n    this.items.set(item.id, item);\n  }\n  get(id: Id): T | undefined {\n    return this.items.get(id);\n  }\n}\n\nexport default function createStore(): Store<User> {\n  return new Store<User>();\n}\n",
+    );
+    write(
+        root,
+        "packages/core/src/util/strings.ts",
+        "export const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);\n\nexport function pad(s: string, n = 2): string {\n  return s.padStart(n, '0');\n}\n",
+    );
+    write(
+        root,
+        "packages/core/test/user.test.ts",
+        "import { describe, expect, it } from 'vitest';\nimport { User } from '../src';\n\ndescribe('User', () => {\n  it('labels', () => {\n    expect(new User('1', 'ada').label()).toBe('Ada');\n  });\n});\n",
+    );
+    write(
+        root,
+        "packages/app/package.json",
+        "{\n  \"name\": \"@demo/app\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\"@demo/core\": \"workspace:*\", \"react\": \"^19.0.0\"}\n}\n",
+    );
+    write(
+        root,
+        "packages/app/src/main.tsx",
+        "import React, { useState } from 'react';\nimport { createRoot } from 'react-dom/client';\nimport { User, Team, util } from '@demo/core';\nimport type { Named } from '@demo/core/model';\nimport { App } from './App';\nimport './styles.css';\n\nconst team = new Team('core').add(new User('1', 'ada'));\n\nexport function mount(el: HTMLElement): void {\n  createRoot(el).render(<App team={team} title={util.capitalize('demo')} />);\n}\n\nexport const label = (n: Named) => n.label();\n",
+    );
+    write(
+        root,
+        "packages/app/src/App.tsx",
+        "import * as React from 'react';\nimport type { Team } from '@demo/core';\nimport { Layout } from './components/Layout';\n\nexport interface AppProps {\n  team: Team;\n  title: string;\n}\n\n/** Root component. */\nexport function App({ team, title }: AppProps) {\n  const [open, setOpen] = React.useState(false);\n  return (\n    <Layout.Page title={title}>\n      <Layout.Header onClick={() => setOpen(!open)}>{team.label()}</Layout.Header>\n      {open && <p>{title}</p>}\n    </Layout.Page>\n  );\n}\n\nexport default App;\n",
+    );
+    write(
+        root,
+        "packages/app/src/components/Layout.tsx",
+        "import type { ReactNode } from 'react';\n\ntype Props = { title?: string; children?: ReactNode; onClick?: () => void };\n\nfunction Page({ title, children }: Props) {\n  return <main aria-label={title}>{children}</main>;\n}\n\nfunction Header({ children, onClick }: Props) {\n  return <header onClick={onClick}>{children}</header>;\n}\n\nexport const Layout = { Page, Header };\n",
+    );
+    write(
+        root,
+        "packages/app/src/styles.css",
+        ".app {\n  color: red;\n}\n",
+    );
+    write(
+        root,
+        "packages/app/src/legacy.js",
+        "'use strict';\nconst path = require('path');\nconst { pad } = require('@demo/core/src/util/strings');\n\nfunction Legacy(name) {\n  this.name = name;\n}\nLegacy.prototype.render = function () {\n  return path.join(pad(this.name), 'x');\n};\n\nmodule.exports = { Legacy };\n",
+    );
+    write(
+        root,
+        "packages/app/src/esm.mjs",
+        "import { Legacy } from './legacy.js';\nexport const legacy = new Legacy('a');\nexport default class Widget {\n  render() {\n    return legacy.render();\n  }\n}\n",
+    );
+    write(
+        root,
+        "packages/app/src/view.jsx",
+        "import React from 'react';\nimport Widget from './esm.mjs';\nexport function View(props) {\n  return <section>{new Widget().render()}{props.children}</section>;\n}\n",
+    );
+    write(
+        root,
+        "packages/app/scripts/build.cjs",
+        "#!/usr/bin/env node\nconst fs = require('node:fs');\nif (!fs.existsSync('dist')) return;\nfs.rmSync('dist', { recursive: true });\n",
+    );
+    write(
+        root,
+        "packages/app/types/env.d.ts",
+        "declare module '*.css';\ndeclare global {\n  interface Window {\n    demo?: string;\n  }\n}\nexport {};\n",
+    );
+    write(root, "dist/bundle.js", "function ignored() {}\n");
+    write(root, ".gitignore", "dist/\n");
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+fn native_matches_wrongstack_on_typescript_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+
+    let s = base.join("ts-walk");
+    let root = s.join("project");
+    scenario_npm_monorepo(&root);
+    failures.extend(compare("ts-monorepo-walk", &root, &s));
+    let idx = s.join("idx-native");
+    let langs = scalar(
+        &idx,
+        "SELECT group_concat(lang) FROM (SELECT DISTINCT lang FROM files ORDER BY lang)",
+    );
+    let packages = scalar(
+        &idx,
+        "SELECT group_concat(DISTINCT package) FROM (SELECT package FROM files ORDER BY package)",
+    );
+    let refs = scalar(&idx, "SELECT count(*) FROM refs");
+    let resolved = scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''");
+    let bound = scalar(&idx, "SELECT count(*) FROM refs WHERE to_id IS NOT NULL");
+    eprintln!(
+        "ts-monorepo-walk: langs {langs}; packages {packages}; {refs} refs, {resolved} resolved to a file, {bound} bound to a symbol"
+    );
+    assert!(langs.contains("ts") && langs.contains("tsx") && langs.contains("js"));
+    assert!(resolved.parse::<usize>().unwrap() >= 15, "{resolved}");
+    assert!(bound.parse::<usize>().unwrap() >= 15, "{bound}");
+
+    // Clean Git checkout, then a dirty one (modified, staged-new, untracked).
+    let s = base.join("ts-git");
+    let root = s.join("project");
+    scenario_npm_monorepo(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("ts-monorepo-git", &root, &s));
+
+    let s = base.join("ts-git-dirty");
+    let root = s.join("project");
+    scenario_npm_monorepo(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    write(
+        &root,
+        "packages/core/src/util/strings.ts",
+        "export function capitalize(s: string): string {\n  return s.toUpperCase();\n}\nexport function pad(s: string): string {\n  return s;\n}\n",
+    );
+    write(
+        &root,
+        "packages/core/src/extra.ts",
+        "export { pad as padLeft } from './util/strings';\n",
+    );
+    git(&root, &["add", "packages/core/src/extra.ts"]);
+    write(
+        &root,
+        "packages/app/src/untracked.ts",
+        "import { App } from './App';\nexport const app = App;\n",
+    );
+    failures.extend(compare("ts-monorepo-git-dirty", &root, &s));
+
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Real-world projects: `WRONGINDEX_DIFF_PROJECTS` lists directories
 /// (separated by `;`) that are copied and indexed both ways.
 #[test]

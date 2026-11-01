@@ -12,7 +12,8 @@
     "import-extractor.ts": "7f4fee0c65c218dce2d96c5bed3ffaf37d54ac705eb32531698a9b29ae5a4e1c",
     "parser-dispatch.ts": "de5ddfb6c9a67c97694b5982a9b421808dcaf10d5ef79d018b977cc476003662",
     "generic-parser.ts": "706a6d97ee89fc30523a381719ae242b86af4b822805038c6bafb611817c4512",
-    "infra-parser.ts": "677958dc4f2c9440c3830f2b83fa632dd1a86b353a411eae1b20ef5a36a19a51"
+    "infra-parser.ts": "677958dc4f2c9440c3830f2b83fa632dd1a86b353a411eae1b20ef5a36a19a51",
+    "ts-parser.ts": "c7cc9a334980b4370e98a06af6d6a92915e6d997c43c9a090ead7eb21e967286"
   },
   "cases": [
     {
@@ -31875,6 +31876,5619 @@
         }
       ],
       "refs": []
+    },
+    {
+      "source": "synthetic:ts-spike-a",
+      "lang": "ts",
+      "file": "C:\\kat\\a.ts",
+      "content": "\n/** @license first */\n/** real doc */\n@Component({ selector: 'x' })\nexport class Widget<T extends Base> extends Mixin(Base) implements A.B, C<D>, E {\n  @Input() name: string = '';\n  @Output() static readonly change = new EventEmitter<string>();\n  #secret = 1;\n  'quoted'() {}\n  0x10() {}\n  1e3() {}\n  .5() {}\n  017() {}\n  1_000() {}\n  [Symbol.iterator]() { const inner = 1; return inner; }\n  \"constructor\"() {}\n  constructor(private readonly svc: Service, public x?: number) { super(); new.target; super.method(); }\n  get value(): number { return this.#secret; }\n  set value(v: number) { this.#secret = v; }\n  accessor acc = 1;\n  abstract?: void;\n  m(): void;\n  m(x: string): void;\n  m(x?: string) { this?.x; obj?.y?.z; fn?.(); }\n  static { const staticLocal = 1; var staticVar = 2; }\n  arrow = async <U,>(u: U): Promise<U> => { return u; };\n  fexp = function named() { return 1; };\n  klass = class Inner { im() {} };\n}\nexport default function () { anonCall(); }\nexport namespace Outer.Middle.Inner { export const deep = 1; }\ndeclare global { interface Window { myGlobal: string } }\ndeclare module 'virtual:mod' { export function vf(): void; const vc: number; export default vc; }\nmodule LegacyNs { export var lv = 1; }\nexport declare namespace Decl { function df(): void; }\nexport as namespace UMDGlobal;\nexport enum Color { Red = 'r', Green = 'g' }\nexport const enum Flags { A = 1 << 0 }\ndeclare enum Ambient { X }\nexport type Mapped<T> = { readonly [K in keyof T]?: T[K] extends infer U ? U : never };\ntype Tpl = `prefix-${string}`;\ntype Q = typeof import('./mod').thing;\ntype QN = NS.Sub.Type<Inner.X>;\ninterface Acc { get a(): string; set a(v: string); method(): void; prop: number; (call: number): string; new (x: number): Acc; [k: string]: unknown; }\nexport function over(a: string): string;\nexport function over(a: number): number;\nexport function over(a: any) { return a; }\nimport fs = require('fs');\nimport type { T1, T2 as T3 } from './types';\nimport def, * as ns from './ns';\nimport { default as dflt, type T4, 'string name' as sn } from './x' with { type: 'json' };\nimport {} from './empty';\nimport './side';\nexport { a as b, c } from './re';\nexport * from './star';\nexport * as starNs from './starns';\nexport { default } from './dflt';\nexport {};\nexport = Widget;\nfor (const loopVar of list) { let blockLet = loopVar; }\nfor (let i = 0, j = 1; i < 1; i++) {}\nfor (var k in obj) {}\ntry { risky(); } catch (err) { const inCatch = 1; }\n{ const inBlock = 1; }\nif (x) { var hoisted = 2; }\nconst { d1, d2: renamed, d3 = 5, ...drest } = source(), [a1, , [a2], ...arest] = arr;\nexport let e1 = 1, e2 = () => {}, e3 = 'export';\nusing res = getRes();\nlabel: for (;;) { break label; }\nconst o = { m() { const local = 1; }, get g() { return 1; }, set g(v) {}, async *gen() {}, ['comp']: 1, prop: () => {}, 'str'() {}, 42() {} };\nconst tagged = tag`x${y}`;\nconst asserted = <Foo>bar;\nconst sat = cfg satisfies Config as unknown as Other;\nconst nn = maybe!.value!;\nconst call = (paren)(1);\nconst el = arr[0].x;\nconst meta = import.meta.url;\nconst dyn = import('./dyn');\nconst req = require('./req');\nfunction outer() { function innerFn() {} class InnerCls { im() {} } const notIndexed = 1; return { om() {} }; }\nconst abc = 1;\nconst ünïcødé = '😀';\n/* block */ /** after block */ export const afterBlock = 1;\nexport const sameLine = 1; /** trailing doc */\nexport const nextDecl = 2;\n/** multi\n * line\n */\nexport type Multi = string;\n/***/ const stars = 1;\n/**/ const emptyDoc = 1;\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "Widget",
+          "line": 5,
+          "col": 13,
+          "signature": "@Component({ selector: 'x' }) export class Widget<T extends Base> extends Mixin(Base) implements A.B, C<D>, E {",
+          "docComment": "@license first",
+          "scope": "",
+          "text": "Widget | @Component({ selector: 'x' }) export class Widget<T extends Base> extends Mixin(Base) implements A.B, C<D>, E { | @license first",
+          "isExported": true,
+          "endLine": 29
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 6,
+          "col": 11,
+          "signature": "@Input() name: string = '';",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "name | @Input() name: string = '';",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "property",
+          "name": "change",
+          "line": 7,
+          "col": 28,
+          "signature": "@Output() static readonly change = new EventEmitter<string>();",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "change | @Output() static readonly change = new EventEmitter<string>();",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "property",
+          "name": "#secret",
+          "line": 8,
+          "col": 2,
+          "signature": "#secret = 1;",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "#secret | #secret = 1;",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "method",
+          "name": "quoted",
+          "line": 9,
+          "col": 2,
+          "signature": "'quoted'()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "quoted | 'quoted'()",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "method",
+          "name": "16",
+          "line": 10,
+          "col": 2,
+          "signature": "0x10()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "16 | 0x10()",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "method",
+          "name": "1000",
+          "line": 11,
+          "col": 2,
+          "signature": "1e3()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "1000 | 1e3()",
+          "isExported": false,
+          "endLine": 11
+        },
+        {
+          "kind": "method",
+          "name": "0.5",
+          "line": 12,
+          "col": 2,
+          "signature": ".5()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "0.5 | .5()",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "method",
+          "name": "15",
+          "line": 13,
+          "col": 2,
+          "signature": "017()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "15 | 017()",
+          "isExported": false,
+          "endLine": 13
+        },
+        {
+          "kind": "method",
+          "name": "1000",
+          "line": 14,
+          "col": 2,
+          "signature": "1_000()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "1000 | 1_000()",
+          "isExported": false,
+          "endLine": 14
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 18,
+          "col": 6,
+          "signature": "get value(): number",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "value | get value(): number",
+          "isExported": false,
+          "endLine": 18
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 19,
+          "col": 6,
+          "signature": "set value(v: number)",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "value | set value(v: number)",
+          "isExported": false,
+          "endLine": 19
+        },
+        {
+          "kind": "property",
+          "name": "acc",
+          "line": 20,
+          "col": 11,
+          "signature": "accessor acc = 1;",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "acc | accessor acc = 1;",
+          "isExported": false,
+          "endLine": 20
+        },
+        {
+          "kind": "property",
+          "name": "abstract",
+          "line": 21,
+          "col": 2,
+          "signature": "abstract?: void;",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "abstract | abstract?: void;",
+          "isExported": false,
+          "endLine": 21
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 22,
+          "col": 2,
+          "signature": "m(): void;",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "m | m(): void;",
+          "isExported": false,
+          "endLine": 22
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 23,
+          "col": 2,
+          "signature": "m(x: string): void;",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "m | m(x: string): void;",
+          "isExported": false,
+          "endLine": 23
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 24,
+          "col": 2,
+          "signature": "m(x?: string)",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "m | m(x?: string)",
+          "isExported": false,
+          "endLine": 24
+        },
+        {
+          "kind": "const",
+          "name": "staticLocal",
+          "line": 25,
+          "col": 17,
+          "signature": "staticLocal = 1",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "staticLocal | staticLocal = 1",
+          "isExported": false,
+          "endLine": 25
+        },
+        {
+          "kind": "var",
+          "name": "staticVar",
+          "line": 25,
+          "col": 38,
+          "signature": "staticVar = 2",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "staticVar | staticVar = 2",
+          "isExported": false,
+          "endLine": 25
+        },
+        {
+          "kind": "property",
+          "name": "arrow",
+          "line": 26,
+          "col": 2,
+          "signature": "arrow = async <U,>(u: U): Promise<U> =>",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "arrow | arrow = async <U,>(u: U): Promise<U> =>",
+          "isExported": false,
+          "endLine": 26
+        },
+        {
+          "kind": "property",
+          "name": "fexp",
+          "line": 27,
+          "col": 2,
+          "signature": "fexp = function named()",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "fexp | fexp = function named()",
+          "isExported": false,
+          "endLine": 27
+        },
+        {
+          "kind": "property",
+          "name": "klass",
+          "line": 28,
+          "col": 2,
+          "signature": "klass = class Inner {",
+          "docComment": "",
+          "scope": "Widget",
+          "text": "klass | klass = class Inner {",
+          "isExported": false,
+          "endLine": 28
+        },
+        {
+          "kind": "method",
+          "name": "im",
+          "line": 28,
+          "col": 24,
+          "signature": "im()",
+          "docComment": "",
+          "scope": "Widget.klass",
+          "text": "im | im()",
+          "isExported": false,
+          "endLine": 28
+        },
+        {
+          "kind": "namespace",
+          "name": "Outer",
+          "line": 31,
+          "col": 17,
+          "signature": "export namespace Outer.Middle.Inner { export const deep = 1; }",
+          "docComment": "",
+          "scope": "",
+          "text": "Outer | export namespace Outer.Middle.Inner { export const deep = 1; }",
+          "isExported": true,
+          "endLine": 31
+        },
+        {
+          "kind": "namespace",
+          "name": "Middle",
+          "line": 31,
+          "col": 23,
+          "signature": "Middle.Inner { export const deep = 1; }",
+          "docComment": "",
+          "scope": "",
+          "text": "Middle | Middle.Inner { export const deep = 1; }",
+          "isExported": true,
+          "endLine": 31
+        },
+        {
+          "kind": "namespace",
+          "name": "Inner",
+          "line": 31,
+          "col": 30,
+          "signature": "Inner {",
+          "docComment": "",
+          "scope": "",
+          "text": "Inner | Inner {",
+          "isExported": false,
+          "endLine": 31
+        },
+        {
+          "kind": "const",
+          "name": "deep",
+          "line": 31,
+          "col": 51,
+          "signature": "deep = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "deep | deep = 1",
+          "isExported": true,
+          "endLine": 31
+        },
+        {
+          "kind": "namespace",
+          "name": "global",
+          "line": 32,
+          "col": 8,
+          "signature": "declare global {",
+          "docComment": "",
+          "scope": "",
+          "text": "global | declare global {",
+          "isExported": false,
+          "endLine": 32
+        },
+        {
+          "kind": "interface",
+          "name": "Window",
+          "line": 32,
+          "col": 27,
+          "signature": "interface Window { myGlobal: string }",
+          "docComment": "",
+          "scope": "",
+          "text": "Window | interface Window { myGlobal: string }",
+          "isExported": false,
+          "endLine": 32
+        },
+        {
+          "kind": "namespace",
+          "name": "virtual:mod",
+          "line": 33,
+          "col": 15,
+          "signature": "declare module 'virtual:mod' {",
+          "docComment": "",
+          "scope": "",
+          "text": "virtual:mod | declare module 'virtual:mod' {",
+          "isExported": false,
+          "endLine": 33
+        },
+        {
+          "kind": "function",
+          "name": "vf",
+          "line": 33,
+          "col": 47,
+          "signature": "export function vf(): void;",
+          "docComment": "",
+          "scope": "",
+          "text": "vf | export function vf(): void;",
+          "isExported": true,
+          "endLine": 33
+        },
+        {
+          "kind": "const",
+          "name": "vc",
+          "line": 33,
+          "col": 65,
+          "signature": "vc: number",
+          "docComment": "",
+          "scope": "",
+          "text": "vc | vc: number",
+          "isExported": false,
+          "endLine": 33
+        },
+        {
+          "kind": "namespace",
+          "name": "LegacyNs",
+          "line": 34,
+          "col": 7,
+          "signature": "module LegacyNs {",
+          "docComment": "",
+          "scope": "",
+          "text": "LegacyNs | module LegacyNs {",
+          "isExported": false,
+          "endLine": 34
+        },
+        {
+          "kind": "var",
+          "name": "lv",
+          "line": 34,
+          "col": 29,
+          "signature": "lv = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "lv | lv = 1",
+          "isExported": true,
+          "endLine": 34
+        },
+        {
+          "kind": "namespace",
+          "name": "Decl",
+          "line": 35,
+          "col": 25,
+          "signature": "export declare namespace Decl {",
+          "docComment": "",
+          "scope": "",
+          "text": "Decl | export declare namespace Decl {",
+          "isExported": true,
+          "endLine": 35
+        },
+        {
+          "kind": "function",
+          "name": "df",
+          "line": 35,
+          "col": 41,
+          "signature": "function df(): void;",
+          "docComment": "",
+          "scope": "",
+          "text": "df | function df(): void;",
+          "isExported": false,
+          "endLine": 35
+        },
+        {
+          "kind": "namespace",
+          "name": "UMDGlobal",
+          "line": 36,
+          "col": 20,
+          "signature": "export as namespace UMDGlobal;",
+          "docComment": "",
+          "scope": "",
+          "text": "UMDGlobal | export as namespace UMDGlobal;",
+          "isExported": true,
+          "endLine": 36
+        },
+        {
+          "kind": "enum",
+          "name": "Color",
+          "line": 37,
+          "col": 12,
+          "signature": "export enum Color { Red = 'r', Green = 'g' }",
+          "docComment": "",
+          "scope": "",
+          "text": "Color | export enum Color { Red = 'r', Green = 'g' }",
+          "isExported": true,
+          "endLine": 37
+        },
+        {
+          "kind": "enum",
+          "name": "Flags",
+          "line": 38,
+          "col": 18,
+          "signature": "export const enum Flags { A = 1 << 0 }",
+          "docComment": "",
+          "scope": "",
+          "text": "Flags | export const enum Flags { A = 1 << 0 }",
+          "isExported": true,
+          "endLine": 38
+        },
+        {
+          "kind": "enum",
+          "name": "Ambient",
+          "line": 39,
+          "col": 13,
+          "signature": "declare enum Ambient { X }",
+          "docComment": "",
+          "scope": "",
+          "text": "Ambient | declare enum Ambient { X }",
+          "isExported": false,
+          "endLine": 39
+        },
+        {
+          "kind": "type",
+          "name": "Mapped",
+          "line": 40,
+          "col": 12,
+          "signature": "export type Mapped<T> = { readonly [K in keyof T]?: T[K] extends infer U ? U : never };",
+          "docComment": "",
+          "scope": "",
+          "text": "Mapped | export type Mapped<T> = { readonly [K in keyof T]?: T[K] extends infer U ? U : never };",
+          "isExported": true,
+          "endLine": 40
+        },
+        {
+          "kind": "type",
+          "name": "Tpl",
+          "line": 41,
+          "col": 5,
+          "signature": "type Tpl = `prefix-${string}`;",
+          "docComment": "",
+          "scope": "",
+          "text": "Tpl | type Tpl = `prefix-${string}`;",
+          "isExported": false,
+          "endLine": 41
+        },
+        {
+          "kind": "type",
+          "name": "Q",
+          "line": 42,
+          "col": 5,
+          "signature": "type Q = typeof import('./mod').thing;",
+          "docComment": "",
+          "scope": "",
+          "text": "Q | type Q = typeof import('./mod').thing;",
+          "isExported": false,
+          "endLine": 42
+        },
+        {
+          "kind": "type",
+          "name": "QN",
+          "line": 43,
+          "col": 5,
+          "signature": "type QN = NS.Sub.Type<Inner.X>;",
+          "docComment": "",
+          "scope": "",
+          "text": "QN | type QN = NS.Sub.Type<Inner.X>;",
+          "isExported": false,
+          "endLine": 43
+        },
+        {
+          "kind": "interface",
+          "name": "Acc",
+          "line": 44,
+          "col": 10,
+          "signature": "interface Acc { get a(): string; set a(v: string); method(): void; prop: number; (call: number): string; new (x: number): Acc; [k: string]: unknown; }",
+          "docComment": "",
+          "scope": "",
+          "text": "Acc | interface Acc { get a(): string; set a(v: string); method(): void; prop: number; (call: number): string; new (x: number): Acc; [k: string]: unknown; }",
+          "isExported": false,
+          "endLine": 44
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 44,
+          "col": 20,
+          "signature": "get a(): string;",
+          "docComment": "",
+          "scope": "Acc",
+          "text": "a | get a(): string;",
+          "isExported": false,
+          "endLine": 44
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 44,
+          "col": 37,
+          "signature": "set a(v: string);",
+          "docComment": "",
+          "scope": "Acc",
+          "text": "a | set a(v: string);",
+          "isExported": false,
+          "endLine": 44
+        },
+        {
+          "kind": "function",
+          "name": "over",
+          "line": 45,
+          "col": 16,
+          "signature": "export function over(a: string): string;",
+          "docComment": "",
+          "scope": "",
+          "text": "over | export function over(a: string): string;",
+          "isExported": true,
+          "endLine": 45
+        },
+        {
+          "kind": "function",
+          "name": "over",
+          "line": 46,
+          "col": 16,
+          "signature": "export function over(a: number): number;",
+          "docComment": "",
+          "scope": "",
+          "text": "over | export function over(a: number): number;",
+          "isExported": true,
+          "endLine": 46
+        },
+        {
+          "kind": "function",
+          "name": "over",
+          "line": 47,
+          "col": 16,
+          "signature": "export function over(a: any)",
+          "docComment": "",
+          "scope": "",
+          "text": "over | export function over(a: any)",
+          "isExported": true,
+          "endLine": 47
+        },
+        {
+          "kind": "const",
+          "name": "loopVar",
+          "line": 60,
+          "col": 11,
+          "signature": "loopVar",
+          "docComment": "",
+          "scope": "",
+          "text": "loopVar | loopVar",
+          "isExported": false,
+          "endLine": 60
+        },
+        {
+          "kind": "let",
+          "name": "blockLet",
+          "line": 60,
+          "col": 34,
+          "signature": "blockLet = loopVar",
+          "docComment": "",
+          "scope": "",
+          "text": "blockLet | blockLet = loopVar",
+          "isExported": false,
+          "endLine": 60
+        },
+        {
+          "kind": "let",
+          "name": "i",
+          "line": 61,
+          "col": 9,
+          "signature": "i = 0",
+          "docComment": "",
+          "scope": "",
+          "text": "i | i = 0",
+          "isExported": false,
+          "endLine": 61
+        },
+        {
+          "kind": "let",
+          "name": "j",
+          "line": 61,
+          "col": 16,
+          "signature": "j = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "j | j = 1",
+          "isExported": false,
+          "endLine": 61
+        },
+        {
+          "kind": "var",
+          "name": "k",
+          "line": 62,
+          "col": 9,
+          "signature": "k",
+          "docComment": "",
+          "scope": "",
+          "text": "k | k",
+          "isExported": false,
+          "endLine": 62
+        },
+        {
+          "kind": "const",
+          "name": "inCatch",
+          "line": 63,
+          "col": 37,
+          "signature": "inCatch = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "inCatch | inCatch = 1",
+          "isExported": false,
+          "endLine": 63
+        },
+        {
+          "kind": "const",
+          "name": "inBlock",
+          "line": 64,
+          "col": 8,
+          "signature": "inBlock = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "inBlock | inBlock = 1",
+          "isExported": false,
+          "endLine": 64
+        },
+        {
+          "kind": "var",
+          "name": "hoisted",
+          "line": 65,
+          "col": 13,
+          "signature": "hoisted = 2",
+          "docComment": "",
+          "scope": "",
+          "text": "hoisted | hoisted = 2",
+          "isExported": false,
+          "endLine": 65
+        },
+        {
+          "kind": "const",
+          "name": "d1",
+          "line": 66,
+          "col": 8,
+          "signature": "{ d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "docComment": "",
+          "scope": "",
+          "text": "d1 | { d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "renamed",
+          "line": 66,
+          "col": 16,
+          "signature": "{ d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "docComment": "",
+          "scope": "",
+          "text": "renamed | { d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "d3",
+          "line": 66,
+          "col": 25,
+          "signature": "{ d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "docComment": "",
+          "scope": "",
+          "text": "d3 | { d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "drest",
+          "line": 66,
+          "col": 36,
+          "signature": "{ d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "docComment": "",
+          "scope": "",
+          "text": "drest | { d1, d2: renamed, d3 = 5, ...drest } = source()",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "a1",
+          "line": 66,
+          "col": 57,
+          "signature": "[a1, , [a2], ...arest] = arr",
+          "docComment": "",
+          "scope": "",
+          "text": "a1 | [a1, , [a2], ...arest] = arr",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "a2",
+          "line": 66,
+          "col": 64,
+          "signature": "[a1, , [a2], ...arest] = arr",
+          "docComment": "",
+          "scope": "",
+          "text": "a2 | [a1, , [a2], ...arest] = arr",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "const",
+          "name": "arest",
+          "line": 66,
+          "col": 72,
+          "signature": "[a1, , [a2], ...arest] = arr",
+          "docComment": "",
+          "scope": "",
+          "text": "arest | [a1, , [a2], ...arest] = arr",
+          "isExported": false,
+          "endLine": 66
+        },
+        {
+          "kind": "let",
+          "name": "e1",
+          "line": 67,
+          "col": 11,
+          "signature": "e1 = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "e1 | e1 = 1",
+          "isExported": true,
+          "endLine": 67
+        },
+        {
+          "kind": "let",
+          "name": "e2",
+          "line": 67,
+          "col": 19,
+          "signature": "e2 = () =>",
+          "docComment": "",
+          "scope": "",
+          "text": "e2 | e2 = () =>",
+          "isExported": false,
+          "endLine": 67
+        },
+        {
+          "kind": "let",
+          "name": "e3",
+          "line": 67,
+          "col": 34,
+          "signature": "e3 = 'export'",
+          "docComment": "",
+          "scope": "",
+          "text": "e3 | e3 = 'export'",
+          "isExported": true,
+          "endLine": 67
+        },
+        {
+          "kind": "var",
+          "name": "res",
+          "line": 68,
+          "col": 6,
+          "signature": "res = getRes()",
+          "docComment": "",
+          "scope": "",
+          "text": "res | res = getRes()",
+          "isExported": false,
+          "endLine": 68
+        },
+        {
+          "kind": "const",
+          "name": "o",
+          "line": 70,
+          "col": 6,
+          "signature": "o = { m() { const local = 1; }, get g() { return 1; }, set g(v) {}, async *gen() {}, ['comp']: 1, prop: () => {}, 'str'() {}, 42() {} }",
+          "docComment": "",
+          "scope": "",
+          "text": "o | o = { m() { const local = 1; }, get g() { return 1; }, set g(v) {}, async *gen() {}, ['comp']: 1, prop: () => {}, 'str'() {}, 42() {} }",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 70,
+          "col": 12,
+          "signature": "m()",
+          "docComment": "",
+          "scope": "",
+          "text": "m | m()",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "property",
+          "name": "g",
+          "line": 70,
+          "col": 42,
+          "signature": "get g()",
+          "docComment": "",
+          "scope": "",
+          "text": "g | get g()",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "property",
+          "name": "g",
+          "line": 70,
+          "col": 65,
+          "signature": "set g(v)",
+          "docComment": "",
+          "scope": "",
+          "text": "g | set g(v)",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "method",
+          "name": "gen",
+          "line": 70,
+          "col": 81,
+          "signature": "async *gen()",
+          "docComment": "",
+          "scope": "",
+          "text": "gen | async *gen()",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "method",
+          "name": "str",
+          "line": 70,
+          "col": 120,
+          "signature": "'str'()",
+          "docComment": "",
+          "scope": "",
+          "text": "str | 'str'()",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "method",
+          "name": "42",
+          "line": 70,
+          "col": 132,
+          "signature": "42()",
+          "docComment": "",
+          "scope": "",
+          "text": "42 | 42()",
+          "isExported": false,
+          "endLine": 70
+        },
+        {
+          "kind": "const",
+          "name": "tagged",
+          "line": 71,
+          "col": 6,
+          "signature": "tagged = tag`x${y}`",
+          "docComment": "",
+          "scope": "",
+          "text": "tagged | tagged = tag`x${y}`",
+          "isExported": false,
+          "endLine": 71
+        },
+        {
+          "kind": "const",
+          "name": "asserted",
+          "line": 72,
+          "col": 6,
+          "signature": "asserted = <Foo>bar",
+          "docComment": "",
+          "scope": "",
+          "text": "asserted | asserted = <Foo>bar",
+          "isExported": false,
+          "endLine": 72
+        },
+        {
+          "kind": "const",
+          "name": "sat",
+          "line": 73,
+          "col": 6,
+          "signature": "sat = cfg satisfies Config as unknown as Other",
+          "docComment": "",
+          "scope": "",
+          "text": "sat | sat = cfg satisfies Config as unknown as Other",
+          "isExported": false,
+          "endLine": 73
+        },
+        {
+          "kind": "const",
+          "name": "nn",
+          "line": 74,
+          "col": 6,
+          "signature": "nn = maybe!.value!",
+          "docComment": "",
+          "scope": "",
+          "text": "nn | nn = maybe!.value!",
+          "isExported": false,
+          "endLine": 74
+        },
+        {
+          "kind": "const",
+          "name": "call",
+          "line": 75,
+          "col": 6,
+          "signature": "call = (paren)(1)",
+          "docComment": "",
+          "scope": "",
+          "text": "call | call = (paren)(1)",
+          "isExported": false,
+          "endLine": 75
+        },
+        {
+          "kind": "const",
+          "name": "el",
+          "line": 76,
+          "col": 6,
+          "signature": "el = arr[0].x",
+          "docComment": "",
+          "scope": "",
+          "text": "el | el = arr[0].x",
+          "isExported": false,
+          "endLine": 76
+        },
+        {
+          "kind": "const",
+          "name": "meta",
+          "line": 77,
+          "col": 6,
+          "signature": "meta = import.meta.url",
+          "docComment": "",
+          "scope": "",
+          "text": "meta | meta = import.meta.url",
+          "isExported": false,
+          "endLine": 77
+        },
+        {
+          "kind": "const",
+          "name": "dyn",
+          "line": 78,
+          "col": 6,
+          "signature": "dyn = import('./dyn')",
+          "docComment": "",
+          "scope": "",
+          "text": "dyn | dyn = import('./dyn')",
+          "isExported": false,
+          "endLine": 78
+        },
+        {
+          "kind": "const",
+          "name": "req",
+          "line": 79,
+          "col": 6,
+          "signature": "req = require('./req')",
+          "docComment": "",
+          "scope": "",
+          "text": "req | req = require('./req')",
+          "isExported": false,
+          "endLine": 79
+        },
+        {
+          "kind": "function",
+          "name": "outer",
+          "line": 80,
+          "col": 9,
+          "signature": "function outer()",
+          "docComment": "",
+          "scope": "",
+          "text": "outer | function outer()",
+          "isExported": false,
+          "endLine": 80
+        },
+        {
+          "kind": "function",
+          "name": "innerFn",
+          "line": 80,
+          "col": 28,
+          "signature": "function innerFn()",
+          "docComment": "",
+          "scope": "outer",
+          "text": "innerFn | function innerFn()",
+          "isExported": false,
+          "endLine": 80
+        },
+        {
+          "kind": "class",
+          "name": "InnerCls",
+          "line": 80,
+          "col": 47,
+          "signature": "class InnerCls {",
+          "docComment": "",
+          "scope": "outer",
+          "text": "InnerCls | class InnerCls {",
+          "isExported": false,
+          "endLine": 80
+        },
+        {
+          "kind": "method",
+          "name": "im",
+          "line": 80,
+          "col": 58,
+          "signature": "im()",
+          "docComment": "",
+          "scope": "outer.InnerCls",
+          "text": "im | im()",
+          "isExported": false,
+          "endLine": 80
+        },
+        {
+          "kind": "method",
+          "name": "om",
+          "line": 80,
+          "col": 99,
+          "signature": "om()",
+          "docComment": "",
+          "scope": "outer",
+          "text": "om | om()",
+          "isExported": false,
+          "endLine": 80
+        },
+        {
+          "kind": "const",
+          "name": "abc",
+          "line": 81,
+          "col": 6,
+          "signature": "abc = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "abc | abc = 1",
+          "isExported": false,
+          "endLine": 81
+        },
+        {
+          "kind": "const",
+          "name": "ünïcødé",
+          "line": 82,
+          "col": 6,
+          "signature": "ünïcødé = '😀'",
+          "docComment": "",
+          "scope": "",
+          "text": "ünïcødé | ünïcødé = '😀'",
+          "isExported": false,
+          "endLine": 82
+        },
+        {
+          "kind": "const",
+          "name": "afterBlock",
+          "line": 83,
+          "col": 44,
+          "signature": "afterBlock = 1",
+          "docComment": "after block",
+          "scope": "",
+          "text": "afterBlock | afterBlock = 1 | after block",
+          "isExported": true,
+          "endLine": 83
+        },
+        {
+          "kind": "const",
+          "name": "sameLine",
+          "line": 84,
+          "col": 13,
+          "signature": "sameLine = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "sameLine | sameLine = 1",
+          "isExported": true,
+          "endLine": 84
+        },
+        {
+          "kind": "const",
+          "name": "nextDecl",
+          "line": 85,
+          "col": 13,
+          "signature": "nextDecl = 2",
+          "docComment": "",
+          "scope": "",
+          "text": "nextDecl | nextDecl = 2",
+          "isExported": true,
+          "endLine": 85
+        },
+        {
+          "kind": "type",
+          "name": "Multi",
+          "line": 89,
+          "col": 12,
+          "signature": "export type Multi = string;",
+          "docComment": "multi",
+          "scope": "",
+          "text": "Multi | export type Multi = string; | multi",
+          "isExported": true,
+          "endLine": 89
+        },
+        {
+          "kind": "const",
+          "name": "stars",
+          "line": 90,
+          "col": 12,
+          "signature": "stars = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "stars | stars = 1",
+          "isExported": false,
+          "endLine": 90
+        },
+        {
+          "kind": "const",
+          "name": "emptyDoc",
+          "line": 91,
+          "col": 11,
+          "signature": "emptyDoc = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "emptyDoc | emptyDoc = 1",
+          "isExported": false,
+          "endLine": 91
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Component",
+          "callType": "call",
+          "line": 4,
+          "lang": "ts"
+        },
+        {
+          "toName": "Base",
+          "callType": "type_ref",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "Mixin",
+          "callType": "call",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "C",
+          "callType": "implement",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "E",
+          "callType": "implement",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "A",
+          "callType": "call",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "D",
+          "callType": "type_ref",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "Input",
+          "callType": "call",
+          "line": 6,
+          "lang": "ts"
+        },
+        {
+          "toName": "Output",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "EventEmitter",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "Symbol",
+          "callType": "call",
+          "line": 15,
+          "lang": "ts"
+        },
+        {
+          "toName": "Service",
+          "callType": "type_ref",
+          "line": 17,
+          "lang": "ts"
+        },
+        {
+          "toName": "obj",
+          "callType": "call",
+          "line": 24,
+          "lang": "ts"
+        },
+        {
+          "toName": "fn",
+          "callType": "call",
+          "line": 24,
+          "lang": "ts"
+        },
+        {
+          "toName": "U",
+          "callType": "type_ref",
+          "line": 26,
+          "lang": "ts"
+        },
+        {
+          "toName": "Promise",
+          "callType": "type_ref",
+          "line": 26,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 40,
+          "lang": "ts"
+        },
+        {
+          "toName": "K",
+          "callType": "type_ref",
+          "line": 40,
+          "lang": "ts"
+        },
+        {
+          "toName": "U",
+          "callType": "type_ref",
+          "line": 40,
+          "lang": "ts"
+        },
+        {
+          "toName": "NS.Sub.Type",
+          "callType": "type_ref",
+          "line": 43,
+          "lang": "ts"
+        },
+        {
+          "toName": "Inner.X",
+          "callType": "type_ref",
+          "line": 43,
+          "lang": "ts"
+        },
+        {
+          "toName": "Acc",
+          "callType": "type_ref",
+          "line": 44,
+          "lang": "ts"
+        },
+        {
+          "toName": "T1",
+          "callType": "import",
+          "line": 49,
+          "lang": "ts",
+          "module": "./types"
+        },
+        {
+          "toName": "T2",
+          "callType": "import",
+          "line": 49,
+          "lang": "ts",
+          "module": "./types"
+        },
+        {
+          "toName": "def",
+          "callType": "import",
+          "line": 50,
+          "lang": "ts",
+          "module": "./ns"
+        },
+        {
+          "toName": "ns",
+          "callType": "import",
+          "line": 50,
+          "lang": "ts",
+          "module": "./ns"
+        },
+        {
+          "toName": "default",
+          "callType": "import",
+          "line": 51,
+          "lang": "ts",
+          "module": "./x"
+        },
+        {
+          "toName": "T4",
+          "callType": "import",
+          "line": 51,
+          "lang": "ts",
+          "module": "./x"
+        },
+        {
+          "toName": "string name",
+          "callType": "import",
+          "line": 51,
+          "lang": "ts",
+          "module": "./x"
+        },
+        {
+          "toName": "./side",
+          "callType": "import",
+          "line": 53,
+          "lang": "ts",
+          "module": "./side"
+        },
+        {
+          "toName": "a",
+          "callType": "import",
+          "line": 54,
+          "lang": "ts",
+          "module": "./re"
+        },
+        {
+          "toName": "c",
+          "callType": "import",
+          "line": 54,
+          "lang": "ts",
+          "module": "./re"
+        },
+        {
+          "toName": "./star",
+          "callType": "import",
+          "line": 55,
+          "lang": "ts",
+          "module": "./star"
+        },
+        {
+          "toName": "starNs",
+          "callType": "import",
+          "line": 56,
+          "lang": "ts",
+          "module": "./starns"
+        },
+        {
+          "toName": "default",
+          "callType": "import",
+          "line": 57,
+          "lang": "ts",
+          "module": "./dflt"
+        },
+        {
+          "toName": "risky",
+          "callType": "call",
+          "line": 63,
+          "lang": "ts"
+        },
+        {
+          "toName": "source",
+          "callType": "call",
+          "line": 66,
+          "lang": "ts"
+        },
+        {
+          "toName": "getRes",
+          "callType": "call",
+          "line": 68,
+          "lang": "ts"
+        },
+        {
+          "toName": "Foo",
+          "callType": "type_ref",
+          "line": 72,
+          "lang": "ts"
+        },
+        {
+          "toName": "Config",
+          "callType": "type_ref",
+          "line": 73,
+          "lang": "ts"
+        },
+        {
+          "toName": "Other",
+          "callType": "type_ref",
+          "line": 73,
+          "lang": "ts"
+        },
+        {
+          "toName": "require",
+          "callType": "call",
+          "line": 79,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-b",
+      "lang": "tsx",
+      "file": "C:\\kat\\b.tsx",
+      "content": "\nimport React from 'react';\nexport const App = <T,>(p: Props<T>) => (\n  <Layout.Main title={t('x')} {...rest}>\n    <this.Sub />\n    <ns:tag />\n    <Foo.Bar.Baz>{items.map((i) => <Item key={i.id} />)}</Foo.Bar.Baz>\n    &nbsp;text\n  </Layout.Main>\n);\nexport default class extends React.Component {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "App",
+          "line": 3,
+          "col": 13,
+          "signature": "App = <T,>(p: Props<T>) => ( <Layout.Main title={t('x')} {...rest}> <this.Sub /> <ns:tag /> <Foo.Bar.Baz>{items.map((i) => <Item key={i.id} />)}</Foo.Bar.Baz> &nbsp;text </Layout.Main> )",
+          "docComment": "",
+          "scope": "",
+          "text": "App | App = <T,>(p: Props<T>) => ( <Layout.Main title={t('x')} {...rest}> <this.Sub /> <ns:tag /> <Foo.Bar.Baz>{items.map((i) => <Item key={i.id} />)}</Foo.Bar.Baz> &nbsp;text </Layout.Main> )",
+          "isExported": true,
+          "endLine": 10
+        }
+      ],
+      "refs": [
+        {
+          "toName": "React",
+          "callType": "import",
+          "line": 2,
+          "lang": "tsx",
+          "module": "react"
+        },
+        {
+          "toName": "Props",
+          "callType": "type_ref",
+          "line": 3,
+          "lang": "tsx"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 3,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Layout",
+          "callType": "call",
+          "line": 4,
+          "lang": "tsx"
+        },
+        {
+          "toName": "t",
+          "callType": "call",
+          "line": 4,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Foo",
+          "callType": "call",
+          "line": 7,
+          "lang": "tsx"
+        },
+        {
+          "toName": "items",
+          "callType": "call",
+          "line": 7,
+          "lang": "tsx"
+        },
+        {
+          "toName": "i",
+          "callType": "call",
+          "line": 7,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Layout",
+          "callType": "call",
+          "line": 9,
+          "lang": "tsx"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-c",
+      "lang": "js",
+      "file": "C:\\kat\\c.js",
+      "content": "#!/usr/bin/env node\n'use strict';\nconst path = require('path');\nmodule.exports = { a: 1 };\nexports.b = function b() {};\nfunction Legacy() {}\nLegacy.prototype.m = function () { return <div className=\"x\">{this.y}</div>; };\nclass K { static s = 1; #p() {} }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "path",
+          "line": 3,
+          "col": 6,
+          "signature": "path = require('path')",
+          "docComment": "",
+          "scope": "",
+          "text": "path | path = require('path')",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "function",
+          "name": "Legacy",
+          "line": 6,
+          "col": 9,
+          "signature": "function Legacy()",
+          "docComment": "",
+          "scope": "",
+          "text": "Legacy | function Legacy()",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "class",
+          "name": "K",
+          "line": 8,
+          "col": 6,
+          "signature": "class K {",
+          "docComment": "",
+          "scope": "",
+          "text": "K | class K {",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "property",
+          "name": "s",
+          "line": 8,
+          "col": 17,
+          "signature": "static s = 1;",
+          "docComment": "",
+          "scope": "K",
+          "text": "s | static s = 1;",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "method",
+          "name": "#p",
+          "line": 8,
+          "col": 24,
+          "signature": "#p()",
+          "docComment": "",
+          "scope": "K",
+          "text": "#p | #p()",
+          "isExported": false,
+          "endLine": 8
+        }
+      ],
+      "refs": [
+        {
+          "toName": "require",
+          "callType": "call",
+          "line": 3,
+          "lang": "js"
+        },
+        {
+          "toName": "module",
+          "callType": "call",
+          "line": 4,
+          "lang": "js"
+        },
+        {
+          "toName": "exports",
+          "callType": "call",
+          "line": 5,
+          "lang": "js"
+        },
+        {
+          "toName": "Legacy",
+          "callType": "call",
+          "line": 7,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-d-cr",
+      "lang": "ts",
+      "file": "C:\\kat\\d-cr.ts",
+      "content": "/** cr doc */\rexport function crOnly() {\r  call1();\r}\rconst x = 1;\r\n/** mixed */\r\nexport const y = foo.bar;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "crOnly",
+          "line": 2,
+          "col": 16,
+          "signature": "export function crOnly()",
+          "docComment": "cr doc",
+          "scope": "",
+          "text": "crOnly | export function crOnly() | cr doc",
+          "isExported": true,
+          "endLine": 4
+        },
+        {
+          "kind": "const",
+          "name": "x",
+          "line": 5,
+          "col": 6,
+          "signature": "x = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "x | x = 1",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "const",
+          "name": "y",
+          "line": 7,
+          "col": 13,
+          "signature": "y = foo.bar",
+          "docComment": "mixed",
+          "scope": "",
+          "text": "y | y = foo.bar | mixed",
+          "isExported": true,
+          "endLine": 7
+        }
+      ],
+      "refs": [
+        {
+          "toName": "call1",
+          "callType": "call",
+          "line": 3,
+          "lang": "ts"
+        },
+        {
+          "toName": "foo",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-e-lsps",
+      "lang": "ts",
+      "file": "C:\\kat\\e-lsps.ts",
+      "content": "const a = \" \"; export function afterLS() { call2(); } /** ps doc */ export const z = b.c;\n/*   in block */ export const w = d.e;\nconst 𝒜x = 1;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "a",
+          "line": 1,
+          "col": 6,
+          "signature": "a = \" \"",
+          "docComment": "",
+          "scope": "",
+          "text": "a | a = \" \"",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "afterLS",
+          "line": 1,
+          "col": 31,
+          "signature": "export function afterLS()",
+          "docComment": "",
+          "scope": "",
+          "text": "afterLS | export function afterLS()",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "z",
+          "line": 1,
+          "col": 81,
+          "signature": "z = b.c",
+          "docComment": "",
+          "scope": "",
+          "text": "z | z = b.c",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "w",
+          "line": 2,
+          "col": 30,
+          "signature": "w = d.e",
+          "docComment": "",
+          "scope": "",
+          "text": "w | w = d.e",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "𝒜x",
+          "line": 3,
+          "col": 6,
+          "signature": "𝒜x = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "𝒜x | 𝒜x = 1",
+          "isExported": false,
+          "endLine": 3
+        }
+      ],
+      "refs": [
+        {
+          "toName": "call2",
+          "callType": "call",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "b",
+          "callType": "call",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "d",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-f-bom",
+      "lang": "ts",
+      "file": "C:\\kat\\f-bom.ts",
+      "content": "﻿/** bom doc */\nexport const bom = 1;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "bom",
+          "line": 2,
+          "col": 13,
+          "signature": "bom = 1",
+          "docComment": "bom doc",
+          "scope": "",
+          "text": "bom | bom = 1 | bom doc",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-spike-g-long",
+      "lang": "ts",
+      "file": "C:\\kat\\g-long.ts",
+      "content": "export const big: Record<string, \"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"> = {};\nexport type T = A | A | A | A | A | A | A | A | A | A | A;\nexport function longSig(p0: string,\n    p1: string,\n    p2: string,\n    p3: string,\n    p4: string,\n    p5: string,\n    p6: string,\n    p7: string,\n    p8: string,\n    p9: string,\n    p10: string,\n    p11: string,\n    p12: string,\n    p13: string,\n    p14: string,\n    p15: string,\n    p16: string,\n    p17: string,\n    p18: string,\n    p19: string,\n    p20: string,\n    p21: string,\n    p22: string,\n    p23: string,\n    p24: string,\n    p25: string,\n    p26: string,\n    p27: string,\n    p28: string,\n    p29: string,\n    p30: string,\n    p31: string,\n    p32: string,\n    p33: string,\n    p34: string,\n    p35: string,\n    p36: string,\n    p37: string,\n    p38: string,\n    p39: string,\n    p40: string,\n    p41: string,\n    p42: string,\n    p43: string,\n    p44: string,\n    p45: string,\n    p46: string,\n    p47: string,\n    p48: string,\n    p49: string,\n    p50: string,\n    p51: string,\n    p52: string,\n    p53: string,\n    p54: string,\n    p55: string,\n    p56: string,\n    p57: string,\n    p58: string,\n    p59: string,\n    p60: string,\n    p61: string,\n    p62: string,\n    p63: string,\n    p64: string,\n    p65: string,\n    p66: string,\n    p67: string,\n    p68: string,\n    p69: string,\n    p70: string,\n    p71: string,\n    p72: string,\n    p73: string,\n    p74: string,\n    p75: string,\n    p76: string,\n    p77: string,\n    p78: string,\n    p79: string) {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "big",
+          "line": 1,
+          "col": 13,
+          "signature": "big: Record<string, \"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀�",
+          "docComment": "",
+          "scope": "",
+          "text": "big | big: Record<string, \"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀�",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "type",
+          "name": "T",
+          "line": 2,
+          "col": 12,
+          "signature": "export type T = A | A | A | A | A | A | A | A | A | A | A;",
+          "docComment": "",
+          "scope": "",
+          "text": "T | export type T = A | A | A | A | A | A | A | A | A | A | A;",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "function",
+          "name": "longSig",
+          "line": 3,
+          "col": 16,
+          "signature": "export function longSig(p0: string, p1: string, p2: string, p3: string, p4: string, p5: string, p6: string, p7: string, p8: string, p9: string, p10: string, p11: string, p12: string, p13: string, p14: string, p15: string, p16: string, p17: string, p18: string, p19: string, p20: string, p21: string, p22: string, p23: string, p24: string, p25: string, p26: string, p27: string, p28: string, p29: string, p30: string, p31: string, p32: string, p33: string, p34: string, p35: string, p36: string, p37: ",
+          "docComment": "",
+          "scope": "",
+          "text": "longSig | export function longSig(p0: string, p1: string, p2: string, p3: string, p4: string, p5: string, p6: string, p7: string, p8: string, p9: string, p10: string, p11: string, p12: string, p13: string, p14: string, p15: string, p16: string, p17: string, p18: string, p19: string, p20: string, p21: string, p22: string, p23: string, p24: string, p25: string, p26: string, p27: string, p28: string, p29: string, p30: string, p31: string, p32: string, p33: string, p34: string, p35: string, p36: string, p37: ",
+          "isExported": true,
+          "endLine": 82
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Record",
+          "callType": "type_ref",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "A",
+          "callType": "type_ref",
+          "line": 2,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-h-script",
+      "lang": "ts",
+      "file": "C:\\kat\\h-script.ts",
+      "content": "await (async () => {})();\nawait\n(x);\nconst v = 1;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "v",
+          "line": 4,
+          "col": 6,
+          "signature": "v = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "v | v = 1",
+          "isExported": false,
+          "endLine": 4
+        }
+      ],
+      "refs": [
+        {
+          "toName": "await",
+          "callType": "call",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "await",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-i-nul",
+      "lang": "js",
+      "file": "C:\\kat\\i-nul.js",
+      "content": "const a = 1;\u0000\nfunction f() {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "a",
+          "line": 1,
+          "col": 6,
+          "signature": "a = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "a | a = 1",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 2,
+          "col": 9,
+          "signature": "function f()",
+          "docComment": "",
+          "scope": "",
+          "text": "f | function f()",
+          "isExported": false,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-spike-j-conflict",
+      "lang": "ts",
+      "file": "C:\\kat\\j-conflict.ts",
+      "content": "export const a = 1;\n<<<<<<< HEAD\nconst b = 1;\n=======\nconst b = 2;\n>>>>>>> branch\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "a",
+          "line": 1,
+          "col": 13,
+          "signature": "a = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "a | a = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "b",
+          "line": 3,
+          "col": 6,
+          "signature": "b = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "b | b = 1",
+          "isExported": false,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-spike-k-broken",
+      "lang": "ts",
+      "file": "C:\\kat\\k-broken.ts",
+      "content": "export function ok() {}\nexport class Broken {\n  m( {\n}\nexport const after = foo();\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "ok",
+          "line": 1,
+          "col": 16,
+          "signature": "export function ok()",
+          "docComment": "",
+          "scope": "",
+          "text": "ok | export function ok()",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "class",
+          "name": "Broken",
+          "line": 2,
+          "col": 13,
+          "signature": "export class Broken {",
+          "docComment": "",
+          "scope": "",
+          "text": "Broken | export class Broken {",
+          "isExported": true,
+          "endLine": 5
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 3,
+          "col": 2,
+          "signature": "m( { } export const after = foo();",
+          "docComment": "",
+          "scope": "Broken",
+          "text": "m | m( { } export const after = foo();",
+          "isExported": true,
+          "endLine": 5
+        }
+      ],
+      "refs": [
+        {
+          "toName": "foo",
+          "callType": "call",
+          "line": 5,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-l-jsx-in-ts",
+      "lang": "ts",
+      "file": "C:\\kat\\l-jsx-in-ts.ts",
+      "content": "const x = <T>(y: T) => y;\nconst z = <div/>;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "x",
+          "line": 1,
+          "col": 6,
+          "signature": "x = <T>(y: T) => y",
+          "docComment": "",
+          "scope": "",
+          "text": "x | x = <T>(y: T) => y",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "z",
+          "line": 2,
+          "col": 6,
+          "signature": "z = <div/>",
+          "docComment": "",
+          "scope": "",
+          "text": "z | z = <div/>",
+          "isExported": false,
+          "endLine": 2
+        }
+      ],
+      "refs": [
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "div",
+          "callType": "type_ref",
+          "line": 2,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-spike-m-decl",
+      "lang": "ts",
+      "file": "C:\\kat\\m-decl.d.ts",
+      "content": "declare function g(): void;\nexport declare class DC { private constructor(); m(): void; }\ndeclare const dc: number;\nexport {};\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "g",
+          "line": 1,
+          "col": 17,
+          "signature": "declare function g(): void;",
+          "docComment": "",
+          "scope": "",
+          "text": "g | declare function g(): void;",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "class",
+          "name": "DC",
+          "line": 2,
+          "col": 21,
+          "signature": "export declare class DC {",
+          "docComment": "",
+          "scope": "",
+          "text": "DC | export declare class DC {",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 2,
+          "col": 49,
+          "signature": "m(): void;",
+          "docComment": "",
+          "scope": "DC",
+          "text": "m | m(): void;",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "dc",
+          "line": 3,
+          "col": 14,
+          "signature": "dc: number",
+          "docComment": "",
+          "scope": "",
+          "text": "dc | dc: number",
+          "isExported": false,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-spike-n",
+      "lang": "js",
+      "file": "C:\\kat\\n.cjs",
+      "content": "if (!x) return;\nconst y = require(\"y\");\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "y",
+          "line": 2,
+          "col": 6,
+          "signature": "y = require(\"y\")",
+          "docComment": "",
+          "scope": "",
+          "text": "y | y = require(\"y\")",
+          "isExported": false,
+          "endLine": 2
+        }
+      ],
+      "refs": [
+        {
+          "toName": "require",
+          "callType": "call",
+          "line": 2,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-empty",
+      "lang": "ts",
+      "file": "C:\\kat\\empty.ts",
+      "content": "",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-numeric-names",
+      "lang": "ts",
+      "file": "C:\\kat\\nums.ts",
+      "content": "export class N {\n  123456789012345678901234567890() {}\n  1.0() {}\n  1e21() {}\n  1e-7() {}\n  0.000001() {}\n  0b101() {}\n  0o17() {}\n  0XFF() {}\n  .5e1() {}\n  1n() {}\n  9007199254740993() {}\n  0() {}\n  1_0.5_0() {}\n  get 7() { return 7; }\n  static 8 = 1;\n}\nconst lit = { 1.50() {}, 0x1F() {}, 2e0() {} };\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "N",
+          "line": 1,
+          "col": 13,
+          "signature": "export class N {",
+          "docComment": "",
+          "scope": "",
+          "text": "N | export class N {",
+          "isExported": true,
+          "endLine": 17
+        },
+        {
+          "kind": "method",
+          "name": "1.2345678901234568e+29",
+          "line": 2,
+          "col": 2,
+          "signature": "123456789012345678901234567890()",
+          "docComment": "",
+          "scope": "N",
+          "text": "1.2345678901234568e+29 | 123456789012345678901234567890()",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "method",
+          "name": "1",
+          "line": 3,
+          "col": 2,
+          "signature": "1.0()",
+          "docComment": "",
+          "scope": "N",
+          "text": "1 | 1.0()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "method",
+          "name": "1e+21",
+          "line": 4,
+          "col": 2,
+          "signature": "1e21()",
+          "docComment": "",
+          "scope": "N",
+          "text": "1e+21 | 1e21()",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "method",
+          "name": "1e-7",
+          "line": 5,
+          "col": 2,
+          "signature": "1e-7()",
+          "docComment": "",
+          "scope": "N",
+          "text": "1e-7 | 1e-7()",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "method",
+          "name": "0.000001",
+          "line": 6,
+          "col": 2,
+          "signature": "0.000001()",
+          "docComment": "",
+          "scope": "N",
+          "text": "0.000001 | 0.000001()",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "method",
+          "name": "5",
+          "line": 7,
+          "col": 2,
+          "signature": "0b101()",
+          "docComment": "",
+          "scope": "N",
+          "text": "5 | 0b101()",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "method",
+          "name": "15",
+          "line": 8,
+          "col": 2,
+          "signature": "0o17()",
+          "docComment": "",
+          "scope": "N",
+          "text": "15 | 0o17()",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "method",
+          "name": "255",
+          "line": 9,
+          "col": 2,
+          "signature": "0XFF()",
+          "docComment": "",
+          "scope": "N",
+          "text": "255 | 0XFF()",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "method",
+          "name": "5",
+          "line": 10,
+          "col": 2,
+          "signature": ".5e1()",
+          "docComment": "",
+          "scope": "N",
+          "text": "5 | .5e1()",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "method",
+          "name": "9007199254740992",
+          "line": 12,
+          "col": 2,
+          "signature": "9007199254740993()",
+          "docComment": "",
+          "scope": "N",
+          "text": "9007199254740992 | 9007199254740993()",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "method",
+          "name": "0",
+          "line": 13,
+          "col": 2,
+          "signature": "0()",
+          "docComment": "",
+          "scope": "N",
+          "text": "0 | 0()",
+          "isExported": false,
+          "endLine": 13
+        },
+        {
+          "kind": "method",
+          "name": "10.5",
+          "line": 14,
+          "col": 2,
+          "signature": "1_0.5_0()",
+          "docComment": "",
+          "scope": "N",
+          "text": "10.5 | 1_0.5_0()",
+          "isExported": false,
+          "endLine": 14
+        },
+        {
+          "kind": "property",
+          "name": "7",
+          "line": 15,
+          "col": 6,
+          "signature": "get 7()",
+          "docComment": "",
+          "scope": "N",
+          "text": "7 | get 7()",
+          "isExported": false,
+          "endLine": 15
+        },
+        {
+          "kind": "property",
+          "name": "8",
+          "line": 16,
+          "col": 9,
+          "signature": "static 8 = 1;",
+          "docComment": "",
+          "scope": "N",
+          "text": "8 | static 8 = 1;",
+          "isExported": false,
+          "endLine": 16
+        },
+        {
+          "kind": "const",
+          "name": "lit",
+          "line": 18,
+          "col": 6,
+          "signature": "lit = { 1.50() {}, 0x1F() {}, 2e0() {} }",
+          "docComment": "",
+          "scope": "",
+          "text": "lit | lit = { 1.50() {}, 0x1F() {}, 2e0() {} }",
+          "isExported": false,
+          "endLine": 18
+        },
+        {
+          "kind": "method",
+          "name": "1.5",
+          "line": 18,
+          "col": 14,
+          "signature": "1.50()",
+          "docComment": "",
+          "scope": "",
+          "text": "1.5 | 1.50()",
+          "isExported": false,
+          "endLine": 18
+        },
+        {
+          "kind": "method",
+          "name": "31",
+          "line": 18,
+          "col": 25,
+          "signature": "0x1F()",
+          "docComment": "",
+          "scope": "",
+          "text": "31 | 0x1F()",
+          "isExported": false,
+          "endLine": 18
+        },
+        {
+          "kind": "method",
+          "name": "2",
+          "line": 18,
+          "col": 36,
+          "signature": "2e0()",
+          "docComment": "",
+          "scope": "",
+          "text": "2 | 2e0()",
+          "isExported": false,
+          "endLine": 18
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-escaped-names",
+      "lang": "ts",
+      "file": "C:\\kat\\esc.ts",
+      "content": "const \\u0061bc2 = 1;\nclass \\u{62}cls { \\u0063m() {} \"\\u0064s\"() {} 'it\\'s'() {} }\nexport function f\\u0031() {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "abc2",
+          "line": 1,
+          "col": 6,
+          "signature": "\\u0061bc2 = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "abc2 | \\u0061bc2 = 1",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "class",
+          "name": "bcls",
+          "line": 2,
+          "col": 6,
+          "signature": "class \\u{62}cls {",
+          "docComment": "",
+          "scope": "",
+          "text": "bcls | class \\u{62}cls {",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "method",
+          "name": "cm",
+          "line": 2,
+          "col": 18,
+          "signature": "\\u0063m()",
+          "docComment": "",
+          "scope": "bcls",
+          "text": "cm | \\u0063m()",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "method",
+          "name": "ds",
+          "line": 2,
+          "col": 31,
+          "signature": "\"\\u0064s\"()",
+          "docComment": "",
+          "scope": "bcls",
+          "text": "ds | \"\\u0064s\"()",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "method",
+          "name": "it's",
+          "line": 2,
+          "col": 46,
+          "signature": "'it\\'s'()",
+          "docComment": "",
+          "scope": "bcls",
+          "text": "it's | 'it\\'s'()",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "function",
+          "name": "f1",
+          "line": 3,
+          "col": 16,
+          "signature": "export function f\\u0031()",
+          "docComment": "",
+          "scope": "",
+          "text": "f1 | export function f\\u0031()",
+          "isExported": true,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-decorators",
+      "lang": "ts",
+      "file": "C:\\kat\\deco.ts",
+      "content": "@a\n@b.c()\nexport class D1 {}\nexport @e class D2 {}\n@f export default class D3 {\n  @g() @h.i m() {}\n  @j static p = 1;\n  constructor(@Inject(TOKEN) private t: T) {}\n  @k accessor q = 2;\n  @l get g2() { return 1; }\n}\nabstract class Abs { abstract m(): void; abstract p: number; protected abstract get g(): string; }\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "D1",
+          "line": 3,
+          "col": 13,
+          "signature": "@a @b.c() export class D1 {",
+          "docComment": "",
+          "scope": "",
+          "text": "D1 | @a @b.c() export class D1 {",
+          "isExported": true,
+          "endLine": 3
+        },
+        {
+          "kind": "class",
+          "name": "D2",
+          "line": 4,
+          "col": 16,
+          "signature": "export @e class D2 {",
+          "docComment": "",
+          "scope": "",
+          "text": "D2 | export @e class D2 {",
+          "isExported": true,
+          "endLine": 4
+        },
+        {
+          "kind": "class",
+          "name": "D3",
+          "line": 5,
+          "col": 24,
+          "signature": "@f export default class D3 {",
+          "docComment": "",
+          "scope": "",
+          "text": "D3 | @f export default class D3 {",
+          "isExported": true,
+          "endLine": 11
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 6,
+          "col": 12,
+          "signature": "@g() @h.i m()",
+          "docComment": "",
+          "scope": "D3",
+          "text": "m | @g() @h.i m()",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "property",
+          "name": "p",
+          "line": 7,
+          "col": 12,
+          "signature": "@j static p = 1;",
+          "docComment": "",
+          "scope": "D3",
+          "text": "p | @j static p = 1;",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "property",
+          "name": "q",
+          "line": 9,
+          "col": 14,
+          "signature": "@k accessor q = 2;",
+          "docComment": "",
+          "scope": "D3",
+          "text": "q | @k accessor q = 2;",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "property",
+          "name": "g2",
+          "line": 10,
+          "col": 9,
+          "signature": "@l get g2()",
+          "docComment": "",
+          "scope": "D3",
+          "text": "g2 | @l get g2()",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "class",
+          "name": "Abs",
+          "line": 12,
+          "col": 15,
+          "signature": "abstract class Abs {",
+          "docComment": "",
+          "scope": "",
+          "text": "Abs | abstract class Abs {",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 12,
+          "col": 30,
+          "signature": "abstract m(): void;",
+          "docComment": "",
+          "scope": "Abs",
+          "text": "m | abstract m(): void;",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "property",
+          "name": "p",
+          "line": 12,
+          "col": 50,
+          "signature": "abstract p: number;",
+          "docComment": "",
+          "scope": "Abs",
+          "text": "p | abstract p: number;",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "property",
+          "name": "g",
+          "line": 12,
+          "col": 84,
+          "signature": "protected abstract get g(): string;",
+          "docComment": "",
+          "scope": "Abs",
+          "text": "g | protected abstract get g(): string;",
+          "isExported": false,
+          "endLine": 12
+        }
+      ],
+      "refs": [
+        {
+          "toName": "b",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        },
+        {
+          "toName": "g",
+          "callType": "call",
+          "line": 6,
+          "lang": "ts"
+        },
+        {
+          "toName": "h",
+          "callType": "call",
+          "line": 6,
+          "lang": "ts"
+        },
+        {
+          "toName": "Inject",
+          "callType": "call",
+          "line": 8,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 8,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-modifiers",
+      "lang": "ts",
+      "file": "C:\\kat\\mods.ts",
+      "content": "export default async function namedDefault() { await x; }\nexport async function* gen() {}\ndeclare class DeclCls { m(): void; }\ndeclare function declFn(a: number): void;\ndeclare let declLet: string;\ndeclare var declVar: string, other: number;\nexport declare const ec: number;\nexport abstract class EA {}\nexport default interface DI { x: number }\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "namedDefault",
+          "line": 1,
+          "col": 30,
+          "signature": "export default async function namedDefault()",
+          "docComment": "",
+          "scope": "",
+          "text": "namedDefault | export default async function namedDefault()",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "gen",
+          "line": 2,
+          "col": 23,
+          "signature": "export async function* gen()",
+          "docComment": "",
+          "scope": "",
+          "text": "gen | export async function* gen()",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "class",
+          "name": "DeclCls",
+          "line": 3,
+          "col": 14,
+          "signature": "declare class DeclCls {",
+          "docComment": "",
+          "scope": "",
+          "text": "DeclCls | declare class DeclCls {",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 3,
+          "col": 24,
+          "signature": "m(): void;",
+          "docComment": "",
+          "scope": "DeclCls",
+          "text": "m | m(): void;",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "function",
+          "name": "declFn",
+          "line": 4,
+          "col": 17,
+          "signature": "declare function declFn(a: number): void;",
+          "docComment": "",
+          "scope": "",
+          "text": "declFn | declare function declFn(a: number): void;",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "let",
+          "name": "declLet",
+          "line": 5,
+          "col": 12,
+          "signature": "declLet: string",
+          "docComment": "",
+          "scope": "",
+          "text": "declLet | declLet: string",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "var",
+          "name": "declVar",
+          "line": 6,
+          "col": 12,
+          "signature": "declVar: string",
+          "docComment": "",
+          "scope": "",
+          "text": "declVar | declVar: string",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "var",
+          "name": "other",
+          "line": 6,
+          "col": 29,
+          "signature": "other: number",
+          "docComment": "",
+          "scope": "",
+          "text": "other | other: number",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "const",
+          "name": "ec",
+          "line": 7,
+          "col": 21,
+          "signature": "ec: number",
+          "docComment": "",
+          "scope": "",
+          "text": "ec | ec: number",
+          "isExported": true,
+          "endLine": 7
+        },
+        {
+          "kind": "class",
+          "name": "EA",
+          "line": 8,
+          "col": 22,
+          "signature": "export abstract class EA {",
+          "docComment": "",
+          "scope": "",
+          "text": "EA | export abstract class EA {",
+          "isExported": true,
+          "endLine": 8
+        },
+        {
+          "kind": "interface",
+          "name": "DI",
+          "line": 9,
+          "col": 25,
+          "signature": "export default interface DI { x: number }",
+          "docComment": "",
+          "scope": "",
+          "text": "DI | export default interface DI { x: number }",
+          "isExported": true,
+          "endLine": 9
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-heritage-lines",
+      "lang": "ts",
+      "file": "C:\\kat\\heritage.ts",
+      "content": "class X\n  extends\n  Base\n  implements\n    I1,\n    ns.I2,\n    I3<T> {}\ninterface Y extends\n  A, B.C<D>,\n  E {}\nconst Z = class extends Q { };\nclass W extends (Base as any) {}\nclass V extends ns.Base<T> {}\nclass U extends mix(A, B) implements I {}\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "X",
+          "line": 1,
+          "col": 6,
+          "signature": "class X extends Base implements I1, ns.I2, I3<T> {",
+          "docComment": "",
+          "scope": "",
+          "text": "X | class X extends Base implements I1, ns.I2, I3<T> {",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "interface",
+          "name": "Y",
+          "line": 8,
+          "col": 10,
+          "signature": "interface Y extends A, B.C<D>, E {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Y | interface Y extends A, B.C<D>, E {}",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "const",
+          "name": "Z",
+          "line": 11,
+          "col": 6,
+          "signature": "Z = class extends Q {",
+          "docComment": "",
+          "scope": "",
+          "text": "Z | Z = class extends Q {",
+          "isExported": false,
+          "endLine": 11
+        },
+        {
+          "kind": "class",
+          "name": "W",
+          "line": 12,
+          "col": 6,
+          "signature": "class W extends (Base as any) {",
+          "docComment": "",
+          "scope": "",
+          "text": "W | class W extends (Base as any) {",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "class",
+          "name": "V",
+          "line": 13,
+          "col": 6,
+          "signature": "class V extends ns.Base<T> {",
+          "docComment": "",
+          "scope": "",
+          "text": "V | class V extends ns.Base<T> {",
+          "isExported": false,
+          "endLine": 13
+        },
+        {
+          "kind": "class",
+          "name": "U",
+          "line": 14,
+          "col": 6,
+          "signature": "class U extends mix(A, B) implements I {",
+          "docComment": "",
+          "scope": "",
+          "text": "U | class U extends mix(A, B) implements I {",
+          "isExported": false,
+          "endLine": 14
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Base",
+          "callType": "inherit",
+          "line": 2,
+          "lang": "ts"
+        },
+        {
+          "toName": "I1",
+          "callType": "implement",
+          "line": 4,
+          "lang": "ts"
+        },
+        {
+          "toName": "I3",
+          "callType": "implement",
+          "line": 4,
+          "lang": "ts"
+        },
+        {
+          "toName": "ns",
+          "callType": "call",
+          "line": 6,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "A",
+          "callType": "inherit",
+          "line": 8,
+          "lang": "ts"
+        },
+        {
+          "toName": "E",
+          "callType": "inherit",
+          "line": 8,
+          "lang": "ts"
+        },
+        {
+          "toName": "B",
+          "callType": "call",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "D",
+          "callType": "type_ref",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "Q",
+          "callType": "inherit",
+          "line": 11,
+          "lang": "ts"
+        },
+        {
+          "toName": "ns",
+          "callType": "call",
+          "line": 13,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 13,
+          "lang": "ts"
+        },
+        {
+          "toName": "mix",
+          "callType": "call",
+          "line": 14,
+          "lang": "ts"
+        },
+        {
+          "toName": "I",
+          "callType": "implement",
+          "line": 14,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-docs",
+      "lang": "ts",
+      "file": "C:\\kat\\docs.ts",
+      "content": "/** one */ /** two */\nexport const first = 1;\n// line\n/** after line */\nexport const afterLine = 2;\n/** doc */ // trailing line comment\nexport const mixed = 3;\nconst prev = 1; /** same line doc */\nexport const notCollected = 4;\nconst prev2 = 1; /** same line doc */ /** next */\n\n/** collected */\nexport const collected = 5;\n/**\n *\n * second line is first non-empty\n */\nexport const blankFirst = 6;\n/**    padded   */\nexport const padded = 7;\n/** xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx */\nexport const longDoc = 8;\n/** a\r\n * crlf b\r\n */\r\nexport const crlfDoc = 9;\n/*\n * not jsdoc\n */\nexport const notJsDoc = 10;\n/** doc */\n\n\n\nexport function farAway() {}\nexport class C {\n  /** member doc */\n  m() {}\n  /** prop doc */ p = 1;\n}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "first",
+          "line": 2,
+          "col": 13,
+          "signature": "first = 1",
+          "docComment": "one",
+          "scope": "",
+          "text": "first | first = 1 | one",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "afterLine",
+          "line": 5,
+          "col": 13,
+          "signature": "afterLine = 2",
+          "docComment": "after line",
+          "scope": "",
+          "text": "afterLine | afterLine = 2 | after line",
+          "isExported": true,
+          "endLine": 5
+        },
+        {
+          "kind": "const",
+          "name": "mixed",
+          "line": 7,
+          "col": 13,
+          "signature": "mixed = 3",
+          "docComment": "doc",
+          "scope": "",
+          "text": "mixed | mixed = 3 | doc",
+          "isExported": true,
+          "endLine": 7
+        },
+        {
+          "kind": "const",
+          "name": "prev",
+          "line": 8,
+          "col": 6,
+          "signature": "prev = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "prev | prev = 1",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "const",
+          "name": "notCollected",
+          "line": 9,
+          "col": 13,
+          "signature": "notCollected = 4",
+          "docComment": "",
+          "scope": "",
+          "text": "notCollected | notCollected = 4",
+          "isExported": true,
+          "endLine": 9
+        },
+        {
+          "kind": "const",
+          "name": "prev2",
+          "line": 10,
+          "col": 6,
+          "signature": "prev2 = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "prev2 | prev2 = 1",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "const",
+          "name": "collected",
+          "line": 13,
+          "col": 13,
+          "signature": "collected = 5",
+          "docComment": "collected",
+          "scope": "",
+          "text": "collected | collected = 5 | collected",
+          "isExported": true,
+          "endLine": 13
+        },
+        {
+          "kind": "const",
+          "name": "blankFirst",
+          "line": 18,
+          "col": 13,
+          "signature": "blankFirst = 6",
+          "docComment": "second line is first non-empty",
+          "scope": "",
+          "text": "blankFirst | blankFirst = 6 | second line is first non-empty",
+          "isExported": true,
+          "endLine": 18
+        },
+        {
+          "kind": "const",
+          "name": "padded",
+          "line": 20,
+          "col": 13,
+          "signature": "padded = 7",
+          "docComment": "padded",
+          "scope": "",
+          "text": "padded | padded = 7 | padded",
+          "isExported": true,
+          "endLine": 20
+        },
+        {
+          "kind": "const",
+          "name": "longDoc",
+          "line": 22,
+          "col": 13,
+          "signature": "longDoc = 8",
+          "docComment": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "scope": "",
+          "text": "longDoc | longDoc = 8 | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "isExported": true,
+          "endLine": 22
+        },
+        {
+          "kind": "const",
+          "name": "crlfDoc",
+          "line": 26,
+          "col": 13,
+          "signature": "crlfDoc = 9",
+          "docComment": "a",
+          "scope": "",
+          "text": "crlfDoc | crlfDoc = 9 | a",
+          "isExported": true,
+          "endLine": 26
+        },
+        {
+          "kind": "const",
+          "name": "notJsDoc",
+          "line": 30,
+          "col": 13,
+          "signature": "notJsDoc = 10",
+          "docComment": "",
+          "scope": "",
+          "text": "notJsDoc | notJsDoc = 10",
+          "isExported": true,
+          "endLine": 30
+        },
+        {
+          "kind": "function",
+          "name": "farAway",
+          "line": 35,
+          "col": 16,
+          "signature": "export function farAway()",
+          "docComment": "doc",
+          "scope": "",
+          "text": "farAway | export function farAway() | doc",
+          "isExported": true,
+          "endLine": 35
+        },
+        {
+          "kind": "class",
+          "name": "C",
+          "line": 36,
+          "col": 13,
+          "signature": "export class C {",
+          "docComment": "",
+          "scope": "",
+          "text": "C | export class C {",
+          "isExported": true,
+          "endLine": 40
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 38,
+          "col": 2,
+          "signature": "m()",
+          "docComment": "member doc",
+          "scope": "C",
+          "text": "m | m() | member doc",
+          "isExported": false,
+          "endLine": 38
+        },
+        {
+          "kind": "property",
+          "name": "p",
+          "line": 39,
+          "col": 18,
+          "signature": "p = 1;",
+          "docComment": "prop doc",
+          "scope": "C",
+          "text": "p | p = 1; | prop doc",
+          "isExported": false,
+          "endLine": 39
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-vars",
+      "lang": "ts",
+      "file": "C:\\kat\\vars.ts",
+      "content": "export const a = 1, b = function () {}, c = class { m() {} }, d = () => 1;\nlet { x: { y: [z = 1] } } = obj;\nvar [, , third] = arr;\nexport let multi\n  = 1,\n  multi2 = 2;\nconst fnInit = function named(a) {\n  return a;\n};\nconst arrowBlock = async (a: number): Promise<void> => {\n  body();\n};\nconst clsInit = class Named extends Base {\n  im() {}\n};\nfor (const [k, v] of Object.entries(o)) {}\nfor await (const chunk of stream) {}\nswitch (x) { case 1: { const inCase = 1; } }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "a",
+          "line": 1,
+          "col": 13,
+          "signature": "a = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "a | a = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "b",
+          "line": 1,
+          "col": 20,
+          "signature": "b = function ()",
+          "docComment": "",
+          "scope": "",
+          "text": "b | b = function ()",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "c",
+          "line": 1,
+          "col": 40,
+          "signature": "c = class {",
+          "docComment": "",
+          "scope": "",
+          "text": "c | c = class {",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 1,
+          "col": 52,
+          "signature": "m()",
+          "docComment": "",
+          "scope": "",
+          "text": "m | m()",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "d",
+          "line": 1,
+          "col": 62,
+          "signature": "d = () => 1",
+          "docComment": "",
+          "scope": "",
+          "text": "d | d = () => 1",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "let",
+          "name": "z",
+          "line": 2,
+          "col": 15,
+          "signature": "{ x: { y: [z = 1] } } = obj",
+          "docComment": "",
+          "scope": "",
+          "text": "z | { x: { y: [z = 1] } } = obj",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "var",
+          "name": "third",
+          "line": 3,
+          "col": 9,
+          "signature": "[, , third] = arr",
+          "docComment": "",
+          "scope": "",
+          "text": "third | [, , third] = arr",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "let",
+          "name": "multi",
+          "line": 4,
+          "col": 11,
+          "signature": "multi = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "multi | multi = 1",
+          "isExported": true,
+          "endLine": 6
+        },
+        {
+          "kind": "let",
+          "name": "multi2",
+          "line": 6,
+          "col": 2,
+          "signature": "multi2 = 2",
+          "docComment": "",
+          "scope": "",
+          "text": "multi2 | multi2 = 2",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "const",
+          "name": "fnInit",
+          "line": 7,
+          "col": 6,
+          "signature": "fnInit = function named(a)",
+          "docComment": "",
+          "scope": "",
+          "text": "fnInit | fnInit = function named(a)",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "const",
+          "name": "arrowBlock",
+          "line": 10,
+          "col": 6,
+          "signature": "arrowBlock = async (a: number): Promise<void> =>",
+          "docComment": "",
+          "scope": "",
+          "text": "arrowBlock | arrowBlock = async (a: number): Promise<void> =>",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "const",
+          "name": "clsInit",
+          "line": 13,
+          "col": 6,
+          "signature": "clsInit = class Named extends Base {",
+          "docComment": "",
+          "scope": "",
+          "text": "clsInit | clsInit = class Named extends Base {",
+          "isExported": false,
+          "endLine": 15
+        },
+        {
+          "kind": "method",
+          "name": "im",
+          "line": 14,
+          "col": 2,
+          "signature": "im()",
+          "docComment": "",
+          "scope": "",
+          "text": "im | im()",
+          "isExported": false,
+          "endLine": 14
+        },
+        {
+          "kind": "const",
+          "name": "k",
+          "line": 16,
+          "col": 12,
+          "signature": "[k, v]",
+          "docComment": "",
+          "scope": "",
+          "text": "k | [k, v]",
+          "isExported": false,
+          "endLine": 16
+        },
+        {
+          "kind": "const",
+          "name": "v",
+          "line": 16,
+          "col": 15,
+          "signature": "[k, v]",
+          "docComment": "",
+          "scope": "",
+          "text": "v | [k, v]",
+          "isExported": false,
+          "endLine": 16
+        },
+        {
+          "kind": "const",
+          "name": "chunk",
+          "line": 17,
+          "col": 17,
+          "signature": "chunk",
+          "docComment": "",
+          "scope": "",
+          "text": "chunk | chunk",
+          "isExported": false,
+          "endLine": 17
+        },
+        {
+          "kind": "const",
+          "name": "inCase",
+          "line": 18,
+          "col": 29,
+          "signature": "inCase = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "inCase | inCase = 1",
+          "isExported": false,
+          "endLine": 18
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Promise",
+          "callType": "type_ref",
+          "line": 10,
+          "lang": "ts"
+        },
+        {
+          "toName": "body",
+          "callType": "call",
+          "line": 11,
+          "lang": "ts"
+        },
+        {
+          "toName": "Base",
+          "callType": "inherit",
+          "line": 13,
+          "lang": "ts"
+        },
+        {
+          "toName": "Object",
+          "callType": "call",
+          "line": 16,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-using",
+      "lang": "ts",
+      "file": "C:\\kat\\using.ts",
+      "content": "export {};\nusing u1 = res();\nawait using u2 = res();\nconst top = await load();\nfor (using u3 of list) {}\n",
+      "symbols": [
+        {
+          "kind": "var",
+          "name": "u1",
+          "line": 2,
+          "col": 6,
+          "signature": "u1 = res()",
+          "docComment": "",
+          "scope": "",
+          "text": "u1 | u1 = res()",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "u2",
+          "line": 3,
+          "col": 12,
+          "signature": "u2 = res()",
+          "docComment": "",
+          "scope": "",
+          "text": "u2 | u2 = res()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "const",
+          "name": "top",
+          "line": 4,
+          "col": 6,
+          "signature": "top = await load()",
+          "docComment": "",
+          "scope": "",
+          "text": "top | top = await load()",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "var",
+          "name": "u3",
+          "line": 5,
+          "col": 11,
+          "signature": "u3",
+          "docComment": "",
+          "scope": "",
+          "text": "u3 | u3",
+          "isExported": false,
+          "endLine": 5
+        }
+      ],
+      "refs": [
+        {
+          "toName": "res",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        },
+        {
+          "toName": "res",
+          "callType": "call",
+          "line": 3,
+          "lang": "ts"
+        },
+        {
+          "toName": "load",
+          "callType": "call",
+          "line": 4,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-refs",
+      "lang": "ts",
+      "file": "C:\\kat\\refs.ts",
+      "content": "import type * as TNS from \"./tns\";\nimport D, { type X as Y, Z } from \"./m\";\nimport * as NS from \"@scope/pkg/sub\";\nexport type { T1 } from \"./t\";\nexport { default as Def, \"str\" as S } from \"./d\";\nexport * as \"quoted ns\" from \"./q\";\nfoo(); foo(); bar.baz(); a.b.c.d(); new Klass(); new ns.Klass(); new (getK())();\n(paren)(); (obj).prop; obj!.p; obj?.p; obj?.[k]; obj[k]; this.p; super.x;\nconst t: Map<string, Array<Foo.Bar>> = new Map();\nfunction g<T extends Base>(a: T): asserts a is Narrow {}\nlet q: typeof val.prop; let r: keyof typeof val;\nlet i: import(\"./mod\").Type<Arg>;\nlet tl: `a${Lit}`;\nlet tup: [a: A, b?: B, ...rest: C[]];\nlet fnT: (a: P) => R; let ctorT: new (a: P) => R;\nlet cond: A extends B ? C : D;\nlet idx: O[\"k\"];\nobj.a.b; obj.a; x?.y.z;\ntag`t${expr.p}`;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "t",
+          "line": 9,
+          "col": 6,
+          "signature": "t: Map<string, Array<Foo.Bar>> = new Map()",
+          "docComment": "",
+          "scope": "",
+          "text": "t | t: Map<string, Array<Foo.Bar>> = new Map()",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "function",
+          "name": "g",
+          "line": 10,
+          "col": 9,
+          "signature": "function g<T extends Base>(a: T): asserts a is Narrow",
+          "docComment": "",
+          "scope": "",
+          "text": "g | function g<T extends Base>(a: T): asserts a is Narrow",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "let",
+          "name": "q",
+          "line": 11,
+          "col": 4,
+          "signature": "q: typeof val.prop",
+          "docComment": "",
+          "scope": "",
+          "text": "q | q: typeof val.prop",
+          "isExported": false,
+          "endLine": 11
+        },
+        {
+          "kind": "let",
+          "name": "r",
+          "line": 11,
+          "col": 28,
+          "signature": "r: keyof typeof val",
+          "docComment": "",
+          "scope": "",
+          "text": "r | r: keyof typeof val",
+          "isExported": false,
+          "endLine": 11
+        },
+        {
+          "kind": "let",
+          "name": "i",
+          "line": 12,
+          "col": 4,
+          "signature": "i: import(\"./mod\").Type<Arg>",
+          "docComment": "",
+          "scope": "",
+          "text": "i | i: import(\"./mod\").Type<Arg>",
+          "isExported": false,
+          "endLine": 12
+        },
+        {
+          "kind": "let",
+          "name": "tl",
+          "line": 13,
+          "col": 4,
+          "signature": "tl: `a${Lit}`",
+          "docComment": "",
+          "scope": "",
+          "text": "tl | tl: `a${Lit}`",
+          "isExported": false,
+          "endLine": 13
+        },
+        {
+          "kind": "let",
+          "name": "tup",
+          "line": 14,
+          "col": 4,
+          "signature": "tup: [a: A, b?: B, ...rest: C[]]",
+          "docComment": "",
+          "scope": "",
+          "text": "tup | tup: [a: A, b?: B, ...rest: C[]]",
+          "isExported": false,
+          "endLine": 14
+        },
+        {
+          "kind": "let",
+          "name": "fnT",
+          "line": 15,
+          "col": 4,
+          "signature": "fnT: (a: P) => R",
+          "docComment": "",
+          "scope": "",
+          "text": "fnT | fnT: (a: P) => R",
+          "isExported": false,
+          "endLine": 15
+        },
+        {
+          "kind": "let",
+          "name": "ctorT",
+          "line": 15,
+          "col": 26,
+          "signature": "ctorT: new (a: P) => R",
+          "docComment": "",
+          "scope": "",
+          "text": "ctorT | ctorT: new (a: P) => R",
+          "isExported": false,
+          "endLine": 15
+        },
+        {
+          "kind": "let",
+          "name": "cond",
+          "line": 16,
+          "col": 4,
+          "signature": "cond: A extends B ? C : D",
+          "docComment": "",
+          "scope": "",
+          "text": "cond | cond: A extends B ? C : D",
+          "isExported": false,
+          "endLine": 16
+        },
+        {
+          "kind": "let",
+          "name": "idx",
+          "line": 17,
+          "col": 4,
+          "signature": "idx: O[\"k\"]",
+          "docComment": "",
+          "scope": "",
+          "text": "idx | idx: O[\"k\"]",
+          "isExported": false,
+          "endLine": 17
+        }
+      ],
+      "refs": [
+        {
+          "toName": "TNS",
+          "callType": "import",
+          "line": 1,
+          "lang": "ts",
+          "module": "./tns"
+        },
+        {
+          "toName": "D",
+          "callType": "import",
+          "line": 2,
+          "lang": "ts",
+          "module": "./m"
+        },
+        {
+          "toName": "X",
+          "callType": "import",
+          "line": 2,
+          "lang": "ts",
+          "module": "./m"
+        },
+        {
+          "toName": "Z",
+          "callType": "import",
+          "line": 2,
+          "lang": "ts",
+          "module": "./m"
+        },
+        {
+          "toName": "NS",
+          "callType": "import",
+          "line": 3,
+          "lang": "ts",
+          "module": "@scope/pkg/sub"
+        },
+        {
+          "toName": "T1",
+          "callType": "import",
+          "line": 4,
+          "lang": "ts",
+          "module": "./t"
+        },
+        {
+          "toName": "default",
+          "callType": "import",
+          "line": 5,
+          "lang": "ts",
+          "module": "./d"
+        },
+        {
+          "toName": "str",
+          "callType": "import",
+          "line": 5,
+          "lang": "ts",
+          "module": "./d"
+        },
+        {
+          "toName": "quoted ns",
+          "callType": "import",
+          "line": 6,
+          "lang": "ts",
+          "module": "./q"
+        },
+        {
+          "toName": "foo",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "bar",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "a",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "Klass",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "ns",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "getK",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "obj",
+          "callType": "call",
+          "line": 8,
+          "lang": "ts"
+        },
+        {
+          "toName": "Map",
+          "callType": "type_ref",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "Array",
+          "callType": "type_ref",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "Foo.Bar",
+          "callType": "type_ref",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "Map",
+          "callType": "call",
+          "line": 9,
+          "lang": "ts"
+        },
+        {
+          "toName": "Base",
+          "callType": "type_ref",
+          "line": 10,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 10,
+          "lang": "ts"
+        },
+        {
+          "toName": "Narrow",
+          "callType": "type_ref",
+          "line": 10,
+          "lang": "ts"
+        },
+        {
+          "toName": "Arg",
+          "callType": "type_ref",
+          "line": 12,
+          "lang": "ts"
+        },
+        {
+          "toName": "Lit",
+          "callType": "type_ref",
+          "line": 13,
+          "lang": "ts"
+        },
+        {
+          "toName": "A",
+          "callType": "type_ref",
+          "line": 14,
+          "lang": "ts"
+        },
+        {
+          "toName": "B",
+          "callType": "type_ref",
+          "line": 14,
+          "lang": "ts"
+        },
+        {
+          "toName": "C",
+          "callType": "type_ref",
+          "line": 14,
+          "lang": "ts"
+        },
+        {
+          "toName": "P",
+          "callType": "type_ref",
+          "line": 15,
+          "lang": "ts"
+        },
+        {
+          "toName": "R",
+          "callType": "type_ref",
+          "line": 15,
+          "lang": "ts"
+        },
+        {
+          "toName": "A",
+          "callType": "type_ref",
+          "line": 16,
+          "lang": "ts"
+        },
+        {
+          "toName": "B",
+          "callType": "type_ref",
+          "line": 16,
+          "lang": "ts"
+        },
+        {
+          "toName": "C",
+          "callType": "type_ref",
+          "line": 16,
+          "lang": "ts"
+        },
+        {
+          "toName": "D",
+          "callType": "type_ref",
+          "line": 16,
+          "lang": "ts"
+        },
+        {
+          "toName": "O",
+          "callType": "type_ref",
+          "line": 17,
+          "lang": "ts"
+        },
+        {
+          "toName": "obj",
+          "callType": "call",
+          "line": 18,
+          "lang": "ts"
+        },
+        {
+          "toName": "x",
+          "callType": "call",
+          "line": 18,
+          "lang": "ts"
+        },
+        {
+          "toName": "expr",
+          "callType": "call",
+          "line": 19,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-jsx",
+      "lang": "tsx",
+      "file": "C:\\kat\\comp.tsx",
+      "content": "import * as React from \"react\";\nexport function Comp({ a }: Props) {\n  return (\n    <Ctx.Provider value={a}>\n      <Ctx.Consumer>{(v) => <span>{v}</span>}</Ctx.Consumer>\n      <a.b.c />\n      <svg:rect />\n      <>{list.map(render)}</>\n      <Foo\n        x={1}\n      />\n    </Ctx.Provider>\n  );\n}\nexport default () => <div />;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "Comp",
+          "line": 2,
+          "col": 16,
+          "signature": "export function Comp({ a }: Props)",
+          "docComment": "",
+          "scope": "",
+          "text": "Comp | export function Comp({ a }: Props)",
+          "isExported": true,
+          "endLine": 14
+        }
+      ],
+      "refs": [
+        {
+          "toName": "React",
+          "callType": "import",
+          "line": 1,
+          "lang": "tsx",
+          "module": "react"
+        },
+        {
+          "toName": "Props",
+          "callType": "type_ref",
+          "line": 2,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Ctx",
+          "callType": "call",
+          "line": 4,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Ctx",
+          "callType": "call",
+          "line": 5,
+          "lang": "tsx"
+        },
+        {
+          "toName": "a",
+          "callType": "call",
+          "line": 6,
+          "lang": "tsx"
+        },
+        {
+          "toName": "list",
+          "callType": "call",
+          "line": 8,
+          "lang": "tsx"
+        },
+        {
+          "toName": "Ctx",
+          "callType": "call",
+          "line": 12,
+          "lang": "tsx"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-jsx-js",
+      "lang": "jsx",
+      "file": "C:\\kat\\view.jsx",
+      "content": "import React from \"react\";\nexport default function View(props) {\n  return <Layout.Page {...props}><props.Child /></Layout.Page>;\n}\nconst Arrow = () => <></>;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "View",
+          "line": 2,
+          "col": 24,
+          "signature": "export default function View(props)",
+          "docComment": "",
+          "scope": "",
+          "text": "View | export default function View(props)",
+          "isExported": true,
+          "endLine": 4
+        },
+        {
+          "kind": "const",
+          "name": "Arrow",
+          "line": 5,
+          "col": 6,
+          "signature": "Arrow = () => <></>",
+          "docComment": "",
+          "scope": "",
+          "text": "Arrow | Arrow = () => <></>",
+          "isExported": false,
+          "endLine": 5
+        }
+      ],
+      "refs": [
+        {
+          "toName": "React",
+          "callType": "import",
+          "line": 1,
+          "lang": "jsx",
+          "module": "react"
+        },
+        {
+          "toName": "Layout",
+          "callType": "call",
+          "line": 3,
+          "lang": "jsx"
+        },
+        {
+          "toName": "props",
+          "callType": "call",
+          "line": 3,
+          "lang": "jsx"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-mjs",
+      "lang": "js",
+      "file": "C:\\kat\\mod.mjs",
+      "content": "import { a } from \"./a.mjs\";\nexport const b = a + 1;\nexport default { b };\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "b",
+          "line": 2,
+          "col": 13,
+          "signature": "b = a + 1",
+          "docComment": "",
+          "scope": "",
+          "text": "b | b = a + 1",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": [
+        {
+          "toName": "a",
+          "callType": "import",
+          "line": 1,
+          "lang": "js",
+          "module": "./a.mjs"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-cjs-script",
+      "lang": "js",
+      "file": "C:\\kat\\script.cjs",
+      "content": "\"use strict\";\nconst { join } = require(\"path\");\nfunction main() { return join(\"a\", \"b\"); }\nmodule.exports = { main };\nvar hoisted = 1;\nlet octalLike = 0;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "join",
+          "line": 2,
+          "col": 8,
+          "signature": "{ join } = require(\"path\")",
+          "docComment": "",
+          "scope": "",
+          "text": "join | { join } = require(\"path\")",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "function",
+          "name": "main",
+          "line": 3,
+          "col": 9,
+          "signature": "function main()",
+          "docComment": "",
+          "scope": "",
+          "text": "main | function main()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "var",
+          "name": "hoisted",
+          "line": 5,
+          "col": 4,
+          "signature": "hoisted = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "hoisted | hoisted = 1",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "let",
+          "name": "octalLike",
+          "line": 6,
+          "col": 4,
+          "signature": "octalLike = 0",
+          "docComment": "",
+          "scope": "",
+          "text": "octalLike | octalLike = 0",
+          "isExported": false,
+          "endLine": 6
+        }
+      ],
+      "refs": [
+        {
+          "toName": "require",
+          "callType": "call",
+          "line": 2,
+          "lang": "js"
+        },
+        {
+          "toName": "join",
+          "callType": "call",
+          "line": 3,
+          "lang": "js"
+        },
+        {
+          "toName": "module",
+          "callType": "call",
+          "line": 4,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-mts-cts",
+      "lang": "ts",
+      "file": "C:\\kat\\x.mts",
+      "content": "export const m: number = 1;\nexport function f(): void {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "m",
+          "line": 1,
+          "col": 13,
+          "signature": "m: number = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "m | m: number = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 2,
+          "col": 16,
+          "signature": "export function f(): void",
+          "docComment": "",
+          "scope": "",
+          "text": "f | export function f(): void",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-cts",
+      "lang": "ts",
+      "file": "C:\\kat\\y.cts",
+      "content": "import fs = require(\"fs\");\nexport = { fs };\n",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-namespaces",
+      "lang": "ts",
+      "file": "C:\\kat\\ns.ts",
+      "content": "namespace A.B { export class C {} }\nexport module M { export namespace N { export const v = 1; } }\ndeclare module \"ambient\";\ndeclare module \"body\" { export const k: number; }\nnamespace Empty {}\nexport declare global { var g: number; }\n",
+      "symbols": [
+        {
+          "kind": "namespace",
+          "name": "A",
+          "line": 1,
+          "col": 10,
+          "signature": "namespace A.B { export class C {} }",
+          "docComment": "",
+          "scope": "",
+          "text": "A | namespace A.B { export class C {} }",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "namespace",
+          "name": "B",
+          "line": 1,
+          "col": 12,
+          "signature": "B {",
+          "docComment": "",
+          "scope": "",
+          "text": "B | B {",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "class",
+          "name": "C",
+          "line": 1,
+          "col": 29,
+          "signature": "export class C {",
+          "docComment": "",
+          "scope": "",
+          "text": "C | export class C {",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "namespace",
+          "name": "M",
+          "line": 2,
+          "col": 14,
+          "signature": "export module M {",
+          "docComment": "",
+          "scope": "",
+          "text": "M | export module M {",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "namespace",
+          "name": "N",
+          "line": 2,
+          "col": 35,
+          "signature": "export namespace N {",
+          "docComment": "",
+          "scope": "",
+          "text": "N | export namespace N {",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "v",
+          "line": 2,
+          "col": 52,
+          "signature": "v = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "v | v = 1",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "namespace",
+          "name": "ambient",
+          "line": 3,
+          "col": 15,
+          "signature": "declare module \"ambient\";",
+          "docComment": "",
+          "scope": "",
+          "text": "ambient | declare module \"ambient\";",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "namespace",
+          "name": "body",
+          "line": 4,
+          "col": 15,
+          "signature": "declare module \"body\" {",
+          "docComment": "",
+          "scope": "",
+          "text": "body | declare module \"body\" {",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "const",
+          "name": "k",
+          "line": 4,
+          "col": 37,
+          "signature": "k: number",
+          "docComment": "",
+          "scope": "",
+          "text": "k | k: number",
+          "isExported": true,
+          "endLine": 4
+        },
+        {
+          "kind": "namespace",
+          "name": "Empty",
+          "line": 5,
+          "col": 10,
+          "signature": "namespace Empty {",
+          "docComment": "",
+          "scope": "",
+          "text": "Empty | namespace Empty {",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "namespace",
+          "name": "global",
+          "line": 6,
+          "col": 15,
+          "signature": "export declare global {",
+          "docComment": "",
+          "scope": "",
+          "text": "global | export declare global {",
+          "isExported": true,
+          "endLine": 6
+        },
+        {
+          "kind": "var",
+          "name": "g",
+          "line": 6,
+          "col": 28,
+          "signature": "g: number",
+          "docComment": "",
+          "scope": "",
+          "text": "g | g: number",
+          "isExported": false,
+          "endLine": 6
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-enum-type",
+      "lang": "ts",
+      "file": "C:\\kat\\types.ts",
+      "content": "export enum E { A, B = A + 1, C = \"c\".length }\nexport type Fn = (a: number) => void;\nexport type Obj = {\n  get x(): number;\n  set x(v: number);\n  m(): void;\n  p: string;\n};\ninterface I { get y(): string; m?(): void; readonly [k: string]: unknown }\nexport type Long = 'v0' | 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15' | 'v16' | 'v17' | 'v18' | 'v19' | 'v20' | 'v21' | 'v22' | 'v23' | 'v24' | 'v25' | 'v26' | 'v27' | 'v28' | 'v29' | 'v30' | 'v31' | 'v32' | 'v33' | 'v34' | 'v35' | 'v36' | 'v37' | 'v38' | 'v39' | 'v40' | 'v41' | 'v42' | 'v43' | 'v44' | 'v45' | 'v46' | 'v47' | 'v48' | 'v49' | 'v50' | 'v51' | 'v52' | 'v53' | 'v54' | 'v55' | 'v56' | 'v57' | 'v58' | 'v59' | 'v60' | 'v61' | 'v62' | 'v63' | 'v64' | 'v65' | 'v66' | 'v67' | 'v68' | 'v69' | 'v70' | 'v71' | 'v72' | 'v73' | 'v74' | 'v75' | 'v76' | 'v77' | 'v78' | 'v79' | 'v80' | 'v81' | 'v82' | 'v83' | 'v84' | 'v85' | 'v86' | 'v87' | 'v88' | 'v89' | 'v90' | 'v91' | 'v92' | 'v93' | 'v94' | 'v95' | 'v96' | 'v97' | 'v98' | 'v99' | 'v100' | 'v101' | 'v102' | 'v103' | 'v104' | 'v105' | 'v106' | 'v107' | 'v108' | 'v109' | 'v110' | 'v111' | 'v112' | 'v113' | 'v114' | 'v115' | 'v116' | 'v117' | 'v118' | 'v119' | 'v120' | 'v121' | 'v122' | 'v123' | 'v124' | 'v125' | 'v126' | 'v127' | 'v128' | 'v129' | 'v130' | 'v131' | 'v132' | 'v133' | 'v134' | 'v135' | 'v136' | 'v137' | 'v138' | 'v139' | 'v140' | 'v141' | 'v142' | 'v143' | 'v144' | 'v145' | 'v146' | 'v147' | 'v148' | 'v149' | 'v150' | 'v151' | 'v152' | 'v153' | 'v154' | 'v155' | 'v156' | 'v157' | 'v158' | 'v159' | 'v160' | 'v161' | 'v162' | 'v163' | 'v164' | 'v165' | 'v166' | 'v167' | 'v168' | 'v169' | 'v170' | 'v171' | 'v172' | 'v173' | 'v174' | 'v175' | 'v176' | 'v177' | 'v178' | 'v179' | 'v180' | 'v181' | 'v182' | 'v183' | 'v184' | 'v185' | 'v186' | 'v187' | 'v188' | 'v189' | 'v190' | 'v191' | 'v192' | 'v193' | 'v194' | 'v195' | 'v196' | 'v197' | 'v198' | 'v199';\n",
+      "symbols": [
+        {
+          "kind": "enum",
+          "name": "E",
+          "line": 1,
+          "col": 12,
+          "signature": "export enum E { A, B = A + 1, C = \"c\".length }",
+          "docComment": "",
+          "scope": "",
+          "text": "E | export enum E { A, B = A + 1, C = \"c\".length }",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "type",
+          "name": "Fn",
+          "line": 2,
+          "col": 12,
+          "signature": "export type Fn = (a: number) => void;",
+          "docComment": "",
+          "scope": "",
+          "text": "Fn | export type Fn = (a: number) => void;",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "type",
+          "name": "Obj",
+          "line": 3,
+          "col": 12,
+          "signature": "export type Obj = { get x(): number; set x(v: number); m(): void; p: string; };",
+          "docComment": "",
+          "scope": "",
+          "text": "Obj | export type Obj = { get x(): number; set x(v: number); m(): void; p: string; };",
+          "isExported": true,
+          "endLine": 8
+        },
+        {
+          "kind": "property",
+          "name": "x",
+          "line": 4,
+          "col": 6,
+          "signature": "get x(): number;",
+          "docComment": "",
+          "scope": "Obj",
+          "text": "x | get x(): number;",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "property",
+          "name": "x",
+          "line": 5,
+          "col": 6,
+          "signature": "set x(v: number);",
+          "docComment": "",
+          "scope": "Obj",
+          "text": "x | set x(v: number);",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "interface",
+          "name": "I",
+          "line": 9,
+          "col": 10,
+          "signature": "interface I { get y(): string; m?(): void; readonly [k: string]: unknown }",
+          "docComment": "",
+          "scope": "",
+          "text": "I | interface I { get y(): string; m?(): void; readonly [k: string]: unknown }",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "property",
+          "name": "y",
+          "line": 9,
+          "col": 18,
+          "signature": "get y(): string;",
+          "docComment": "",
+          "scope": "I",
+          "text": "y | get y(): string;",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "type",
+          "name": "Long",
+          "line": 10,
+          "col": 12,
+          "signature": "export type Long = 'v0' | 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15' | 'v16' | 'v17' | 'v18' | 'v19' | 'v20' | 'v21' | 'v22' | 'v23' | 'v24' | 'v25' | 'v26' | 'v27' | 'v28' | 'v29' | 'v30' | 'v31' | 'v32' | 'v33' | 'v34' | 'v35' | 'v36' | 'v37' | 'v38' | 'v39' | 'v40' | 'v41' | 'v42' | 'v43' | 'v44' | 'v45' | 'v46' | 'v47' | 'v48' | 'v49' | 'v50' | 'v51' | 'v52' | 'v53' | 'v54' | 'v55' | 'v56' | 'v57' | 'v58' | 'v59' | 'v60' | 'v6",
+          "docComment": "",
+          "scope": "",
+          "text": "Long | export type Long = 'v0' | 'v1' | 'v2' | 'v3' | 'v4' | 'v5' | 'v6' | 'v7' | 'v8' | 'v9' | 'v10' | 'v11' | 'v12' | 'v13' | 'v14' | 'v15' | 'v16' | 'v17' | 'v18' | 'v19' | 'v20' | 'v21' | 'v22' | 'v23' | 'v24' | 'v25' | 'v26' | 'v27' | 'v28' | 'v29' | 'v30' | 'v31' | 'v32' | 'v33' | 'v34' | 'v35' | 'v36' | 'v37' | 'v38' | 'v39' | 'v40' | 'v41' | 'v42' | 'v43' | 'v44' | 'v45' | 'v46' | 'v47' | 'v48' | 'v49' | 'v50' | 'v51' | 'v52' | 'v53' | 'v54' | 'v55' | 'v56' | 'v57' | 'v58' | 'v59' | 'v60' | 'v6",
+          "isExported": true,
+          "endLine": 10
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-surrogate-cut",
+      "lang": "ts",
+      "file": "C:\\kat\\cut.ts",
+      "content": "export const s = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀😀\";\n/** bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb😀 tail */\nexport const d = 1;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "s",
+          "line": 1,
+          "col": 13,
+          "signature": "s = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀😀\"",
+          "docComment": "",
+          "scope": "",
+          "text": "s | s = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀😀😀\"",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "d",
+          "line": 3,
+          "col": 13,
+          "signature": "d = 1",
+          "docComment": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb😀",
+          "scope": "",
+          "text": "d | d = 1 | bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb😀",
+          "isExported": true,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-line-breaks",
+      "lang": "ts",
+      "file": "C:\\kat\\lb.ts",
+      "content": "export function a() {   callA(); }\rexport function b() {\r\n  callB();\n} /** ls doc */ export const c = 1;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 1,
+          "col": 16,
+          "signature": "export function a()",
+          "docComment": "",
+          "scope": "",
+          "text": "a | export function a()",
+          "isExported": true,
+          "endLine": 3
+        },
+        {
+          "kind": "function",
+          "name": "b",
+          "line": 4,
+          "col": 16,
+          "signature": "export function b()",
+          "docComment": "",
+          "scope": "",
+          "text": "b | export function b()",
+          "isExported": true,
+          "endLine": 6
+        },
+        {
+          "kind": "const",
+          "name": "c",
+          "line": 8,
+          "col": 13,
+          "signature": "c = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "c | c = 1",
+          "isExported": true,
+          "endLine": 8
+        }
+      ],
+      "refs": [
+        {
+          "toName": "callA",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        },
+        {
+          "toName": "callB",
+          "callType": "call",
+          "line": 5,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-object-members",
+      "lang": "js",
+      "file": "C:\\kat\\obj.js",
+      "content": "export const api = {\n  get: function () {},\n  async post() {},\n  get value() { return 1; },\n  set value(v) {},\n  [computed]() {},\n  \"quoted-key\"() {},\n  #notValid: 1,\n};\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "api",
+          "line": 1,
+          "col": 13,
+          "signature": "api = { get: function () {}, async post() {}, get value() { return 1; }, set value(v) {}, [computed]() {}, \"quoted-key\"() {}, #notValid: 1, }",
+          "docComment": "",
+          "scope": "",
+          "text": "api | api = { get: function () {}, async post() {}, get value() { return 1; }, set value(v) {}, [computed]() {}, \"quoted-key\"() {}, #notValid: 1, }",
+          "isExported": true,
+          "endLine": 9
+        },
+        {
+          "kind": "method",
+          "name": "post",
+          "line": 3,
+          "col": 8,
+          "signature": "async post()",
+          "docComment": "",
+          "scope": "",
+          "text": "post | async post()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 4,
+          "col": 6,
+          "signature": "get value()",
+          "docComment": "",
+          "scope": "",
+          "text": "value | get value()",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 5,
+          "col": 6,
+          "signature": "set value(v)",
+          "docComment": "",
+          "scope": "",
+          "text": "value | set value(v)",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "method",
+          "name": "quoted-key",
+          "line": 7,
+          "col": 2,
+          "signature": "\"quoted-key\"()",
+          "docComment": "",
+          "scope": "",
+          "text": "quoted-key | \"quoted-key\"()",
+          "isExported": false,
+          "endLine": 7
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-object-members-ok",
+      "lang": "js",
+      "file": "C:\\kat\\obj2.js",
+      "content": "export const api = {\n  get: function () {},\n  async post() { inner(); },\n  get value() { return 1; },\n  set value(v) {},\n  [computed]() {},\n  \"quoted-key\"() {},\n  nested: { deep() {} },\n};\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "api",
+          "line": 1,
+          "col": 13,
+          "signature": "api = { get: function () {}, async post() { inner(); }, get value() { return 1; }, set value(v) {}, [computed]() {}, \"quoted-key\"() {}, nested: { deep() {} }, }",
+          "docComment": "",
+          "scope": "",
+          "text": "api | api = { get: function () {}, async post() { inner(); }, get value() { return 1; }, set value(v) {}, [computed]() {}, \"quoted-key\"() {}, nested: { deep() {} }, }",
+          "isExported": true,
+          "endLine": 9
+        },
+        {
+          "kind": "method",
+          "name": "post",
+          "line": 3,
+          "col": 8,
+          "signature": "async post()",
+          "docComment": "",
+          "scope": "",
+          "text": "post | async post()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 4,
+          "col": 6,
+          "signature": "get value()",
+          "docComment": "",
+          "scope": "",
+          "text": "value | get value()",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "property",
+          "name": "value",
+          "line": 5,
+          "col": 6,
+          "signature": "set value(v)",
+          "docComment": "",
+          "scope": "",
+          "text": "value | set value(v)",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "method",
+          "name": "quoted-key",
+          "line": 7,
+          "col": 2,
+          "signature": "\"quoted-key\"()",
+          "docComment": "",
+          "scope": "",
+          "text": "quoted-key | \"quoted-key\"()",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "method",
+          "name": "deep",
+          "line": 8,
+          "col": 12,
+          "signature": "deep()",
+          "docComment": "",
+          "scope": "",
+          "text": "deep | deep()",
+          "isExported": false,
+          "endLine": 8
+        }
+      ],
+      "refs": [
+        {
+          "toName": "inner",
+          "callType": "call",
+          "line": 3,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-class-fields",
+      "lang": "ts",
+      "file": "C:\\kat\\fields.ts",
+      "content": "export class F {\n  declare d: string;\n  readonly r = 1;\n  static s?: number;\n  private p!: string;\n  override o = 2;\n  #h = () => { body(); };\n  [k] = 1;\n  \"str\" = 2;\n  42 = 3;\n  f = function () {};\n  c = class {};\n  static { init(); }\n  constructor() { super(); }\n}\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "F",
+          "line": 1,
+          "col": 13,
+          "signature": "export class F {",
+          "docComment": "",
+          "scope": "",
+          "text": "F | export class F {",
+          "isExported": true,
+          "endLine": 15
+        },
+        {
+          "kind": "property",
+          "name": "d",
+          "line": 2,
+          "col": 10,
+          "signature": "declare d: string;",
+          "docComment": "",
+          "scope": "F",
+          "text": "d | declare d: string;",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "property",
+          "name": "r",
+          "line": 3,
+          "col": 11,
+          "signature": "readonly r = 1;",
+          "docComment": "",
+          "scope": "F",
+          "text": "r | readonly r = 1;",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "property",
+          "name": "s",
+          "line": 4,
+          "col": 9,
+          "signature": "static s?: number;",
+          "docComment": "",
+          "scope": "F",
+          "text": "s | static s?: number;",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "property",
+          "name": "p",
+          "line": 5,
+          "col": 10,
+          "signature": "private p!: string;",
+          "docComment": "",
+          "scope": "F",
+          "text": "p | private p!: string;",
+          "isExported": false,
+          "endLine": 5
+        },
+        {
+          "kind": "property",
+          "name": "o",
+          "line": 6,
+          "col": 11,
+          "signature": "override o = 2;",
+          "docComment": "",
+          "scope": "F",
+          "text": "o | override o = 2;",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "property",
+          "name": "#h",
+          "line": 7,
+          "col": 2,
+          "signature": "#h = () =>",
+          "docComment": "",
+          "scope": "F",
+          "text": "#h | #h = () =>",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "property",
+          "name": "str",
+          "line": 9,
+          "col": 2,
+          "signature": "\"str\" = 2;",
+          "docComment": "",
+          "scope": "F",
+          "text": "str | \"str\" = 2;",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "property",
+          "name": "42",
+          "line": 10,
+          "col": 2,
+          "signature": "42 = 3;",
+          "docComment": "",
+          "scope": "F",
+          "text": "42 | 42 = 3;",
+          "isExported": false,
+          "endLine": 10
+        },
+        {
+          "kind": "property",
+          "name": "f",
+          "line": 11,
+          "col": 2,
+          "signature": "f = function ()",
+          "docComment": "",
+          "scope": "F",
+          "text": "f | f = function ()",
+          "isExported": false,
+          "endLine": 11
+        },
+        {
+          "kind": "property",
+          "name": "c",
+          "line": 12,
+          "col": 2,
+          "signature": "c = class {",
+          "docComment": "",
+          "scope": "F",
+          "text": "c | c = class {",
+          "isExported": false,
+          "endLine": 12
+        }
+      ],
+      "refs": [
+        {
+          "toName": "body",
+          "callType": "call",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "init",
+          "callType": "call",
+          "line": 13,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-script-await-id",
+      "lang": "js",
+      "file": "C:\\kat\\awaitid.js",
+      "content": "var await = 1;\nawait(2);\n",
+      "symbols": [
+        {
+          "kind": "var",
+          "name": "await",
+          "line": 1,
+          "col": 4,
+          "signature": "await = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "await | await = 1",
+          "isExported": false,
+          "endLine": 1
+        }
+      ],
+      "refs": [
+        {
+          "toName": "await",
+          "callType": "call",
+          "line": 2,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-script-await-nested",
+      "lang": "js",
+      "file": "C:\\kat\\awaitfn.js",
+      "content": "async function f() { await g(); }\nconst h = async () => { await (1); };\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 1,
+          "col": 15,
+          "signature": "async function f()",
+          "docComment": "",
+          "scope": "",
+          "text": "f | async function f()",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "h",
+          "line": 2,
+          "col": 6,
+          "signature": "h = async () =>",
+          "docComment": "",
+          "scope": "",
+          "text": "h | h = async () =>",
+          "isExported": false,
+          "endLine": 2
+        }
+      ],
+      "refs": [
+        {
+          "toName": "g",
+          "callType": "call",
+          "line": 1,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-regex-and-html-comment",
+      "lang": "js",
+      "file": "C:\\kat\\misc.js",
+      "content": "const re = /ab+c/gi;\nconst re2 = /[/]/;\nconst div = a / b / c;\n// end\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "re",
+          "line": 1,
+          "col": 6,
+          "signature": "re = /ab+c/gi",
+          "docComment": "",
+          "scope": "",
+          "text": "re | re = /ab+c/gi",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "re2",
+          "line": 2,
+          "col": 6,
+          "signature": "re2 = /[/]/",
+          "docComment": "",
+          "scope": "",
+          "text": "re2 | re2 = /[/]/",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "const",
+          "name": "div",
+          "line": 3,
+          "col": 6,
+          "signature": "div = a / b / c",
+          "docComment": "",
+          "scope": "",
+          "text": "div | div = a / b / c",
+          "isExported": false,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-generics-arrow-ts",
+      "lang": "ts",
+      "file": "C:\\kat\\gen.ts",
+      "content": "const id = <T,>(x: T) => x;\nconst id2 = <T extends unknown>(x: T): T => x;\nfunction f<const T>(x: T) {}\nclass G<in out T> {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "id",
+          "line": 1,
+          "col": 6,
+          "signature": "id = <T,>(x: T) => x",
+          "docComment": "",
+          "scope": "",
+          "text": "id | id = <T,>(x: T) => x",
+          "isExported": false,
+          "endLine": 1
+        },
+        {
+          "kind": "const",
+          "name": "id2",
+          "line": 2,
+          "col": 6,
+          "signature": "id2 = <T extends unknown>(x: T): T => x",
+          "docComment": "",
+          "scope": "",
+          "text": "id2 | id2 = <T extends unknown>(x: T): T => x",
+          "isExported": false,
+          "endLine": 2
+        },
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 3,
+          "col": 9,
+          "signature": "function f<const T>(x: T)",
+          "docComment": "",
+          "scope": "",
+          "text": "f | function f<const T>(x: T)",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "class",
+          "name": "G",
+          "line": 4,
+          "col": 6,
+          "signature": "class G<in out T> {",
+          "docComment": "",
+          "scope": "",
+          "text": "G | class G<in out T> {",
+          "isExported": false,
+          "endLine": 4
+        }
+      ],
+      "refs": [
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 1,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 2,
+          "lang": "ts"
+        },
+        {
+          "toName": "T",
+          "callType": "type_ref",
+          "line": 3,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-crlf-file",
+      "lang": "ts",
+      "file": "C:\\kat\\crlf.ts",
+      "content": "import { a } from \"./a\";\r\n\r\n/** Doc */\r\nexport class K extends a.Base {\r\n  method(): void {\r\n    a.call();\r\n  }\r\n}\r\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "K",
+          "line": 4,
+          "col": 13,
+          "signature": "export class K extends a.Base {",
+          "docComment": "Doc",
+          "scope": "",
+          "text": "K | export class K extends a.Base { | Doc",
+          "isExported": true,
+          "endLine": 8
+        },
+        {
+          "kind": "method",
+          "name": "method",
+          "line": 5,
+          "col": 2,
+          "signature": "method(): void",
+          "docComment": "",
+          "scope": "K",
+          "text": "method | method(): void",
+          "isExported": false,
+          "endLine": 7
+        }
+      ],
+      "refs": [
+        {
+          "toName": "a",
+          "callType": "import",
+          "line": 1,
+          "lang": "ts",
+          "module": "./a"
+        },
+        {
+          "toName": "a",
+          "callType": "call",
+          "line": 4,
+          "lang": "ts"
+        },
+        {
+          "toName": "a",
+          "callType": "call",
+          "line": 6,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-nested-functions",
+      "lang": "ts",
+      "file": "C:\\kat\\nested.ts",
+      "content": "export function outer() {\n  function inner() {\n    class Local { m() {} }\n  }\n  return inner;\n}\nexport const arrow = () => {\n  function insideArrow() {}\n  const notTop = 1;\n};\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "outer",
+          "line": 1,
+          "col": 16,
+          "signature": "export function outer()",
+          "docComment": "",
+          "scope": "",
+          "text": "outer | export function outer()",
+          "isExported": true,
+          "endLine": 6
+        },
+        {
+          "kind": "function",
+          "name": "inner",
+          "line": 2,
+          "col": 11,
+          "signature": "function inner()",
+          "docComment": "",
+          "scope": "outer",
+          "text": "inner | function inner()",
+          "isExported": false,
+          "endLine": 4
+        },
+        {
+          "kind": "class",
+          "name": "Local",
+          "line": 3,
+          "col": 10,
+          "signature": "class Local {",
+          "docComment": "",
+          "scope": "outer.inner",
+          "text": "Local | class Local {",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "method",
+          "name": "m",
+          "line": 3,
+          "col": 18,
+          "signature": "m()",
+          "docComment": "",
+          "scope": "outer.inner.Local",
+          "text": "m | m()",
+          "isExported": false,
+          "endLine": 3
+        },
+        {
+          "kind": "const",
+          "name": "arrow",
+          "line": 7,
+          "col": 13,
+          "signature": "arrow = () =>",
+          "docComment": "",
+          "scope": "",
+          "text": "arrow | arrow = () =>",
+          "isExported": true,
+          "endLine": 10
+        },
+        {
+          "kind": "function",
+          "name": "insideArrow",
+          "line": 8,
+          "col": 11,
+          "signature": "function insideArrow()",
+          "docComment": "",
+          "scope": "",
+          "text": "insideArrow | function insideArrow()",
+          "isExported": false,
+          "endLine": 8
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-script-await-alike",
+      "lang": "js",
+      "file": "C:\\kat\\tla.mjs",
+      "content": "await main();\nawait 'x';\nawait new Foo();\nawait import('./x');\nawait 5;\nawait this.y;\nconst r = await fetch(u);\nawait /* c */ go();\nawait\tasync function () {};\nfunction later() {}\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "r",
+          "line": 7,
+          "col": 6,
+          "signature": "r = await fetch(u)",
+          "docComment": "",
+          "scope": "",
+          "text": "r | r = await fetch(u)",
+          "isExported": false,
+          "endLine": 7
+        },
+        {
+          "kind": "function",
+          "name": "later",
+          "line": 10,
+          "col": 9,
+          "signature": "function later()",
+          "docComment": "",
+          "scope": "",
+          "text": "later | function later()",
+          "isExported": false,
+          "endLine": 10
+        }
+      ],
+      "refs": [
+        {
+          "toName": "main",
+          "callType": "call",
+          "line": 1,
+          "lang": "js"
+        },
+        {
+          "toName": "Foo",
+          "callType": "call",
+          "line": 3,
+          "lang": "js"
+        },
+        {
+          "toName": "fetch",
+          "callType": "call",
+          "line": 7,
+          "lang": "js"
+        },
+        {
+          "toName": "go",
+          "callType": "call",
+          "line": 8,
+          "lang": "js"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:ts-script-await-template",
+      "lang": "js",
+      "file": "C:\\kat\\tla2.mjs",
+      "content": "const v = 1;\nawait `t${v}`;\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "v",
+          "line": 1,
+          "col": 6,
+          "signature": "v = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "v | v = 1",
+          "isExported": false,
+          "endLine": 1
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:ts-script-await-unary",
+      "lang": "js",
+      "file": "C:\\kat\\tla3.js",
+      "content": "await -x;\nawait [a];\n",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/basic-ts/src/greet.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/basic-ts/src/greet.ts",
+      "content": "/** Greets a person by name. */\nexport function greet(name: string): string {\n  return helper(name);\n}\n\nfunction helper(n: string): string {\n  return `hi ${n}`;\n}\n\nexport const çağrı = (x: number) => x * 2; // non-ASCII identifier\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "greet",
+          "line": 2,
+          "col": 16,
+          "signature": "export function greet(name: string): string",
+          "docComment": "Greets a person by name.",
+          "scope": "",
+          "text": "greet | export function greet(name: string): string | Greets a person by name.",
+          "isExported": true,
+          "endLine": 4
+        },
+        {
+          "kind": "function",
+          "name": "helper",
+          "line": 6,
+          "col": 9,
+          "signature": "function helper(n: string): string",
+          "docComment": "",
+          "scope": "",
+          "text": "helper | function helper(n: string): string",
+          "isExported": false,
+          "endLine": 8
+        },
+        {
+          "kind": "const",
+          "name": "çağrı",
+          "line": 10,
+          "col": 13,
+          "signature": "çağrı = (x: number) => x * 2",
+          "docComment": "",
+          "scope": "",
+          "text": "çağrı | çağrı = (x: number) => x * 2",
+          "isExported": true,
+          "endLine": 10
+        }
+      ],
+      "refs": [
+        {
+          "toName": "helper",
+          "callType": "call",
+          "line": 3,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/basic-ts/src/runner.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/basic-ts/src/runner.ts",
+      "content": "import { greet as hello } from './greet';\n\nexport class Runner {\n  run(): string {\n    return hello('world');\n  }\n  static create(): Runner {\n    return new Runner();\n  }\n}\n\nexport default function main(): void {\n  Runner.create().run();\n}\n",
+      "symbols": [
+        {
+          "kind": "class",
+          "name": "Runner",
+          "line": 3,
+          "col": 13,
+          "signature": "export class Runner {",
+          "docComment": "",
+          "scope": "",
+          "text": "Runner | export class Runner {",
+          "isExported": true,
+          "endLine": 10
+        },
+        {
+          "kind": "method",
+          "name": "run",
+          "line": 4,
+          "col": 2,
+          "signature": "run(): string",
+          "docComment": "",
+          "scope": "Runner",
+          "text": "run | run(): string",
+          "isExported": false,
+          "endLine": 6
+        },
+        {
+          "kind": "method",
+          "name": "create",
+          "line": 7,
+          "col": 9,
+          "signature": "static create(): Runner",
+          "docComment": "",
+          "scope": "Runner",
+          "text": "create | static create(): Runner",
+          "isExported": false,
+          "endLine": 9
+        },
+        {
+          "kind": "function",
+          "name": "main",
+          "line": 12,
+          "col": 24,
+          "signature": "export default function main(): void",
+          "docComment": "",
+          "scope": "",
+          "text": "main | export default function main(): void",
+          "isExported": true,
+          "endLine": 14
+        }
+      ],
+      "refs": [
+        {
+          "toName": "greet",
+          "callType": "import",
+          "line": 1,
+          "lang": "ts",
+          "module": "./greet"
+        },
+        {
+          "toName": "hello",
+          "callType": "call",
+          "line": 5,
+          "lang": "ts"
+        },
+        {
+          "toName": "Runner",
+          "callType": "type_ref",
+          "line": 7,
+          "lang": "ts"
+        },
+        {
+          "toName": "Runner",
+          "callType": "call",
+          "line": 8,
+          "lang": "ts"
+        },
+        {
+          "toName": "Runner",
+          "callType": "call",
+          "line": 13,
+          "lang": "ts"
+        }
+      ]
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/basic-ts/src/view.tsx",
+      "lang": "tsx",
+      "file": "<repo>/tests/fixtures/projects/basic-ts/src/view.tsx",
+      "content": "import { Runner } from './runner';\n\nexport function View(props: { label: string }) {\n  const r = new Runner();\n  return <div title={props.label}>{r.run()}</div>;\n}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "View",
+          "line": 3,
+          "col": 16,
+          "signature": "export function View(props: { label: string })",
+          "docComment": "",
+          "scope": "",
+          "text": "View | export function View(props: { label: string })",
+          "isExported": true,
+          "endLine": 6
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Runner",
+          "callType": "import",
+          "line": 1,
+          "lang": "tsx",
+          "module": "./runner"
+        },
+        {
+          "toName": "Runner",
+          "callType": "call",
+          "line": 4,
+          "lang": "tsx"
+        },
+        {
+          "toName": "props",
+          "callType": "call",
+          "line": 5,
+          "lang": "tsx"
+        },
+        {
+          "toName": "r",
+          "callType": "call",
+          "line": 5,
+          "lang": "tsx"
+        }
+      ]
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/astral.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/astral.ts",
+      "content": "export const astral = \"😀\";\nexport function 𝔘() { return astral; }\nexport function after() { return 1; }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "astral",
+          "line": 1,
+          "col": 13,
+          "signature": "astral = \"😀\"",
+          "docComment": "",
+          "scope": "",
+          "text": "astral | astral = \"😀\"",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "𝔘",
+          "line": 2,
+          "col": 16,
+          "signature": "export function 𝔘()",
+          "docComment": "",
+          "scope": "",
+          "text": "𝔘 | export function 𝔘()",
+          "isExported": true,
+          "endLine": 2
+        },
+        {
+          "kind": "function",
+          "name": "after",
+          "line": 3,
+          "col": 16,
+          "signature": "export function after()",
+          "docComment": "",
+          "scope": "",
+          "text": "after | export function after()",
+          "isExported": true,
+          "endLine": 3
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/bom.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/bom.ts",
+      "content": "﻿export const bom = 1;\nexport function c() { return bom; }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "bom",
+          "line": 1,
+          "col": 14,
+          "signature": "bom = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "bom | bom = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "c",
+          "line": 2,
+          "col": 16,
+          "signature": "export function c()",
+          "docComment": "",
+          "scope": "",
+          "text": "c | export function c()",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/crlf.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/crlf.ts",
+      "content": "export const crlf = 1;\r\nexport function b() { return crlf; }\r\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "crlf",
+          "line": 1,
+          "col": 13,
+          "signature": "crlf = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "crlf | crlf = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "b",
+          "line": 2,
+          "col": 16,
+          "signature": "export function b()",
+          "docComment": "",
+          "scope": "",
+          "text": "b | export function b()",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/empty.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/empty.ts",
+      "content": "",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/invalid-utf8.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/invalid-utf8.ts",
+      "content": "export const bad = \"��\";\nexport function d() { return bad; }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "bad",
+          "line": 1,
+          "col": 13,
+          "signature": "bad = \"��\"",
+          "docComment": "",
+          "scope": "",
+          "text": "bad | bad = \"��\"",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "d",
+          "line": 2,
+          "col": 16,
+          "signature": "export function d()",
+          "docComment": "",
+          "scope": "",
+          "text": "d | export function d()",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/encodings/lf.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/encodings/lf.ts",
+      "content": "export const lf = 1;\nexport function a() { return lf; }\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "lf",
+          "line": 1,
+          "col": 13,
+          "signature": "lf = 1",
+          "docComment": "",
+          "scope": "",
+          "text": "lf | lf = 1",
+          "isExported": true,
+          "endLine": 1
+        },
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 2,
+          "col": 16,
+          "signature": "export function a()",
+          "docComment": "",
+          "scope": "",
+          "text": "a | export function a()",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/paths-unicode/dir with space/file name.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/paths-unicode/dir with space/file name.ts",
+      "content": "export function spaced() { return 1; }\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "spaced",
+          "line": 1,
+          "col": 16,
+          "signature": "export function spaced()",
+          "docComment": "",
+          "scope": "",
+          "text": "spaced | export function spaced()",
+          "isExported": true,
+          "endLine": 1
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/paths-unicode/dir with space/çalışma/dosya.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/paths-unicode/dir with space/çalışma/dosya.ts",
+      "content": "export function türkçe() { return 2; }\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "türkçe",
+          "line": 1,
+          "col": 16,
+          "signature": "export function türkçe()",
+          "docComment": "",
+          "scope": "",
+          "text": "türkçe | export function türkçe()",
+          "isExported": true,
+          "endLine": 1
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/paths-unicode/index.ts",
+      "lang": "ts",
+      "file": "<repo>/tests/fixtures/projects/paths-unicode/index.ts",
+      "content": "import { spaced } from \"./dir with space/file name\";\nexport const v = spaced();\n",
+      "symbols": [
+        {
+          "kind": "const",
+          "name": "v",
+          "line": 2,
+          "col": 13,
+          "signature": "v = spaced()",
+          "docComment": "",
+          "scope": "",
+          "text": "v | v = spaced()",
+          "isExported": true,
+          "endLine": 2
+        }
+      ],
+      "refs": [
+        {
+          "toName": "spaced",
+          "callType": "import",
+          "line": 1,
+          "lang": "ts",
+          "module": "./dir with space/file name"
+        },
+        {
+          "toName": "spaced",
+          "callType": "call",
+          "line": 2,
+          "lang": "ts"
+        }
+      ]
     }
   ]
 }

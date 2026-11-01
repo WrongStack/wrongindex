@@ -6,7 +6,8 @@
  * `infra-parser.ts`: scala, sql, md, toml, html, css, vue, svelte, dart, lua,
  * r, proto, graphql, zig, haskell, other), `parseFileContent(file, content,
  * lang)` (the parser plus the `withRelations` import fallback from
- * `import-extractor.ts`), from a clean oracle prepared by
+ * `import-extractor.ts`), and for TS/JS (`ts-parser.ts`, cases in
+ * `parser-kat-ts.ts`), from a clean oracle prepared by
  * `prepare-clean-wrongstack.ts`, over a corpus of edge cases plus every file
  * of those languages under `tests/fixtures/projects`, and writes
  * `contracts/fixtures/parser-kat.json`. The Rust engine crate is tested
@@ -54,6 +55,8 @@ const GENERIC = new Set([
   'scala', 'sql', 'md', 'toml', 'html', 'css', 'vue', 'svelte', 'dart', 'lua', 'r', 'proto',
   'graphql', 'zig', 'haskell', 'other',
 ]);
+/** Languages `parseFileContent` hands to `ts-parser.ts`. */
+const TS_LANGS = new Set(['ts', 'tsx', 'js', 'jsx']);
 type Lang = string;
 type Case = { lang: Lang; file: string; content: string; source: string };
 const cases: Case[] = [];
@@ -155,13 +158,13 @@ if (corpus) {
   }
 }
 
-/** JSON/YAML/Rust as before, plus every generic-routed language (WrongStack's `detectLang`). */
+/** JSON/YAML/Rust as before, plus every generic-routed language and TS/JS (WrongStack's `detectLang`). */
 function corpusLang(p: string): Lang | null {
   if (/\.json$/i.test(p)) return 'json';
   if (/\.ya?ml$/i.test(p)) return 'yaml';
   if (/\.rs$/i.test(p)) return 'rs';
   const lang = languages.detectLang(p);
-  return lang && GENERIC.has(lang) ? lang : null;
+  return lang && (GENERIC.has(lang) || TS_LANGS.has(lang)) ? lang : null;
 }
 
 // ── Real fixture files ──────────────────────────────────────────────────────
@@ -197,6 +200,24 @@ if (!corpus) {
   }
 }
 
+// ── TypeScript/JavaScript (appended so earlier cases stay byte-identical) ──
+if (!corpus) {
+  const { addTsCases } = await import('./parser-kat-ts.ts');
+  addTsCases(cases);
+  for (const p of fixtureFiles) {
+    const lang = languages.detectLang(p);
+    if (!lang || !TS_LANGS.has(lang)) continue;
+    cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `fixture:${relative(repo, p).split('\\').join('/')}` });
+  }
+}
+
+/**
+ * TS/JS signatures and doc comments are cut with `slice`, which can split a
+ * surrogate pair; SQLite stores such a string with U+FFFD, and JSON parsers
+ * reject lone surrogates, so the known answers record the well-formed form.
+ */
+const wf = (v: unknown) => (typeof v === 'string' ? v.toWellFormed() : v);
+
 const outFile = arg('--out') ?? join(repo, 'contracts/fixtures/parser-kat.json');
 const streaming = corpus !== undefined && outFile.endsWith('.jsonl');
 const lines: string[] = [];
@@ -214,13 +235,20 @@ for (const c of cases) {
     // does not embed a machine-specific absolute path.
     file: c.source.startsWith('fixture:') ? `<repo>/${c.source.slice(8)}` : c.file,
     ...(streaming ? {} : { content: c.content }),
-    symbols: r.symbols.map((s: Record<string, unknown>) => ({
-      kind: s.kind, name: s.name, line: s.line, col: s.col, signature: s.signature,
-      docComment: s.docComment, scope: s.scope, text: s.text,
-    })),
+    symbols: r.symbols.map((s: Record<string, unknown>) =>
+      TS_LANGS.has(c.lang)
+        ? {
+            kind: s.kind, name: wf(s.name), line: s.line, col: s.col, signature: wf(s.signature),
+            docComment: wf(s.docComment), scope: wf(s.scope), text: wf(s.text),
+            isExported: s.isExported, endLine: s.endLine,
+          }
+        : {
+            kind: s.kind, name: s.name, line: s.line, col: s.col, signature: s.signature,
+            docComment: s.docComment, scope: s.scope, text: s.text,
+          }),
     refs: c.lang !== 'json' && c.lang !== 'yaml'
       ? (r.refs ?? []).map((x: Record<string, unknown>) => ({
-          toName: x.toName, callType: x.callType, line: x.line, lang: x.lang, module: x.module,
+          toName: wf(x.toName), callType: x.callType, line: x.line, lang: x.lang, module: wf(x.module),
         }))
       : (r.refs ?? []).length,
   };
@@ -244,6 +272,7 @@ const doc = {
     'parser-dispatch.ts': createHash('sha256').update(readFileSync(`${base}/parser-dispatch.ts`)).digest('hex'),
     'generic-parser.ts': createHash('sha256').update(readFileSync(`${base}/generic-parser.ts`)).digest('hex'),
     'infra-parser.ts': createHash('sha256').update(readFileSync(`${base}/infra-parser.ts`)).digest('hex'),
+    'ts-parser.ts': createHash('sha256').update(readFileSync(`${base}/ts-parser.ts`)).digest('hex'),
   },
   cases: out,
 };

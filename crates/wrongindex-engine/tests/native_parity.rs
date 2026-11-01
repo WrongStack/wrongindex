@@ -1,4 +1,4 @@
-//! WI-502 gate: the native writer's `index.db` for a JSON/YAML-only fixture is
+//! WI-502 gate: the native writer's `index.db` for a fixture is
 //! logically identical to the one WrongStack's own indexer wrote (every table,
 //! FTS content by rowid, `sqlite_stat1`), apart from per-run values (times,
 //! random epoch) and the absolute project root.
@@ -200,14 +200,119 @@ fn rs_basic_matches_the_wrongstack_oracle() {
     );
 }
 
+/// Index a fixture natively and compare it with WrongStack's recorded index:
+/// every table, `relation_structure` (with the oracle's root substituted),
+/// page count. Returns `(files indexed, empty files, symbols)`.
+fn assert_matches_oracle(fixture: &str) -> (usize, usize, usize) {
+    use wrongindex_engine::relations::{detect_module_roots, hex_sha256, structure_json};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("project");
+    let index = base.join("index");
+    copy_dir(&repo().join("tests/fixtures/projects").join(fixture), &root);
+
+    let report = index_fresh(&root, &index).unwrap();
+
+    let (oroot, oindex) = oracle_root(fixture);
+    let mut want_v = Volatile::logical();
+    want_v.rewrite = vec![
+        (oroot.clone(), "<root>".into()),
+        (oindex, "<indexDir>".into()),
+    ];
+    want_v.metadata_keys.push("relation_structure");
+    let mut got_v = Volatile::logical();
+    got_v.rewrite = vec![
+        (root.display().to_string(), "<root>".into()),
+        (index.display().to_string(), "<indexDir>".into()),
+    ];
+    got_v.metadata_keys.push("relation_structure");
+    let oracle_db = repo()
+        .join("tests/fixtures/oracle")
+        .join(fixture)
+        .join("index.db");
+    let want = dump(&oracle_db, &want_v).unwrap();
+    let got = dump(&index.join("index.db"), &got_v).unwrap();
+    let d = diff(&want, &got, 10);
+    assert!(
+        d.is_empty(),
+        "{fixture}: native index differs from the oracle:
+{}",
+        d.join(
+            "
+"
+        )
+    );
+
+    let files: Vec<String> = {
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        c.prepare("SELECT file FROM files")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    };
+    let root_s = root.display().to_string();
+    let json = structure_json(&detect_module_roots(&root_s, &files).roots);
+    assert_eq!(
+        meta(&index.join("index.db"), "relation_structure"),
+        hex_sha256(json.as_bytes())
+    );
+    let portable = |s: &str| s.replace('\\', "/");
+    let as_oracle = json.replace(&portable(&root_s), &portable(&oroot));
+    assert_eq!(
+        meta(&oracle_db, "relation_structure"),
+        hex_sha256(as_oracle.as_bytes()),
+        "{fixture}: {json}"
+    );
+    assert_eq!(
+        page_counts(&index.join("index.db")),
+        page_counts(&oracle_db),
+        "{fixture}"
+    );
+    let ins = wrongindex_storage::inspect_index(&index.join("index.db"));
+    assert_eq!(
+        serde_json::to_value(ins.verdict).unwrap(),
+        "compatible",
+        "{ins:?}"
+    );
+    (
+        report.files_indexed,
+        report.files_empty,
+        report.symbols_indexed,
+    )
+}
+
+/// npm package with TS and TSX sources (WI-505/506): classes, interfaces,
+/// imports bound through the package, JSX, `<module>` owners, npm labels.
+#[test]
+fn basic_ts_matches_the_wrongstack_oracle() {
+    assert_eq!(assert_matches_oracle("basic-ts"), (4, 0, 14));
+}
+
+/// TypeScript files under directory names with spaces and non-ASCII letters.
+#[test]
+fn paths_unicode_matches_the_wrongstack_oracle() {
+    assert_eq!(assert_matches_oracle("paths-unicode"), (3, 0, 4));
+}
+
+/// TypeScript files with a BOM, CRLF, astral characters, invalid UTF-8 and
+/// no content.
+#[test]
+fn encodings_match_the_wrongstack_oracle() {
+    assert_eq!(assert_matches_oracle("encodings"), (5, 1, 11));
+}
+
 #[test]
 fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
-    let ts_root = base.join("ts");
-    copy_dir(&repo().join("tests/fixtures/projects/basic-ts"), &ts_root);
-    let index = base.join("idx-ts");
-    let err = index_fresh(&ts_root, &index).unwrap_err();
+    let go_root = base.join("go");
+    copy_dir(&repo().join("tests/fixtures/projects/go-basic"), &go_root);
+    let index = base.join("idx-go");
+    let err = index_fresh(&go_root, &index).unwrap_err();
+    assert!(err.to_string().contains("language go"), "{err}");
     assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
     assert!(
         !index.exists(),

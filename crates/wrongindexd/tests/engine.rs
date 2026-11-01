@@ -43,6 +43,10 @@ async fn start(root: &Path) -> (Daemon, Client) {
             .arg(root)
             .arg("--engine")
             .arg(engine_dir())
+            // basic-ts is now native under `auto`; this test covers the
+            // supervised compatibility worker.
+            .arg("--backend")
+            .arg("legacy")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

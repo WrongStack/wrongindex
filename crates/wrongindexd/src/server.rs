@@ -716,7 +716,7 @@ async fn dispatch_inner(
                     json!({
                         "backend": "native",
                         "selection": shared.backend.as_str(),
-                        "writes": "projects whose files are all JSON, YAML, Rust or regex-extracted languages (md, toml, html, css, sql, proto, graphql, scala, vue, svelte, dart, lua, r, zig, haskell, other) (full runs; no-op when unchanged)",
+                        "writes": "projects whose files are all TypeScript/JavaScript (ts, tsx, js, jsx), JSON, YAML, Rust or regex-extracted languages (md, toml, html, css, sql, proto, graphql, scala, vue, svelte, dart, lua, r, zig, haskell, other) (full runs; no-op when unchanged; TS/JS files with syntax errors or ambiguous script-level await are refused)",
                         "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),

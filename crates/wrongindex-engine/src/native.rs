@@ -1,9 +1,10 @@
 //! Native full-index writer (WI-502).
 //!
 //! Writes a WrongStack v5 `index.db` for a project whose indexable files are
-//! all JSON, YAML, Rust or a language WrongStack parses with its regex
-//! extractor (md, toml, html, css, sql, proto, graphql, scala, vue, svelte,
-//! dart, lua, r, zig, haskell, other; see [`crate::parse::parse_file`]),
+//! all TypeScript/JavaScript (ts, tsx, js, jsx), JSON, YAML, Rust or a
+//! language WrongStack parses with its regex extractor (md, toml, html, css,
+//! sql, proto, graphql, scala, vue, svelte, dart, lua, r, zig, haskell,
+//! other; see [`crate::parse::parse_file`]),
 //! reproducing one full WrongStack run
 //! (`runIndexerWithStore`, first run into an empty index directory): batch
 //! writes with module owners and refs, then `finalizeIndexRun` - name
@@ -12,10 +13,12 @@
 //! ([`crate::rank`]) and `PRAGMA optimize`. Every situation not ported is
 //! refused with [`NativeError::Unsupported`] before anything is written:
 //!
-//! - any other language (TS/JS, Go, Python and the tree-sitter languages),
+//! - any other language (Go, Python and the tree-sitter languages),
 //!   a YAML file that could carry infra references (`infra-parser.ts`:
 //!   compose, GitHub workflows, OpenAPI, Kubernetes - not ported), or a
-//!   parser result flagged as not ported;
+//!   parser result flagged as not ported (TS/JS files with syntax errors
+//!   TypeScript recovers from, or script-level `await` it parses
+//!   differently - see [`crate::parse::ts`]);
 //! - Git-listed symbolic links that resolve outside the checkout;
 //! - files over 5 MiB, incomplete discovery, or no indexable files;
 //! - an index directory that already holds an `index.db`.

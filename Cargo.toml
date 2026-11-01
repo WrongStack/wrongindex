@@ -42,6 +42,13 @@ unicode-general-category = "=1.1.0"
 tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal", "process"] }
 uuid = { version = "=1.29.0", features = ["v4"] }
 notify = "=8.2.1"
+# TS/JS parsing (WI-505/506). 0.133.0 is the newest oxc release that builds on the
+# pinned 1.93 toolchain; the crates of one release must move together.
+oxc_allocator = "=0.133.0"
+oxc_ast = "=0.133.0"
+oxc_ast_visit = "=0.133.0"
+oxc_parser = "=0.133.0"
+oxc_span = "=0.133.0"
 tauri = { version = "=2.12.5", features = ["tray-icon"] }
 tauri-build = { version = "=2.7.4", features = [] }
 windows-sys = { version = "=0.61.2", features = [

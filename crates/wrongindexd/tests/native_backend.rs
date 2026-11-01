@@ -216,20 +216,21 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    // 5. Unsupported project: refused with the reason, nothing written.
-    let ts = base.join("ts");
-    copy_dir(&repo().join("tests/fixtures/projects/basic-ts"), &ts);
-    let ts_index = base.join("ts-index");
-    let ts_pid = register(&mut c, &ts, &ts_index).await;
-    let job = run_job(&mut c, &ts_pid, json!({"kind": "full"})).await;
+    // 5. Unsupported project (Go is not native yet): refused with the
+    // reason, nothing written.
+    let go = base.join("go");
+    copy_dir(&repo().join("tests/fixtures/projects/go-basic"), &go);
+    let go_index = base.join("go-index");
+    let go_pid = register(&mut c, &go, &go_index).await;
+    let job = run_job(&mut c, &go_pid, json!({"kind": "full"})).await;
     assert_eq!(job["state"], "failed");
     assert_eq!(job["error"]["code"], "NOT_IMPLEMENTED", "{job}");
     assert!(
         job["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("language ts"),
+            .contains("language go"),
         "{job}"
     );
-    assert!(!ts_index.join("index.db").exists());
+    assert!(!go_index.join("index.db").exists());
 }

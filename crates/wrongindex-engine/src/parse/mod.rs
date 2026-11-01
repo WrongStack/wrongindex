@@ -7,6 +7,7 @@ pub mod imports;
 pub mod infra;
 pub mod json;
 pub mod rs;
+pub mod ts;
 pub mod yaml;
 
 use serde::Serialize;
@@ -93,7 +94,9 @@ pub struct ParsedRef {
 /// Languages parsed natively: [`parse_file`] reproduces `parseFileContent`
 /// for each of them.
 pub fn is_native_lang(lang: &str) -> bool {
-    matches!(lang, "json" | "yaml" | "rs") || generic::LANGS.contains(&lang)
+    matches!(lang, "json" | "yaml" | "rs")
+        || generic::LANGS.contains(&lang)
+        || ts::LANGS.contains(&lang)
 }
 
 /// `parseFileContent(file, content, lang)` (`parser-dispatch.ts`): the
@@ -106,6 +109,9 @@ pub fn parse_file(file: &str, lang: &'static str, content: &U16) -> Parsed {
         "yaml" => yaml::parse(content),
         // `rs::parse` already applies `withRelations`.
         "rs" => return rs::parse(content),
+        // `ts-parser.ts` refs are stamped with `lang`; TS/JS have no regex
+        // import fallback.
+        l if ts::LANGS.contains(&l) => return ts::parse(file, l, content),
         l if generic::LANGS.contains(&l) => generic::parse(file, l, content),
         other => {
             return Parsed {
