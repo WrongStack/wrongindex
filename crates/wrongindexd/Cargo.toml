@@ -12,6 +12,7 @@ name = "wrongindexd"
 path = "src/main.rs"
 
 [dependencies]
+wrongindex-engine.workspace = true
 wrongindex-contracts.workspace = true
 wrongindex-storage.workspace = true
 wrongindex-registry.workspace = true
@@ -26,7 +27,6 @@ tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-wrongindex-engine.workspace = true
 rusqlite.workspace = true
 tempfile.workspace = true
 sha2.workspace = true

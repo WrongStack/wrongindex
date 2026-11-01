@@ -208,7 +208,8 @@ async fn vertical_slice_admits_and_completes_a_durable_check_job() {
         .unwrap_err();
     assert_eq!(err.code(), Some(ErrorCode::JobNotFound));
 
-    // Mutating kinds are refused before admission in this build.
+    // Mutating kinds need ownership first (the native backend is always
+    // available, so the refusal is about the fence, not the engine).
     let err = c
         .call_raw(
             method::INDEX_REQUEST,
@@ -218,7 +219,7 @@ async fn vertical_slice_admits_and_completes_a_durable_check_job() {
         )
         .await
         .unwrap_err();
-    assert_eq!(err.code(), Some(ErrorCode::NotImplemented));
+    assert_eq!(err.code(), Some(ErrorCode::OwnerConflict), "{err}");
 
     drop(c);
     daemon.stop(&root).await;

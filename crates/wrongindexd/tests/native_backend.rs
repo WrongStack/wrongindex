@@ -1,0 +1,209 @@
+//! Native backend through the real daemon, without any WrongStack engine:
+//! a JSON/YAML-only project is indexed, re-indexed as a no-op, updated after
+//! an edit, and followed by the watcher; an unsupported project fails with a
+//! clear NOT_IMPLEMENTED reason instead of being written.
+
+#![cfg(windows)]
+
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
+use serde_json::{Value, json};
+use wrongindex_contracts::method;
+use wrongindex_ipc::{Client, DataRoot};
+
+struct Daemon(Child);
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn repo() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn long(p: &Path) -> PathBuf {
+    let c = std::fs::canonicalize(p).unwrap();
+    PathBuf::from(c.display().to_string().trim_start_matches(r"\\?\"))
+}
+
+fn copy_dir(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for e in std::fs::read_dir(src).unwrap() {
+        let e = e.unwrap();
+        let to = dst.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir(&e.path(), &to);
+        } else {
+            std::fs::copy(e.path(), to).unwrap();
+        }
+    }
+}
+
+async fn start(home: &Path) -> (Daemon, Client) {
+    let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
+        .arg("--data-root")
+        .arg(home)
+        .env_remove("WRONGINDEX_ENGINE")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let daemon = Daemon(child);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        if let Ok(c) = Client::connect(&DataRoot::resolve(Some(home)).unwrap(), "t").await {
+            return (daemon, c);
+        }
+        assert!(Instant::now() < deadline, "daemon not ready");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn register(c: &mut Client, root: &Path, index: &Path) -> String {
+    let reg = c
+        .call_raw(
+            method::PROJECT_REGISTER,
+            None,
+            json!({"checkoutRoot": root, "indexDir": index}),
+            None,
+        )
+        .await
+        .unwrap();
+    let pid = reg["project"]["projectId"].as_str().unwrap().to_string();
+    c.call_raw(method::OWNERSHIP_ACQUIRE, Some(&pid), json!({}), None)
+        .await
+        .unwrap();
+    pid
+}
+
+async fn run_job(c: &mut Client, pid: &str, params: Value) -> Value {
+    let admitted = c
+        .call_raw(method::INDEX_REQUEST, Some(pid), params, None)
+        .await
+        .unwrap();
+    let id = admitted["job"]["jobId"].as_str().unwrap().to_string();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let job = c
+            .call_raw(method::JOB_GET, None, json!({"jobId": id}), None)
+            .await
+            .unwrap();
+        if matches!(job["state"].as_str(), Some("succeeded" | "failed")) {
+            return job;
+        }
+        assert!(Instant::now() < deadline, "job did not finish: {job}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn status(c: &mut Client, pid: &str) -> Value {
+    c.call_raw(method::PROJECT_GET, Some(pid), json!({}), None)
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn native_backend_indexes_updates_and_watches_without_an_engine() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let (_d, mut c) = start(&base.join("home")).await;
+    let health = c
+        .call_raw(method::DAEMON_HEALTH, None, json!({}), None)
+        .await
+        .unwrap();
+    assert!(
+        health
+            .to_string()
+            .contains("\\\"backend\\\":\\\"native\\\""),
+        "{health}"
+    );
+
+    let root = base.join("cfg");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join("cfg-index");
+    let pid = register(&mut c, &root, &index).await;
+
+    // 1. Full run, natively.
+    let job = run_job(&mut c, &pid, json!({"kind": "full"})).await;
+    assert_eq!(job["state"], "succeeded", "{job}");
+    let r = &job["result"];
+    assert_eq!(r["backend"], "native");
+    assert_eq!(r["native"]["outcome"], "written");
+    assert_eq!(r["native"]["symbolsIndexed"], 10);
+    assert_eq!(r["generation"], 1);
+    let check = run_job(&mut c, &pid, json!({"kind": "check"})).await;
+    assert_eq!(check["result"]["verdict"], "compatible", "{check}");
+
+    // 2. Nothing changed: no write, generation kept (INV-11).
+    let job = run_job(&mut c, &pid, json!({"kind": "full"})).await;
+    assert_eq!(job["result"]["native"]["outcome"], "unchanged", "{job}");
+    assert_eq!(job["result"]["generation"], 1);
+
+    // 3. An edit, through an incremental request: new generation.
+    std::fs::write(
+        root.join("config/app.yaml"),
+        "server:\n  port: 1\nnewKey: 2\n",
+    )
+    .unwrap();
+    let job = run_job(
+        &mut c,
+        &pid,
+        json!({"kind": "incremental", "paths": [root.join("config/app.yaml")]}),
+    )
+    .await;
+    assert_eq!(job["state"], "succeeded", "{job}");
+    assert_eq!(job["result"]["generation"], 2);
+
+    // 4. Pinned: the watcher follows edits on its own.
+    c.call_raw(
+        method::PROJECT_CONFIGURE,
+        Some(&pid),
+        json!({"watchPolicy": "pinned"}),
+        None,
+    )
+    .await
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let s = status(&mut c, &pid).await;
+        if s["freshness"] == "current" && s["watchHealth"] != "off" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "never became current: {s}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let before = status(&mut c, &pid).await["generation"].as_i64().unwrap();
+    std::fs::write(root.join("config/watched.json"), "{\"watched\": true}").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let s = status(&mut c, &pid).await;
+        if s["generation"].as_i64().unwrap() > before && s["freshness"] == "current" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "watcher edit not published: {s}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // 5. Unsupported project: refused with the reason, nothing written.
+    let ts = base.join("ts");
+    copy_dir(&repo().join("tests/fixtures/projects/basic-ts"), &ts);
+    let ts_index = base.join("ts-index");
+    let ts_pid = register(&mut c, &ts, &ts_index).await;
+    let job = run_job(&mut c, &ts_pid, json!({"kind": "full"})).await;
+    assert_eq!(job["state"], "failed");
+    assert_eq!(job["error"]["code"], "NOT_IMPLEMENTED", "{job}");
+    assert!(
+        job["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("language ts"),
+        "{job}"
+    );
+    assert!(!ts_index.join("index.db").exists());
+}

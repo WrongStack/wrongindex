@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use wrongindex_engine::dbdump::{Volatile, diff, dump};
-use wrongindex_engine::native::{NativeError, index_fresh};
+use wrongindex_engine::native::{NativeError, Rebuild, index_fresh, rebuild};
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -131,4 +131,80 @@ fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     std::fs::write(k8s.join("deploy.yaml"), "apiVersion: v1\nkind: Pod\n").unwrap();
     let err = index_fresh(&k8s, &base.join("idx-k8s")).unwrap_err();
     assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
+}
+
+#[test]
+fn rebuild_is_a_no_op_without_changes_and_replaces_atomically_otherwise() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join("idx");
+    std::fs::create_dir_all(&index).unwrap();
+    std::fs::write(index.join(".wrongindex-owner.lock"), b"").unwrap();
+
+    let Rebuild::Written(first) = rebuild(&root, &index).unwrap() else {
+        panic!("first run must write");
+    };
+    match rebuild(&root, &index).unwrap() {
+        Rebuild::Unchanged { graph_stamp } => {
+            assert_eq!(graph_stamp, Some(first.graph_stamp.clone()))
+        }
+        other => panic!("expected no-op, got {other:?}"),
+    }
+    // A content-preserving touch is still a no-op.
+    let f = root.join("package.json");
+    std::fs::write(&f, std::fs::read(&f).unwrap()).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Unchanged { .. }
+    ));
+
+    std::fs::write(
+        root.join("config/new.yaml"),
+        "added: 1
+",
+    )
+    .unwrap();
+    let Rebuild::Written(second) = rebuild(&root, &index).unwrap() else {
+        panic!("a new file must rewrite the index");
+    };
+    assert_eq!(second.symbols_indexed, 11);
+    // Only the index file was replaced: the owner lock and nothing else remain.
+    let mut names: Vec<String> = std::fs::read_dir(&index)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, vec![".wrongindex-owner.lock", "index.db"]);
+
+    // A WAL file next to the index means another connection: refuse.
+    std::fs::write(
+        root.join("config/more.yaml"),
+        "x: 1
+",
+    )
+    .unwrap();
+    // Another open connection (e.g. a WrongStack reader) keeps the WAL alive:
+    // the swap is refused and the old index stays in place.
+    let reader = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    let n: i64 = reader
+        .query_row("SELECT count(*) FROM symbols", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(n, 11);
+    assert!(matches!(rebuild(&root, &index), Err(NativeError::Busy(_))));
+    drop(reader);
+    let leftovers: Vec<String> = std::fs::read_dir(&index)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(".wrongindex-staging"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "the staging directory is always removed"
+    );
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
 }

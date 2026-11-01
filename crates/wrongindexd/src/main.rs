@@ -43,6 +43,10 @@ struct Args {
     /// Bun executable for the compatibility worker (default: `bun` on PATH).
     #[arg(long)]
     bun: Option<PathBuf>,
+    /// Index writer: `auto` (native when supported, else the compatibility
+    /// worker), `native`, or `legacy`.
+    #[arg(long, value_enum, default_value_t = server::Backend::Auto)]
+    backend: server::Backend,
 }
 
 /// Exit code when another daemon already owns this data root's endpoint.
@@ -73,6 +77,7 @@ fn main() -> ExitCode {
         root,
         drain: Duration::from_secs(args.drain_seconds),
         engine: engine::EngineConfig::resolve(args.engine, args.engine_worker, args.bun),
+        backend: args.backend,
     };
     match runtime.block_on(server::run(config)) {
         Ok(()) => ExitCode::SUCCESS,

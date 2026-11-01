@@ -85,6 +85,8 @@ const ANALYZE_ORDER: &[&str] = &[
 pub enum NativeError {
     #[error("project files changed during indexing")]
     SourceChanged,
+    #[error("the index is in use elsewhere ({0})")]
+    Busy(String),
     #[error("not supported by the native engine yet: {0}")]
     Unsupported(String),
     #[error("io: {0}")]
@@ -303,6 +305,101 @@ pub fn index_fresh(project_root: &Path, index_dir: &Path) -> Result<Report, Nati
         }
         other => other,
     }
+}
+
+/// Result of [`rebuild`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "outcome")]
+pub enum Rebuild {
+    /// The index already describes exactly the current files (same paths
+    /// and content hashes): nothing is written and the published stamp is
+    /// kept, as WrongStack does for a no-op run.
+    Unchanged {
+        graph_stamp: Option<String>,
+    },
+    Written(Report),
+}
+
+/// Bring `index_dir/index.db` up to date with a full native run.
+///
+/// The new index is built in a private staging directory and then moved
+/// over the existing file, so readers never see a partial database. The
+/// replacement is refused while the old file has WAL/shared-memory files
+/// (another connection may have it open).
+pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
+    let db = index_dir.join("index.db");
+    if db.exists() {
+        let (files, _) = collect(project_root)?;
+        let mut current: Vec<(String, String)> = files
+            .iter()
+            .map(|f| (f.path.clone(), f.content_hash.clone()))
+            .collect();
+        current.sort();
+        if let Some((stored, stamp)) = stored_state(&db)?
+            && stored == current
+        {
+            return Ok(Rebuild::Unchanged { graph_stamp: stamp });
+        }
+    }
+    let staging = index_dir.join(format!(
+        ".wrongindex-staging-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let result = (|| {
+        let report = index_fresh(project_root, &staging)?;
+        for suffix in ["-wal", "-shm"] {
+            let mut p = db.as_os_str().to_owned();
+            p.push(suffix);
+            if Path::new(&p).exists() {
+                return Err(NativeError::Busy(format!(
+                    "{} exists",
+                    PathBuf::from(p).display()
+                )));
+            }
+        }
+        std::fs::rename(staging.join("index.db"), &db)?;
+        Ok(Rebuild::Written(report))
+    })();
+    let _ = std::fs::remove_dir_all(&staging);
+    result
+}
+
+/// `(file, content_hash)` rows (sorted) and `graph_stamp` of an existing
+/// WrongStack v5 index; `None` when it is not one.
+/// Sorted `(file, content_hash)` rows plus the stored `graph_stamp`.
+type StoredState = (Vec<(String, String)>, Option<String>);
+
+fn stored_state(db: &Path) -> Result<Option<StoredState>, NativeError> {
+    // Read-write without create, but query-only: a read-only connection to a
+    // WAL database leaves `-wal`/`-shm` behind, which would block the swap.
+    let conn = Connection::open_with_flags(
+        db,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    conn.pragma_update(None, "query_only", true)?;
+    let version: Option<String> = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'version'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    if version.as_deref() != Some("5") {
+        return Ok(None);
+    }
+    let mut rows: Vec<(String, String)> = conn
+        .prepare("SELECT file, content_hash FROM files")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    rows.sort();
+    let stamp = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'graph_stamp'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    Ok(Some((rows, stamp)))
 }
 
 /// Remove a database this run created and never committed.

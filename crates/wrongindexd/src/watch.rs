@@ -420,7 +420,7 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
                 w.and_then(|w| w.retry_at),
             )
         };
-        let desired = shared.engine.configured()
+        let desired = shared.can_write()
             && match p.watch_policy {
                 WatchPolicy::Pinned => true,
                 WatchPolicy::Session => sessions > 0 || grace_until.is_some_and(|g| now < g),

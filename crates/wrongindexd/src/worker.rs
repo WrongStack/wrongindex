@@ -1,8 +1,9 @@
 //! Durable job execution. Jobs are claimed from the registry in admission
 //! order; completion is recorded before it becomes observable via `job.get`.
 //!
-//! M1 executes only `check` jobs: a read-only profile inspection of the
-//! project's existing `index.db`. Indexing backends attach in M2/M3.
+//! `check` jobs inspect the project's `index.db` read-only. Write jobs run on
+//! the native engine when it supports the project (`--backend auto|native`)
+//! and otherwise on the WrongStack compatibility worker (`auto|legacy`).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use serde_json::json;
 use tokio::sync::watch;
 use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, JobState, OwnerFence};
 
-use crate::server::Shared;
+use crate::server::{Backend, Shared};
 use crate::{info, warn};
 
 /// Fallback poll interval; admission normally wakes the worker immediately.
@@ -118,6 +119,36 @@ async fn execute(
                     "ownership guard not held by this instance",
                 )
             })?;
+
+            let mut native_skipped: Option<String> = None;
+            if shared.backend != Backend::Legacy {
+                match run_native(shared, &project).await {
+                    Ok((stamp, detail)) => {
+                        let generation = publish(shared, project_id, fence, stamp.clone()).await?;
+                        return Ok(json!({
+                            "backend": "native",
+                            "native": detail,
+                            "graphStamp": stamp,
+                            "generation": generation,
+                        }));
+                    }
+                    Err(NativeOutcome::Unsupported(why))
+                        if shared.backend == Backend::Auto && shared.engine.configured() =>
+                    {
+                        native_skipped = Some(why);
+                    }
+                    Err(NativeOutcome::Unsupported(why)) => {
+                        let msg = format!("native engine: {why}");
+                        record_failure(shared, project_id, &msg).await;
+                        return Err(ErrorBody::new(ErrorCode::NotImplemented, msg));
+                    }
+                    Err(NativeOutcome::Failed(e)) => {
+                        record_failure(shared, project_id, &e.message).await;
+                        return Err(e);
+                    }
+                }
+            }
+
             let mut args = json!({
                 "projectRoot": project.checkout_root,
                 "indexDir": project.index_dir,
@@ -129,44 +160,115 @@ async fn execute(
                 .engine
                 .call("index", args, Duration::from_secs(30 * 60))
                 .await;
-            let pid = project_id.to_string();
             match run {
                 Ok(result) => {
                     let stamp = result["graphStamp"].as_str().map(str::to_string);
-                    // Re-check the fence with the publication: if the project's
-                    // configuration or epoch changed during the run, the result
-                    // is recorded but the job fails so its paths run again.
-                    let publication = shared
-                        .registry(move |r| {
-                            let fenced = r.validate_fence(&pid, &fence);
-                            let p = r.record_publication(
-                                &pid,
-                                stamp.as_deref(),
-                                fenced.as_ref().err().map(|e| e.message.as_str()),
-                            )?;
-                            fenced.map(|()| p)
-                        })
-                        .await?;
-                    shared.events.publish(
-                        "index.published",
-                        Some(project_id),
-                        json!({
-                            "generation": publication.generation,
-                            "graphStamp": publication.graph_stamp,
-                        }),
-                    );
+                    let generation = publish(shared, project_id, fence, stamp).await?;
                     let mut out = result;
-                    out["generation"] = json!(publication.generation);
+                    out["generation"] = json!(generation);
+                    out["backend"] = json!("legacy-bun-worker");
+                    if let Some(why) = native_skipped {
+                        out["nativeSkipped"] = json!(why);
+                    }
                     Ok(out)
                 }
                 Err(e) => {
-                    let msg = e.to_string();
-                    let _ = shared
-                        .registry(move |r| r.record_publication(&pid, None, Some(&msg)))
-                        .await;
+                    record_failure(shared, project_id, &e.to_string()).await;
                     Err(e)
                 }
             }
         }
     }
+}
+
+enum NativeOutcome {
+    /// The project is outside what the native engine writes (yet).
+    Unsupported(String),
+    Failed(ErrorBody),
+}
+
+/// Full native run (no-op when nothing changed). Returns the graph stamp to
+/// publish and a description of what happened.
+async fn run_native(
+    shared: &Arc<Shared>,
+    project: &wrongindex_contracts::ProjectRecord,
+) -> Result<(Option<String>, serde_json::Value), NativeOutcome> {
+    use wrongindex_engine::native::{NativeError, Rebuild, rebuild};
+    // The compatibility worker may hold a pooled handle on this index; close
+    // it so the native swap is not refused for our own reader.
+    shared
+        .engine
+        .release_store(&project.checkout_root, &project.index_dir)
+        .await;
+    let root = std::path::PathBuf::from(&project.checkout_root);
+    let dir = std::path::PathBuf::from(&project.index_dir);
+    let started = std::time::Instant::now();
+    let r = tokio::task::spawn_blocking(move || rebuild(&root, &dir))
+        .await
+        .map_err(|e| {
+            NativeOutcome::Failed(ErrorBody::new(
+                ErrorCode::Internal,
+                format!("native task failed: {e}"),
+            ))
+        })?;
+    let ms = started.elapsed().as_millis() as u64;
+    match r {
+        Ok(outcome) => {
+            let stamp = match &outcome {
+                Rebuild::Unchanged { graph_stamp } => graph_stamp.clone(),
+                Rebuild::Written(report) => Some(report.graph_stamp.clone()),
+            };
+            let mut detail = serde_json::to_value(&outcome).unwrap_or_default();
+            detail["durationMs"] = json!(ms);
+            Ok((stamp, detail))
+        }
+        Err(NativeError::Unsupported(why)) => Err(NativeOutcome::Unsupported(why)),
+        Err(NativeError::Busy(why)) => Err(NativeOutcome::Failed(ErrorBody::new(
+            ErrorCode::DatabaseBusy,
+            format!("native engine: {why}"),
+        ))),
+        Err(e) => Err(NativeOutcome::Failed(ErrorBody::new(
+            ErrorCode::Internal,
+            format!("native engine: {e}"),
+        ))),
+    }
+}
+
+/// Record a publication. The fence is re-checked together with it: if the
+/// configuration or epoch changed during the run, the result is recorded but
+/// the job fails so its paths run again.
+async fn publish(
+    shared: &Arc<Shared>,
+    project_id: &str,
+    fence: OwnerFence,
+    stamp: Option<String>,
+) -> Result<i64, ErrorBody> {
+    let pid = project_id.to_string();
+    let publication = shared
+        .registry(move |r| {
+            let fenced = r.validate_fence(&pid, &fence);
+            let p = r.record_publication(
+                &pid,
+                stamp.as_deref(),
+                fenced.as_ref().err().map(|e| e.message.as_str()),
+            )?;
+            fenced.map(|()| p)
+        })
+        .await?;
+    shared.events.publish(
+        "index.published",
+        Some(project_id),
+        json!({
+            "generation": publication.generation,
+            "graphStamp": publication.graph_stamp,
+        }),
+    );
+    Ok(publication.generation)
+}
+
+async fn record_failure(shared: &Arc<Shared>, project_id: &str, msg: &str) {
+    let (pid, msg) = (project_id.to_string(), msg.to_string());
+    let _ = shared
+        .registry(move |r| r.record_publication(&pid, None, Some(&msg)))
+        .await;
 }

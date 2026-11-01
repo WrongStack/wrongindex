@@ -37,6 +37,28 @@ pub struct Config {
     pub root: DataRoot,
     pub drain: Duration,
     pub engine: Option<crate::engine::EngineConfig>,
+    pub backend: Backend,
+}
+
+/// Which engine writes indexes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Backend {
+    /// Native when the project is supported, else the compatibility worker.
+    Auto,
+    /// Native engine only; unsupported projects fail with NOT_IMPLEMENTED.
+    Native,
+    /// WrongStack compatibility worker only.
+    Legacy,
+}
+
+impl Backend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Backend::Auto => "auto",
+            Backend::Native => "native",
+            Backend::Legacy => "legacy",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -65,6 +87,7 @@ pub struct Shared {
     pub engine: crate::engine::Engine,
     pub watch: crate::watch::Supervisor,
     pub events: crate::events::EventBus,
+    pub backend: Backend,
 }
 
 impl Shared {
@@ -93,6 +116,11 @@ impl Shared {
             self.events.publish("daemon.draining", None, json!({}));
         }
         let _ = self.shutdown.send(true);
+    }
+
+    /// Whether write jobs can run at all with this configuration.
+    pub fn can_write(&self) -> bool {
+        self.backend != Backend::Legacy || self.engine.configured()
     }
 
     fn hello(&self, selected_profile: Option<String>) -> Hello {
@@ -186,6 +214,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         engine: crate::engine::Engine::new(cfg.engine.clone()),
         watch: watch_supervisor,
         events: crate::events::EventBus::new(instance_id.clone()),
+        backend: cfg.backend,
     });
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
@@ -684,6 +713,13 @@ async fn dispatch_inner(
                 backend_inventory: vec![
                     "inspector:read-only (in-process)".into(),
                     shared.engine.describe().to_string(),
+                    json!({
+                        "backend": "native",
+                        "selection": shared.backend.as_str(),
+                        "writes": "JSON/YAML-only projects (full runs; no-op when unchanged)",
+                        "queries": false,
+                    })
+                    .to_string(),
                     json!({"engineHello": shared.engine.hello().await}).to_string(),
                 ],
             })
@@ -765,11 +801,11 @@ async fn dispatch_inner(
             if params.kind != JobKind::Check {
                 // Write work needs the engine and a valid ownership fence;
                 // the fence travels with the job and is re-validated at run.
-                if !shared.engine.configured() {
+                if !shared.can_write() {
                     return Err(ErrorBody::new(
                         ErrorCode::NotImplemented,
                         format!(
-                            "'{}' jobs need an indexing engine; start wrongindexd with --engine <WrongStack dir>",
+                            "'{}' jobs need an indexing engine; start wrongindexd with --engine <WrongStack dir> or --backend auto|native",
                             params.kind.as_str()
                         ),
                     ));
