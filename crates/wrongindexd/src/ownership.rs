@@ -6,9 +6,12 @@
 //! long as this daemon owns the index; the OS drops it if the daemon dies,
 //! and startup recovery never trusts a previous instance's recorded state.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use tokio::sync::Notify;
 
 use serde_json::{Value, json};
 use wrongindex_contracts::{BASELINE_PROFILE_ID, ErrorBody, ErrorCode, Ownership, OwnershipStatus};
@@ -22,9 +25,77 @@ use crate::{info, warn};
 #[derive(Default)]
 pub struct Owners {
     guards: Mutex<HashMap<String, OwnerGuard>>,
+    /// Projects with a write run in flight. A guard is never released while
+    /// its project is here (INV-01: the OS lock covers the whole write).
+    runs: Mutex<HashSet<String>>,
+    run_done: Notify,
+}
+
+/// Held for the duration of one write run; dropping it ends the run.
+pub struct RunGuard<'a> {
+    owners: &'a Owners,
+    project_id: String,
+}
+
+impl Drop for RunGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut r) = self.owners.runs.lock() {
+            r.remove(&self.project_id);
+        }
+        self.owners.run_done.notify_waiters();
+    }
 }
 
 impl Owners {
+    /// Start a write run, atomically with checking that this instance holds
+    /// the project's guard. `None` when it does not.
+    pub fn begin_run(&self, project_id: &str) -> Option<RunGuard<'_>> {
+        let guards = self.guards.lock().ok()?;
+        if !guards.contains_key(project_id) {
+            return None;
+        }
+        self.runs.lock().ok()?.insert(project_id.to_string());
+        drop(guards);
+        Some(RunGuard {
+            owners: self,
+            project_id: project_id.to_string(),
+        })
+    }
+
+    /// Remove the guard only if no write run is active (same lock order as
+    /// `begin_run`, so a run cannot start in between).
+    fn take_if_idle(&self, project_id: &str) -> Result<Option<OwnerGuard>, ()> {
+        let mut guards = self.guards.lock().map_err(|_| ())?;
+        let runs = self.runs.lock().map_err(|_| ())?;
+        if runs.contains(project_id) {
+            return Err(());
+        }
+        Ok(guards.remove(project_id))
+    }
+
+    /// Wait (bounded) until the project has no write run, then take its guard.
+    async fn take_when_idle(
+        &self,
+        project_id: &str,
+        wait: Duration,
+    ) -> Result<Option<OwnerGuard>, ErrorBody> {
+        let deadline = tokio::time::Instant::now() + wait;
+        loop {
+            let notified = self.run_done.notified();
+            match self.take_if_idle(project_id) {
+                Ok(g) => return Ok(g),
+                Err(()) => {
+                    if tokio::time::timeout_at(deadline, notified).await.is_err() {
+                        return Err(ErrorBody::new(
+                            ErrorCode::OwnerConflict,
+                            "a write run is in progress; ownership was not released",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     pub fn holds(&self, project_id: &str) -> bool {
         self.guards
             .lock()
@@ -36,10 +107,6 @@ impl Owners {
         if let Ok(mut g) = self.guards.lock() {
             g.insert(project_id.to_string(), guard);
         }
-    }
-
-    fn take(&self, project_id: &str) -> Option<OwnerGuard> {
-        self.guards.lock().ok()?.remove(project_id)
     }
 
     fn take_all(&self) -> Vec<(String, OwnerGuard)> {
@@ -145,7 +212,12 @@ pub async fn release(
     project_id: &str,
     keep_desired: bool,
 ) -> Result<OwnershipStatus, ErrorBody> {
-    let Some(guard) = shared.owners.take(project_id) else {
+    // Never drop the OS lock under an in-flight write (INV-01).
+    let taken = shared
+        .owners
+        .take_when_idle(project_id, Duration::from_secs(30))
+        .await?;
+    let Some(guard) = taken else {
         let pid = project_id.to_string();
         let status = shared.registry(move |r| r.ownership_status(&pid)).await?;
         if status.state == Ownership::Owned {

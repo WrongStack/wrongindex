@@ -363,6 +363,30 @@ impl Registry {
             })
     }
 
+    /// Change a project's watch policy. Bumps the configuration revision,
+    /// which fences every job admitted under the previous configuration.
+    pub fn configure_project(
+        &mut self,
+        project_id: &str,
+        watch_policy: WatchPolicy,
+    ) -> Result<ProjectRecord, ErrorBody> {
+        let n = self
+            .conn
+            .execute(
+                "UPDATE projects SET watch_policy = ?2, configuration_revision = configuration_revision + 1
+                 WHERE project_id = ?1",
+                params![project_id, watch_policy.as_str()],
+            )
+            .map_err(db_err)?;
+        if n == 0 {
+            return Err(ErrorBody::new(
+                ErrorCode::ProjectNotFound,
+                format!("no project '{project_id}'"),
+            ));
+        }
+        self.get_project(project_id)
+    }
+
     /// Remove a registration. Source and index files are never deleted
     /// (INV-10); job history for the project is dropped with it.
     pub fn detach_project(&mut self, project_id: &str) -> Result<ProjectRecord, ErrorBody> {

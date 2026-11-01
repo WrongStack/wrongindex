@@ -210,6 +210,10 @@ pub mod method {
     pub const OWNERSHIP_ACQUIRE: &str = "ownership.acquire";
     pub const OWNERSHIP_RELEASE: &str = "ownership.release";
     pub const OWNERSHIP_STATUS: &str = "ownership.status";
+    pub const PROJECT_CONFIGURE: &str = "project.configure";
+    pub const SESSION_ACQUIRE: &str = "session.acquire";
+    pub const SESSION_HEARTBEAT: &str = "session.heartbeat";
+    pub const SESSION_RELEASE: &str = "session.release";
 
     pub const ALL: &[&str] = &[
         DAEMON_HELLO,
@@ -227,6 +231,10 @@ pub mod method {
         OWNERSHIP_ACQUIRE,
         OWNERSHIP_RELEASE,
         OWNERSHIP_STATUS,
+        PROJECT_CONFIGURE,
+        SESSION_ACQUIRE,
+        SESSION_HEARTBEAT,
+        SESSION_RELEASE,
     ];
 }
 
@@ -399,6 +407,18 @@ pub struct ProjectStatus {
     pub activity: String,
     pub watch_health: String,
     pub last_job: Option<JobRecord>,
+    #[serde(default)]
+    pub pending_paths: usize,
+    #[serde(default)]
+    pub reconcile_reason: Option<String>,
+    #[serde(default)]
+    pub sessions: usize,
+    #[serde(default)]
+    pub generation: i64,
+    #[serde(default)]
+    pub last_indexed_ms: Option<i64>,
+    #[serde(default)]
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

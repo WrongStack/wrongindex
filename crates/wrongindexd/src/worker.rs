@@ -103,12 +103,14 @@ async fn execute(
             shared
                 .registry(move |r| r.validate_fence(&pid, &fence))
                 .await?;
-            if !shared.owners.holds(project_id) {
-                return Err(ErrorBody::new(
+            // The run guard keeps the OS ownership lock from being released
+            // until this write has finished and been recorded.
+            let _run = shared.owners.begin_run(project_id).ok_or_else(|| {
+                ErrorBody::new(
                     ErrorCode::OwnerConflict,
                     "ownership guard not held by this instance",
-                ));
-            }
+                )
+            })?;
             let mut args = json!({
                 "projectRoot": project.checkout_root,
                 "indexDir": project.index_dir,
@@ -124,8 +126,19 @@ async fn execute(
             match run {
                 Ok(result) => {
                     let stamp = result["graphStamp"].as_str().map(str::to_string);
+                    // Re-check the fence with the publication: if the project's
+                    // configuration or epoch changed during the run, the result
+                    // is recorded but the job fails so its paths run again.
                     let publication = shared
-                        .registry(move |r| r.record_publication(&pid, stamp.as_deref(), None))
+                        .registry(move |r| {
+                            let fenced = r.validate_fence(&pid, &fence);
+                            let p = r.record_publication(
+                                &pid,
+                                stamp.as_deref(),
+                                fenced.as_ref().err().map(|e| e.message.as_str()),
+                            )?;
+                            fenced.map(|()| p)
+                        })
                         .await?;
                     let mut out = result;
                     out["generation"] = json!(publication.generation);

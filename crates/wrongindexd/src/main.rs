@@ -4,10 +4,12 @@
 //! (first named-pipe instance) -> registry open/migrate/recover -> credential
 //! and discovery publication -> accept authenticated clients.
 
+mod dirty;
 mod engine;
 mod log;
 mod ownership;
 mod server;
+mod watch;
 mod worker;
 
 use std::path::PathBuf;

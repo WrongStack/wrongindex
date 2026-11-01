@@ -11,10 +11,10 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{Notify, watch};
 use wrongindex_contracts::{
-    AuthRequest, AuthResponse, BASELINE_PROFILE_ID, EndpointInfo, ErrorBody, ErrorCode, Freshness,
-    Health, Hello, IndexRequestParams, JobAdmission, JobKind, JobState, Limits, MAX_FRAME_BYTES,
+    AuthRequest, AuthResponse, BASELINE_PROFILE_ID, EndpointInfo, ErrorBody, ErrorCode, Health,
+    Hello, IndexRequestParams, JobAdmission, JobKind, JobState, Limits, MAX_FRAME_BYTES,
     PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectStatus, RegisterProjectParams, RegisterProjectResult,
-    Request, Response, method,
+    Request, Response, WatchPolicy, method,
 };
 use wrongindex_ipc::endpoint::{generate_token, token_eq};
 use wrongindex_ipc::frame::{FrameError, read_body, read_header, write_frame};
@@ -63,6 +63,7 @@ pub struct Shared {
     connections: AtomicUsize,
     sqlite_version: String,
     pub engine: crate::engine::Engine,
+    pub watch: crate::watch::Supervisor,
 }
 
 impl Shared {
@@ -155,6 +156,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     let token = generate_token()?;
     let started_at_ms = now_ms();
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+    let (watch_supervisor, watch_rx) = crate::watch::Supervisor::new();
     let shared = Arc::new(Shared {
         registry: Arc::new(Mutex::new(registry)),
         instance_id: instance_id.clone(),
@@ -167,6 +169,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         connections: AtomicUsize::new(0),
         sqlite_version: wrongindex_storage::sqlite_runtime().version,
         engine: crate::engine::Engine::new(cfg.engine.clone()),
+        watch: watch_supervisor,
     });
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
@@ -192,6 +195,11 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     }
 
     let worker = tokio::spawn(crate::worker::run(shared.clone(), shutdown_rx.clone()));
+    let watcher = tokio::spawn(crate::watch::run(
+        shared.clone(),
+        watch_rx,
+        shutdown_rx.clone(),
+    ));
 
     // 4. Accept loop.
     #[cfg(windows)]
@@ -225,6 +233,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     if tokio::time::timeout(cfg.drain, worker).await.is_err() {
         warn!("drain_budget_exceeded", {"seconds": cfg.drain.as_secs()});
     }
+    let _ = tokio::time::timeout(Duration::from_secs(5), watcher).await;
     shared.engine.shutdown().await;
     crate::ownership::release_all_for_shutdown(&shared).await;
     let retracted = Discovery::retract(&cfg.root, &instance_id).unwrap_or(false);
@@ -518,19 +527,28 @@ async fn dispatch_inner(
         }
         method::PROJECT_GET => {
             let pid = require_project(&req)?;
-            let (project, last_job, ownership) = shared
+            let p2 = pid.clone();
+            let (project, last_job, ownership, publication) = shared
                 .registry(move |r| {
                     Ok((
-                        r.get_project(&pid)?,
-                        r.latest_job(&pid)?,
-                        r.ownership_status(&pid)?,
+                        r.get_project(&p2)?,
+                        r.latest_job(&p2)?,
+                        r.ownership_status(&p2)?,
+                        r.publication_state(&p2)?,
                     ))
                 })
                 .await?;
+            let ws = shared.watch.status(&pid);
+            let freshness = crate::watch::Supervisor::freshness(
+                &ws,
+                ws.last_error
+                    .as_deref()
+                    .or(publication.last_error.as_deref()),
+            );
             // M1 has no watcher or writer: report only what is observable.
             to_value(ProjectStatus {
                 project,
-                freshness: Freshness::Unknown,
+                freshness,
                 ownership: ownership.state,
                 activity: if last_job
                     .as_ref()
@@ -540,8 +558,14 @@ async fn dispatch_inner(
                 } else {
                     "dormant".into()
                 },
-                watch_health: "off".into(),
+                watch_health: ws.watch_health.clone(),
                 last_job,
+                pending_paths: ws.pending_paths,
+                reconcile_reason: ws.reconcile_reason.clone(),
+                sessions: ws.sessions,
+                generation: publication.generation,
+                last_indexed_ms: publication.last_index_ms,
+                last_error: ws.last_error.clone().or(publication.last_error.clone()),
             })
         }
         method::PROJECT_DETACH => {
@@ -692,6 +716,57 @@ async fn dispatch_inner(
             let p: JobGetParams = parse(req.params)?;
             let job = shared.registry(move |r| r.get_job(&p.job_id)).await?;
             to_value(job)
+        }
+        method::PROJECT_CONFIGURE => {
+            let pid = require_project(&req)?;
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct ConfigureParams {
+                watch_policy: WatchPolicy,
+            }
+            let p: ConfigureParams = parse(req.params)?;
+            let project = shared
+                .registry(move |r| r.configure_project(&pid, p.watch_policy))
+                .await?;
+            info!("project_configured", {"projectId": project.project_id, "watchPolicy": project.watch_policy.as_str(), "revision": project.configuration_revision});
+            to_value(project)
+        }
+        method::SESSION_ACQUIRE => {
+            let pid = require_project(&req)?;
+            let p2 = pid.clone();
+            shared.registry(move |r| r.get_project(&p2)).await?;
+            let session_id = shared.watch.acquire_lease(&pid, client);
+            Ok(json!({
+                "sessionId": session_id,
+                "projectId": pid,
+                "leaseMs": crate::watch::LEASE.as_millis() as u64,
+                "heartbeatMs": crate::watch::HEARTBEAT.as_millis() as u64,
+            }))
+        }
+        method::SESSION_HEARTBEAT => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct SessionParams {
+                session_id: String,
+            }
+            let p: SessionParams = parse(req.params)?;
+            if !shared.watch.heartbeat(&p.session_id) {
+                return Err(ErrorBody::new(
+                    ErrorCode::InvalidRequest,
+                    "unknown or expired session; acquire a new one",
+                ));
+            }
+            Ok(json!({"ok": true, "leaseMs": crate::watch::LEASE.as_millis() as u64}))
+        }
+        method::SESSION_RELEASE => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct SessionParams {
+                session_id: String,
+            }
+            let p: SessionParams = parse(req.params)?;
+            let released = shared.watch.release_lease(&p.session_id);
+            Ok(json!({"released": released.is_some(), "projectId": released}))
         }
         method::OWNERSHIP_ACQUIRE => {
             let pid = require_project(&req)?;

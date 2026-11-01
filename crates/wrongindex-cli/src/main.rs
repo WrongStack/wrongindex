@@ -148,6 +148,19 @@ enum ProjectAction {
     Owner {
         id: String,
     },
+    /// Watch continuously, even with no client connected.
+    Pin {
+        id: String,
+    },
+    /// Watch only while a client session is active.
+    Unpin {
+        id: String,
+    },
+    /// Set the watch policy: session, pinned, manual, or disabled.
+    Policy {
+        id: String,
+        policy: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -497,6 +510,12 @@ enum OwnerVerb {
 }
 
 async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome {
+    let policy_choice = match &action {
+        ProjectAction::Pin { .. } => Some("pinned".to_string()),
+        ProjectAction::Unpin { .. } => Some("session".to_string()),
+        ProjectAction::Policy { policy, .. } => Some(policy.clone()),
+        _ => None,
+    };
     let action_kind = match &action {
         ProjectAction::Claim { .. } => OwnerVerb::Claim,
         ProjectAction::Release { .. } => OwnerVerb::Release,
@@ -605,6 +624,19 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                     "  freshness:  {:?}   ownership: {:?}   activity: {}",
                     s.freshness, s.ownership, s.activity
                 );
+                println!(
+                    "  generation: {}   pending paths: {}   sessions: {}{}",
+                    s.generation,
+                    s.pending_paths,
+                    s.sessions,
+                    s.reconcile_reason
+                        .as_deref()
+                        .map(|r| format!("   reconcile: {r}"))
+                        .unwrap_or_default()
+                );
+                if let Some(e) = &s.last_error {
+                    println!("  last error: {e}");
+                }
                 if let Some(j) = &s.last_job {
                     println!(
                         "  last job:   {} {} {}",
@@ -647,6 +679,38 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                     "{verb} {id}: {} (epoch {})",
                     v["state"].as_str().unwrap_or("?"),
                     v["ownerEpoch"]
+                );
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        ProjectAction::Pin { id }
+        | ProjectAction::Unpin { id }
+        | ProjectAction::Policy { id, .. } => {
+            let policy = match &policy_choice {
+                Some(p) => p.clone(),
+                None => unreachable!("policy resolved above"),
+            };
+            if WatchPolicy::parse(&policy).is_none() {
+                return Err(fail(
+                    exit_code::INVALID_INPUT,
+                    "policy must be session, pinned, manual, or disabled",
+                ));
+            }
+            let v = c
+                .call_raw(
+                    method::PROJECT_CONFIGURE,
+                    Some(&id),
+                    json!({"watchPolicy": policy}),
+                    None,
+                )
+                .await?;
+            if json {
+                print_json(&v);
+            } else {
+                println!(
+                    "{id}: watch policy {} (configuration revision {})",
+                    v["watchPolicy"].as_str().unwrap_or("?"),
+                    v["configurationRevision"]
                 );
             }
             Ok(exit_code::SUCCESS)
