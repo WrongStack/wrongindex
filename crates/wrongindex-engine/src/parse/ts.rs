@@ -91,7 +91,37 @@ fn source_type(file: &str) -> SourceType {
     st.with_module(true)
 }
 
+/// Deepest bracket nesting accepted before parsing. oxc's parser and the
+/// symbol walk recurse per nesting level; a pathological file (e.g. 100k
+/// `(`) must be refused, never allowed to overflow the stack. Real code
+/// stays far below this (strings and comments are counted too, which only
+/// makes the scan more conservative).
+pub const MAX_NESTING: usize = 512;
+
+/// Maximum depth of `([{` nesting plus `<`-free template/JSX approximations:
+/// a cheap linear pre-scan.
+fn max_bracket_depth(content: &U16) -> usize {
+    let (mut depth, mut max) = (0usize, 0usize);
+    for &c in content {
+        match c {
+            0x28 | 0x5B | 0x7B => {
+                depth += 1;
+                max = max.max(depth);
+            }
+            0x29 | 0x5D | 0x7D => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    max
+}
+
 fn extract(file: &str, lang: &'static str, content: &U16) -> Result<Parsed, String> {
+    let depth = max_bracket_depth(content);
+    if depth > MAX_NESTING {
+        return Err(format!(
+            "bracket nesting {depth} exceeds {MAX_NESTING} (stack-safety limit)"
+        ));
+    }
     // Lone surrogates become U+FFFD: one UTF-16 unit either way, so offsets
     // agree; every stored slice is read from `content` itself.
     let text = String::from_utf16_lossy(content);

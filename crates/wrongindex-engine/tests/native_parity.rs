@@ -411,3 +411,41 @@ fn rebuild_is_a_no_op_without_changes_and_replaces_atomically_otherwise() {
         Rebuild::Written(_)
     ));
 }
+
+#[test]
+fn pathologically_nested_sources_are_refused_without_crashing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("deep");
+    std::fs::create_dir_all(&root).unwrap();
+    // 200k nested parentheses: would overflow a recursive parser's stack.
+    let deep = format!(
+        "export const x = {}1{};\n",
+        "(".repeat(200_000),
+        ")".repeat(200_000)
+    );
+    std::fs::write(root.join("deep.ts"), deep).unwrap();
+    let index = base.join("idx");
+    match index_fresh(&root, &index) {
+        Err(NativeError::Unsupported(why)) => assert!(why.contains("nesting"), "{why}"),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+    assert!(
+        !index.exists(),
+        "nothing may be written for a refused project"
+    );
+
+    // Ordinary nesting is unaffected.
+    let ok = base.join("ok");
+    std::fs::create_dir_all(&ok).unwrap();
+    std::fs::write(
+        ok.join("a.ts"),
+        format!(
+            "export const y = {}1{};\n",
+            "(".repeat(100),
+            ")".repeat(100)
+        ),
+    )
+    .unwrap();
+    index_fresh(&ok, &base.join("idx-ok")).unwrap();
+}

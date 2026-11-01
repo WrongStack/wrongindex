@@ -211,8 +211,27 @@ struct GitTrust {
     snapshot_key: Option<String>,
 }
 
-/// Read and parse every discovered file; refuse anything unsupported.
+/// Stack for the parsing thread. Parsers recurse on input structure; the
+/// TS parser has an explicit nesting cap, and this large reserved stack
+/// (committed only as used) is the second line of defence: a stack overflow
+/// aborts the whole process and cannot be caught like a panic.
+const PARSE_STACK_BYTES: usize = 256 * 1024 * 1024;
+
+/// Read and parse every discovered file on a dedicated large-stack thread.
 fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+    let root = project_root.to_path_buf();
+    std::thread::Builder::new()
+        .name("wrongindex-parse".into())
+        .stack_size(PARSE_STACK_BYTES)
+        .spawn(move || collect_on_this_thread(&root))?
+        .join()
+        .unwrap_or_else(|_| Err(NativeError::Unsupported("parser thread panicked".into())))
+}
+
+/// Read and parse every discovered file; refuse anything unsupported.
+fn collect_on_this_thread(
+    project_root: &Path,
+) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
     let d = wrongindex_discovery::discover(project_root, &[]);
     if !d.complete {
         return Err(NativeError::Unsupported(format!(
