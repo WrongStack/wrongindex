@@ -7,7 +7,10 @@
   },
   "parsers": {
     "json-parser.ts": "32a2c08f5a2943126dfab7e18e04d17ff4851a4c15c293e02891d80154da4f7f",
-    "yaml-parser.ts": "8f60d0481278da46b14304eacf055d2abc2e88a3010305b4b03ff8a378b6a660"
+    "yaml-parser.ts": "8f60d0481278da46b14304eacf055d2abc2e88a3010305b4b03ff8a378b6a660",
+    "rs-parser.ts": "4fab6bb37f3bc29866b92d59ba59763dcf11db22408de721ccddbb26c4909a6a",
+    "import-extractor.ts": "7f4fee0c65c218dce2d96c5bed3ffaf37d54ac705eb32531698a9b29ae5a4e1c",
+    "parser-dispatch.ts": "de5ddfb6c9a67c97694b5982a9b421808dcaf10d5ef79d018b977cc476003662"
   },
   "cases": [
     {
@@ -12048,6 +12051,4509 @@
       "refs": 0
     },
     {
+      "source": "synthetic:rs-empty",
+      "lang": "rs",
+      "file": "C:\\kat\\empty.rs",
+      "content": "",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-items",
+      "lang": "rs",
+      "file": "C:\\kat\\items.rs",
+      "content": "pub struct Point { x: i32 }\nenum Color { Red }\ntrait Draw { fn draw(&self); }\ntype Alias = u32;\nconst MAX: usize = 3;\nstatic NAME: &str = \"x\";\nmod inner { }\nmod decl;\npub fn run() {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "draw",
+          "line": 3,
+          "col": 16,
+          "signature": "trait Draw { fn draw(&self); }",
+          "docComment": "",
+          "scope": "",
+          "text": "draw trait Draw { fn draw(&self); }"
+        },
+        {
+          "kind": "function",
+          "name": "run",
+          "line": 9,
+          "col": 7,
+          "signature": "pub fn run() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "run pub fn run() {}"
+        },
+        {
+          "kind": "struct",
+          "name": "Point",
+          "line": 1,
+          "col": 11,
+          "signature": "pub struct Point { x: i32 }",
+          "docComment": "",
+          "scope": "",
+          "text": "Point pub struct Point { x: i32 }"
+        },
+        {
+          "kind": "enum",
+          "name": "Color",
+          "line": 2,
+          "col": 5,
+          "signature": "enum Color { Red }",
+          "docComment": "",
+          "scope": "",
+          "text": "Color enum Color { Red }"
+        },
+        {
+          "kind": "trait",
+          "name": "Draw",
+          "line": 3,
+          "col": 6,
+          "signature": "trait Draw { fn draw(&self); }",
+          "docComment": "",
+          "scope": "",
+          "text": "Draw trait Draw { fn draw(&self); }"
+        },
+        {
+          "kind": "type",
+          "name": "Alias",
+          "line": 4,
+          "col": 5,
+          "signature": "type Alias = u32;",
+          "docComment": "",
+          "scope": "",
+          "text": "Alias type Alias = u32;"
+        },
+        {
+          "kind": "const",
+          "name": "MAX",
+          "line": 5,
+          "col": 6,
+          "signature": "const MAX: usize = 3;",
+          "docComment": "",
+          "scope": "",
+          "text": "MAX const MAX: usize = 3;"
+        },
+        {
+          "kind": "static",
+          "name": "NAME",
+          "line": 6,
+          "col": 7,
+          "signature": "static NAME: &str = \"x\";",
+          "docComment": "",
+          "scope": "",
+          "text": "NAME static NAME: &str = \"x\";"
+        },
+        {
+          "kind": "mod",
+          "name": "inner",
+          "line": 7,
+          "col": 4,
+          "signature": "mod inner { }",
+          "docComment": "",
+          "scope": "",
+          "text": "inner mod inner { }"
+        },
+        {
+          "kind": "mod",
+          "name": "decl",
+          "line": 8,
+          "col": 4,
+          "signature": "mod decl;",
+          "docComment": "",
+          "scope": "",
+          "text": "decl mod decl;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "decl",
+          "callType": "import",
+          "line": 8,
+          "lang": "rs",
+          "module": "decl"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-generics",
+      "lang": "rs",
+      "file": "C:\\kat\\generics.rs",
+      "content": "fn parse<T: FromStr>(s: &str) -> Option<T> { None }\nfn  spaced  <T>() {}\nfn tuple ( ) {}\nfn no_paren\n() {}\ntype Map<K, V> = HashMap<K, V>;\ntype Bad<K> where K: X = u8;\ntype Out<A> ;\npub type R<T, E = Error> = Result<T, E>;\ntype G<T> /* c */ = T;\ntype Gt<T: A<B>> = T;\nstruct Wrap<T>(T);\nenum E<'a> { A(&'a str) }\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "parse",
+          "line": 1,
+          "col": 3,
+          "signature": "fn parse<T: FromStr>(s: &str) -> Option<T> { None }",
+          "docComment": "",
+          "scope": "",
+          "text": "parse fn parse<T: FromStr>(s: &str) -> Option<T> { None }"
+        },
+        {
+          "kind": "function",
+          "name": "spaced",
+          "line": 2,
+          "col": 4,
+          "signature": "fn  spaced  <T>() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "spaced fn  spaced  <T>() {}"
+        },
+        {
+          "kind": "function",
+          "name": "tuple",
+          "line": 3,
+          "col": 3,
+          "signature": "fn tuple ( ) {}",
+          "docComment": "",
+          "scope": "",
+          "text": "tuple fn tuple ( ) {}"
+        },
+        {
+          "kind": "function",
+          "name": "no_paren",
+          "line": 4,
+          "col": 3,
+          "signature": "fn no_paren",
+          "docComment": "",
+          "scope": "",
+          "text": "no_paren fn no_paren"
+        },
+        {
+          "kind": "struct",
+          "name": "Wrap",
+          "line": 12,
+          "col": 7,
+          "signature": "struct Wrap<T>(T);",
+          "docComment": "",
+          "scope": "",
+          "text": "Wrap struct Wrap<T>(T);"
+        },
+        {
+          "kind": "enum",
+          "name": "E",
+          "line": 13,
+          "col": 5,
+          "signature": "enum E<'a> { A(&'a str) }",
+          "docComment": "",
+          "scope": "",
+          "text": "E enum E<'a> { A(&'a str) }"
+        },
+        {
+          "kind": "type",
+          "name": "Map",
+          "line": 6,
+          "col": 5,
+          "signature": "type Map<K, V> = HashMap<K, V>;",
+          "docComment": "",
+          "scope": "",
+          "text": "Map type Map<K, V> = HashMap<K, V>;"
+        },
+        {
+          "kind": "type",
+          "name": "G",
+          "line": 10,
+          "col": 5,
+          "signature": "type G<T> /* c */ = T;",
+          "docComment": "",
+          "scope": "",
+          "text": "G type G<T> /* c */ = T;"
+        },
+        {
+          "kind": "type",
+          "name": "Gt",
+          "line": 11,
+          "col": 5,
+          "signature": "type Gt<T: A<B>> = T;",
+          "docComment": "",
+          "scope": "",
+          "text": "Gt type Gt<T: A<B>> = T;"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-impl-blocks",
+      "lang": "rs",
+      "file": "C:\\kat\\impl-blocks.rs",
+      "content": "impl Foo {}\nimpl<T> Foo<T> {}\nimpl<T: Into<String>> Display for Bar<T> {}\nimpl<T: A<B<C>>> deep::path::Thing for X {}\nimpl<T: A<B<C<D>>>> TooDeep for X {}\n  unsafe impl Send for Raw {}\nunsafe  impl<T> Sync for Raw<T> {}\nfn f() -> impl Iterator<Item = u8> { todo!() }\nimpl a::b::<X> {}\nimpl a:::b {}\nimpl ::std::fmt::Debug for Y {}\nimpl\n<T>\nMultiLine<T> {}\nimpl<T>  {}\nimpl dyn Trait {}\nimpl<'a> Lt<'a> {}\nimpl<T unclosed\nstruct AfterUnclosed;\nunsafe implx Bad {}\nimplement Nope {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 8,
+          "col": 3,
+          "signature": "fn f() -> impl Iterator<Item = u8> { todo!() }",
+          "docComment": "",
+          "scope": "",
+          "text": "f fn f() -> impl Iterator<Item = u8> { todo!() }"
+        },
+        {
+          "kind": "struct",
+          "name": "AfterUnclosed",
+          "line": 19,
+          "col": 7,
+          "signature": "struct AfterUnclosed;",
+          "docComment": "",
+          "scope": "",
+          "text": "AfterUnclosed struct AfterUnclosed;"
+        },
+        {
+          "kind": "impl",
+          "name": "Foo",
+          "line": 1,
+          "col": 5,
+          "signature": "impl Foo {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Foo impl Foo {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Foo",
+          "line": 2,
+          "col": 8,
+          "signature": "impl<T> Foo<T> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Foo impl<T> Foo<T> {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Display",
+          "line": 3,
+          "col": 22,
+          "signature": "impl<T: Into<String>> Display for Bar<T> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Display impl<T: Into<String>> Display for Bar<T> {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Thing",
+          "line": 4,
+          "col": 29,
+          "signature": "impl<T: A<B<C>>> deep::path::Thing for X {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Thing impl<T: A<B<C>>> deep::path::Thing for X {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Send",
+          "line": 6,
+          "col": 14,
+          "signature": "unsafe impl Send for Raw {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Send unsafe impl Send for Raw {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Sync",
+          "line": 7,
+          "col": 16,
+          "signature": "unsafe  impl<T> Sync for Raw<T> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Sync unsafe  impl<T> Sync for Raw<T> {}"
+        },
+        {
+          "kind": "impl",
+          "name": "b",
+          "line": 9,
+          "col": 8,
+          "signature": "impl a::b::<X> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "b impl a::b::<X> {}"
+        },
+        {
+          "kind": "impl",
+          "name": "a",
+          "line": 10,
+          "col": 5,
+          "signature": "impl a:::b {}",
+          "docComment": "",
+          "scope": "",
+          "text": "a impl a:::b {}"
+        },
+        {
+          "kind": "impl",
+          "name": "MultiLine",
+          "line": 14,
+          "col": 0,
+          "signature": "MultiLine<T> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "MultiLine MultiLine<T> {}"
+        },
+        {
+          "kind": "impl",
+          "name": "dyn",
+          "line": 16,
+          "col": 5,
+          "signature": "impl dyn Trait {}",
+          "docComment": "",
+          "scope": "",
+          "text": "dyn impl dyn Trait {}"
+        },
+        {
+          "kind": "impl",
+          "name": "Lt",
+          "line": 17,
+          "col": 9,
+          "signature": "impl<'a> Lt<'a> {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Lt impl<'a> Lt<'a> {}"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-traits",
+      "lang": "rs",
+      "file": "C:\\kat\\traits.rs",
+      "content": "pub trait Shape: Debug + Clone {\n    const SIDES: u32;\n    type Output;\n    fn area(&self) -> f64;\n    fn default_name() -> String { String::new() }\n}\npub unsafe trait Danger {}\nauto trait Marker {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "area",
+          "line": 4,
+          "col": 7,
+          "signature": "fn area(&self) -> f64;",
+          "docComment": "",
+          "scope": "",
+          "text": "area fn area(&self) -> f64;"
+        },
+        {
+          "kind": "function",
+          "name": "default_name",
+          "line": 5,
+          "col": 7,
+          "signature": "fn default_name() -> String { String::new() }",
+          "docComment": "",
+          "scope": "",
+          "text": "default_name fn default_name() -> String { String::new() }"
+        },
+        {
+          "kind": "trait",
+          "name": "Shape",
+          "line": 1,
+          "col": 10,
+          "signature": "pub trait Shape: Debug + Clone {",
+          "docComment": "",
+          "scope": "",
+          "text": "Shape pub trait Shape: Debug + Clone {"
+        },
+        {
+          "kind": "trait",
+          "name": "Danger",
+          "line": 7,
+          "col": 17,
+          "signature": "pub unsafe trait Danger {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Danger pub unsafe trait Danger {}"
+        },
+        {
+          "kind": "trait",
+          "name": "Marker",
+          "line": 8,
+          "col": 11,
+          "signature": "auto trait Marker {}",
+          "docComment": "",
+          "scope": "",
+          "text": "Marker auto trait Marker {}"
+        },
+        {
+          "kind": "const",
+          "name": "SIDES",
+          "line": 2,
+          "col": 10,
+          "signature": "const SIDES: u32;",
+          "docComment": "",
+          "scope": "",
+          "text": "SIDES const SIDES: u32;"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-macros",
+      "lang": "rs",
+      "file": "C:\\kat\\macros.rs",
+      "content": "macro_rules! square {\n    ($x:expr) => { $x * $x };\n}\nmacro_rules! make_fn {\n    ($n:ident) => { fn $n() {} };\n}\nmake_fn!(generated);\nlazy_static! {\n    static ref CACHE: Mutex<u8> = Mutex::new(0);\n}\nthread_local! { static LOCAL: Cell<u8> = Cell::new(0); }\n#[macro_export]\nmacro_rules! exported { () => {} }\n",
+      "symbols": [
+        {
+          "kind": "static",
+          "name": "LOCAL",
+          "line": 11,
+          "col": 23,
+          "signature": "thread_local! { static LOCAL: Cell<u8> = Cell::new(0); }",
+          "docComment": "",
+          "scope": "",
+          "text": "LOCAL thread_local! { static LOCAL: Cell<u8> = Cell::new(0); }"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-nested-mods",
+      "lang": "rs",
+      "file": "C:\\kat\\nested-mods.rs",
+      "content": "pub mod outer {\n    pub mod inner {\n        pub fn deep() {}\n        mod deeper;\n    }\n    pub(crate) mod sibling;\n}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn it_works() {}\n}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "deep",
+          "line": 3,
+          "col": 15,
+          "signature": "pub fn deep() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "deep pub fn deep() {}"
+        },
+        {
+          "kind": "function",
+          "name": "it_works",
+          "line": 12,
+          "col": 7,
+          "signature": "fn it_works() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "it_works fn it_works() {}"
+        },
+        {
+          "kind": "mod",
+          "name": "outer",
+          "line": 1,
+          "col": 8,
+          "signature": "pub mod outer {",
+          "docComment": "",
+          "scope": "",
+          "text": "outer pub mod outer {"
+        },
+        {
+          "kind": "mod",
+          "name": "inner",
+          "line": 2,
+          "col": 12,
+          "signature": "pub mod inner {",
+          "docComment": "",
+          "scope": "",
+          "text": "inner pub mod inner {"
+        },
+        {
+          "kind": "mod",
+          "name": "deeper",
+          "line": 4,
+          "col": 12,
+          "signature": "mod deeper;",
+          "docComment": "",
+          "scope": "",
+          "text": "deeper mod deeper;"
+        },
+        {
+          "kind": "mod",
+          "name": "sibling",
+          "line": 6,
+          "col": 19,
+          "signature": "pub(crate) mod sibling;",
+          "docComment": "",
+          "scope": "",
+          "text": "sibling pub(crate) mod sibling;"
+        },
+        {
+          "kind": "mod",
+          "name": "tests",
+          "line": 9,
+          "col": 4,
+          "signature": "mod tests {",
+          "docComment": "",
+          "scope": "",
+          "text": "tests mod tests {"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "super",
+          "callType": "import",
+          "line": 10,
+          "lang": "rs",
+          "module": "super"
+        },
+        {
+          "toName": "deeper",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "deeper"
+        },
+        {
+          "toName": "sibling",
+          "callType": "import",
+          "line": 6,
+          "lang": "rs",
+          "module": "sibling"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-docs",
+      "lang": "rs",
+      "file": "C:\\kat\\docs.rs",
+      "content": "//! Crate docs\n//! fn not_a_symbol()\n\n/// First doc line\n/// second line\n#[derive(Debug)]\n#[serde(rename_all = \"camelCase\")]\npub struct Documented;\n\n///\n///   \n/// after blanks\nfn blank_first() {}\n\n/// Detached\n\nfn detached() {}\n//// four slashes\nfn four() {}\n/** block doc */\nfn block_doc() {}\n/// doc with trailing   \n   #[inline]   \n   fn indented() {}\n/// dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\nfn long_doc() {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "blank_first",
+          "line": 13,
+          "col": 3,
+          "signature": "fn blank_first() {}",
+          "docComment": "after blanks",
+          "scope": "",
+          "text": "blank_first fn blank_first() {} after blanks"
+        },
+        {
+          "kind": "function",
+          "name": "detached",
+          "line": 17,
+          "col": 3,
+          "signature": "fn detached() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "detached fn detached() {}"
+        },
+        {
+          "kind": "function",
+          "name": "four",
+          "line": 19,
+          "col": 3,
+          "signature": "fn four() {}",
+          "docComment": "/ four slashes",
+          "scope": "",
+          "text": "four fn four() {} / four slashes"
+        },
+        {
+          "kind": "function",
+          "name": "block_doc",
+          "line": 21,
+          "col": 3,
+          "signature": "fn block_doc() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "block_doc fn block_doc() {}"
+        },
+        {
+          "kind": "function",
+          "name": "indented",
+          "line": 24,
+          "col": 6,
+          "signature": "fn indented() {}",
+          "docComment": "doc with trailing",
+          "scope": "",
+          "text": "indented fn indented() {} doc with trailing"
+        },
+        {
+          "kind": "function",
+          "name": "long_doc",
+          "line": 26,
+          "col": 3,
+          "signature": "fn long_doc() {}",
+          "docComment": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "scope": "",
+          "text": "long_doc fn long_doc() {} dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        {
+          "kind": "struct",
+          "name": "Documented",
+          "line": 8,
+          "col": 11,
+          "signature": "pub struct Documented;",
+          "docComment": "First doc line",
+          "scope": "",
+          "text": "Documented pub struct Documented; First doc line"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-comments-strings",
+      "lang": "rs",
+      "file": "C:\\kat\\comments-strings.rs",
+      "content": "// fn in_comment()\n/* struct InBlock /* nested */ still comment enum E2 */\nfn real() { let s = \"fn in_string() { struct S }\"; }\nlet esc = \"quote \\\" fn after_escape()\";\nlet ch = '\"'; fn after_char_quote() {}\nlet b = b\"struct Bytes\"; let c = '\\n'; let u = '\\u{1F600}';\nfn after_chars() {}\n/* unterminated block fn never()\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "real",
+          "line": 3,
+          "col": 3,
+          "signature": "fn real() { let s = \"fn in_string() { struct S }\"; }",
+          "docComment": "",
+          "scope": "",
+          "text": "real fn real() { let s = \"fn in_string() { struct S }\"; }"
+        },
+        {
+          "kind": "function",
+          "name": "after_char_quote",
+          "line": 5,
+          "col": 17,
+          "signature": "let ch = '\"'; fn after_char_quote() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_char_quote let ch = '\"'; fn after_char_quote() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_chars",
+          "line": 7,
+          "col": 3,
+          "signature": "fn after_chars() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_chars fn after_chars() {}"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-raw-strings",
+      "lang": "rs",
+      "file": "C:\\kat\\raw-strings.rs",
+      "content": "let a = r\"fn raw_a()\";\nlet b = r#\"fn raw_b() \"quoted\" \"#;\nlet c = r##\"struct \"# RawC \"##;\nlet d = br\"fn byte_raw()\"; let e = cr\"C:\\\"; fn after_c_raw() {}\nlet f = r#ident; fn after_raw_ident() {}\nlet g = xr\"not raw\"; fn after_xr() {}\nlet h = abr\"x\"; fn after_abr() {}\nlet unterminated = r#\"fn never_closed()\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "after_c_raw",
+          "line": 4,
+          "col": 47,
+          "signature": "let d = br\"fn byte_raw()\"; let e = cr\"C:\\\"; fn after_c_raw() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_c_raw let d = br\"fn byte_raw()\"; let e = cr\"C:\\\"; fn after_c_raw() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_raw_ident",
+          "line": 5,
+          "col": 20,
+          "signature": "let f = r#ident; fn after_raw_ident() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_raw_ident let f = r#ident; fn after_raw_ident() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_xr",
+          "line": 6,
+          "col": 24,
+          "signature": "let g = xr\"not raw\"; fn after_xr() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_xr let g = xr\"not raw\"; fn after_xr() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_abr",
+          "line": 7,
+          "col": 19,
+          "signature": "let h = abr\"x\"; fn after_abr() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_abr let h = abr\"x\"; fn after_abr() {}"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-lifetimes",
+      "lang": "rs",
+      "file": "C:\\kat\\lifetimes.rs",
+      "content": "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { x }\nfn st(s: &'static str) {}\nstruct Holder<'a> { r: &'a u8 }\nlet c = 'x'; let e = '😀'; fn after_emoji_char() {}\nstatic GLOBAL: &'static str = \"g\";\nconst C: &'static [u8] = b\"\";\nfn label() { 'outer: loop { break 'outer; } }\nlet q = '\\''; fn after_escaped_quote() {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "longest",
+          "line": 1,
+          "col": 3,
+          "signature": "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { x }",
+          "docComment": "",
+          "scope": "",
+          "text": "longest fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { x }"
+        },
+        {
+          "kind": "function",
+          "name": "st",
+          "line": 2,
+          "col": 3,
+          "signature": "fn st(s: &'static str) {}",
+          "docComment": "",
+          "scope": "",
+          "text": "st fn st(s: &'static str) {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_emoji_char",
+          "line": 4,
+          "col": 30,
+          "signature": "let c = 'x'; let e = '😀'; fn after_emoji_char() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_emoji_char let c = 'x'; let e = '😀'; fn after_emoji_char() {}"
+        },
+        {
+          "kind": "function",
+          "name": "label",
+          "line": 7,
+          "col": 3,
+          "signature": "fn label() { 'outer: loop { break 'outer; } }",
+          "docComment": "",
+          "scope": "",
+          "text": "label fn label() { 'outer: loop { break 'outer; } }"
+        },
+        {
+          "kind": "function",
+          "name": "after_escaped_quote",
+          "line": 8,
+          "col": 17,
+          "signature": "let q = '\\''; fn after_escaped_quote() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_escaped_quote let q = '\\''; fn after_escaped_quote() {}"
+        },
+        {
+          "kind": "struct",
+          "name": "Holder",
+          "line": 3,
+          "col": 7,
+          "signature": "struct Holder<'a> { r: &'a u8 }",
+          "docComment": "",
+          "scope": "",
+          "text": "Holder struct Holder<'a> { r: &'a u8 }"
+        },
+        {
+          "kind": "const",
+          "name": "C",
+          "line": 6,
+          "col": 6,
+          "signature": "const C: &'static [u8] = b\"\";",
+          "docComment": "",
+          "scope": "",
+          "text": "C const C: &'static [u8] = b\"\";"
+        },
+        {
+          "kind": "static",
+          "name": "GLOBAL",
+          "line": 5,
+          "col": 7,
+          "signature": "static GLOBAL: &'static str = \"g\";",
+          "docComment": "",
+          "scope": "",
+          "text": "GLOBAL static GLOBAL: &'static str = \"g\";"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-crlf",
+      "lang": "rs",
+      "file": "C:\\kat\\crlf.rs",
+      "content": "/// Doc\r\npub fn crlf_fn() {}\r\nstruct CrlfStruct;\r\nuse std::io;\r\nmod m;\r\n#[cfg(x)]\r\n/// inner\r\nconst K: u8 = 1;\r\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "crlf_fn",
+          "line": 2,
+          "col": 7,
+          "signature": "pub fn crlf_fn() {}",
+          "docComment": "Doc",
+          "scope": "",
+          "text": "crlf_fn pub fn crlf_fn() {} Doc"
+        },
+        {
+          "kind": "struct",
+          "name": "CrlfStruct",
+          "line": 3,
+          "col": 7,
+          "signature": "struct CrlfStruct;",
+          "docComment": "",
+          "scope": "",
+          "text": "CrlfStruct struct CrlfStruct;"
+        },
+        {
+          "kind": "const",
+          "name": "K",
+          "line": 8,
+          "col": 6,
+          "signature": "const K: u8 = 1;",
+          "docComment": "inner",
+          "scope": "",
+          "text": "K const K: u8 = 1; inner"
+        },
+        {
+          "kind": "mod",
+          "name": "m",
+          "line": 5,
+          "col": 4,
+          "signature": "mod m;",
+          "docComment": "",
+          "scope": "",
+          "text": "m mod m;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "io",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "std::io"
+        },
+        {
+          "toName": "m",
+          "callType": "import",
+          "line": 5,
+          "lang": "rs",
+          "module": "m"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-unicode",
+      "lang": "rs",
+      "file": "C:\\kat\\unicode.rs",
+      "content": "/// Ünïcödé doc 😀\nfn ünïcode() {}\nfn ascii_after_ünï() {}\nstruct Été;\nlet s = \"😀😀\"; fn after_emoji() {}\n// 日本語 fn hidden()\nfn 日本() {}\nstruct Tail😀Name;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "after_emoji",
+          "line": 5,
+          "col": 19,
+          "signature": "let s = \"😀😀\"; fn after_emoji() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_emoji let s = \"😀😀\"; fn after_emoji() {}"
+        },
+        {
+          "kind": "struct",
+          "name": "Tail",
+          "line": 8,
+          "col": 7,
+          "signature": "struct Tail😀Name;",
+          "docComment": "",
+          "scope": "",
+          "text": "Tail struct Tail😀Name;"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-visibility",
+      "lang": "rs",
+      "file": "C:\\kat\\visibility.rs",
+      "content": "pub(crate) fn a() {}\npub(super) struct B;\npub(in crate::x) enum C {}\npub(crate) use crate::x::Y;\npub (crate) use spaced::Z;\npub(crate)use tight::W;\npub use plain::P;\npub(crate) mod vis_mod;\npub (in a::b) mod in_path;\npubuse nope::N;\npub(unclosed use x::Q;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 1,
+          "col": 14,
+          "signature": "pub(crate) fn a() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "a pub(crate) fn a() {}"
+        },
+        {
+          "kind": "struct",
+          "name": "B",
+          "line": 2,
+          "col": 18,
+          "signature": "pub(super) struct B;",
+          "docComment": "",
+          "scope": "",
+          "text": "B pub(super) struct B;"
+        },
+        {
+          "kind": "enum",
+          "name": "C",
+          "line": 3,
+          "col": 22,
+          "signature": "pub(in crate::x) enum C {}",
+          "docComment": "",
+          "scope": "",
+          "text": "C pub(in crate::x) enum C {}"
+        },
+        {
+          "kind": "mod",
+          "name": "vis_mod",
+          "line": 8,
+          "col": 15,
+          "signature": "pub(crate) mod vis_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "vis_mod pub(crate) mod vis_mod;"
+        },
+        {
+          "kind": "mod",
+          "name": "in_path",
+          "line": 9,
+          "col": 18,
+          "signature": "pub (in a::b) mod in_path;",
+          "docComment": "",
+          "scope": "",
+          "text": "in_path pub (in a::b) mod in_path;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Y",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "crate::x::Y"
+        },
+        {
+          "toName": "Z",
+          "callType": "import",
+          "line": 5,
+          "lang": "rs",
+          "module": "spaced::Z"
+        },
+        {
+          "toName": "P",
+          "callType": "import",
+          "line": 7,
+          "lang": "rs",
+          "module": "plain::P"
+        },
+        {
+          "toName": "vis_mod",
+          "callType": "import",
+          "line": 8,
+          "lang": "rs",
+          "module": "vis_mod"
+        },
+        {
+          "toName": "in_path",
+          "callType": "import",
+          "line": 9,
+          "lang": "rs",
+          "module": "in_path"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-fn-qualifiers",
+      "lang": "rs",
+      "file": "C:\\kat\\fn-qualifiers.rs",
+      "content": "async fn a() {}\nconst fn b() -> u8 { 0 }\nunsafe fn c() {}\npub async unsafe fn d() {}\nextern \"C\" fn e() {}\nconst unsafe fn f() {}\nconst async_x: u8 = 0;\nconst fnord: u8 = 1;\nconst extern_ok : u8 = 2;\nconst _: () = ();\nstatic mut COUNTER: u32 = 0;\nstatic mut : u8 = 0;\nstatic mutable: u8 = 0;\nstatic  mut\n  SPLIT: u8 = 0;\nx.const y: u8;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 1,
+          "col": 9,
+          "signature": "async fn a() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "a async fn a() {}"
+        },
+        {
+          "kind": "function",
+          "name": "b",
+          "line": 2,
+          "col": 9,
+          "signature": "const fn b() -> u8 { 0 }",
+          "docComment": "",
+          "scope": "",
+          "text": "b const fn b() -> u8 { 0 }"
+        },
+        {
+          "kind": "function",
+          "name": "c",
+          "line": 3,
+          "col": 10,
+          "signature": "unsafe fn c() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "c unsafe fn c() {}"
+        },
+        {
+          "kind": "function",
+          "name": "d",
+          "line": 4,
+          "col": 20,
+          "signature": "pub async unsafe fn d() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "d pub async unsafe fn d() {}"
+        },
+        {
+          "kind": "function",
+          "name": "e",
+          "line": 5,
+          "col": 14,
+          "signature": "extern \"C\" fn e() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "e extern \"C\" fn e() {}"
+        },
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 6,
+          "col": 16,
+          "signature": "const unsafe fn f() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "f const unsafe fn f() {}"
+        },
+        {
+          "kind": "const",
+          "name": "async_x",
+          "line": 7,
+          "col": 6,
+          "signature": "const async_x: u8 = 0;",
+          "docComment": "",
+          "scope": "",
+          "text": "async_x const async_x: u8 = 0;"
+        },
+        {
+          "kind": "const",
+          "name": "fnord",
+          "line": 8,
+          "col": 6,
+          "signature": "const fnord: u8 = 1;",
+          "docComment": "",
+          "scope": "",
+          "text": "fnord const fnord: u8 = 1;"
+        },
+        {
+          "kind": "const",
+          "name": "extern_ok",
+          "line": 9,
+          "col": 6,
+          "signature": "const extern_ok : u8 = 2;",
+          "docComment": "",
+          "scope": "",
+          "text": "extern_ok const extern_ok : u8 = 2;"
+        },
+        {
+          "kind": "const",
+          "name": "_",
+          "line": 10,
+          "col": 6,
+          "signature": "const _: () = ();",
+          "docComment": "",
+          "scope": "",
+          "text": "_ const _: () = ();"
+        },
+        {
+          "kind": "const",
+          "name": "y",
+          "line": 16,
+          "col": 8,
+          "signature": "x.const y: u8;",
+          "docComment": "",
+          "scope": "",
+          "text": "y x.const y: u8;"
+        },
+        {
+          "kind": "static",
+          "name": "COUNTER",
+          "line": 11,
+          "col": 11,
+          "signature": "static mut COUNTER: u32 = 0;",
+          "docComment": "",
+          "scope": "",
+          "text": "COUNTER static mut COUNTER: u32 = 0;"
+        },
+        {
+          "kind": "static",
+          "name": "mut",
+          "line": 12,
+          "col": 7,
+          "signature": "static mut : u8 = 0;",
+          "docComment": "",
+          "scope": "",
+          "text": "mut static mut : u8 = 0;"
+        },
+        {
+          "kind": "static",
+          "name": "mutable",
+          "line": 13,
+          "col": 7,
+          "signature": "static mutable: u8 = 0;",
+          "docComment": "",
+          "scope": "",
+          "text": "mutable static mutable: u8 = 0;"
+        },
+        {
+          "kind": "static",
+          "name": "SPLIT",
+          "line": 15,
+          "col": 2,
+          "signature": "SPLIT: u8 = 0;",
+          "docComment": "",
+          "scope": "",
+          "text": "SPLIT SPLIT: u8 = 0;"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-use-trees",
+      "lang": "rs",
+      "file": "C:\\kat\\use-trees.rs",
+      "content": "use a::{b, c::{d, e}};\nuse x as y;\nuse std::collections::HashMap;\nuse std::io::{self, Write};\nuse super::*;\nuse crate::parse::*;\nuse self::m::N;\nuse ::abs::Path;\nuse ::{a, b};\nuse {x, y};\nuse  spaced :: path;\nuse a::b\n    ::c;\nuse long::path::Thing as _;\nuse a::b::_;\n    use indented::Thing;\n\tuse tabbed::T;\nuse dup::A;\nuse dup::A;\nuse a::b::C as D;\nuse foo::bar::{\n    Baz,\n};\nuse ascii::Ünï;\nuse nosemicolon\nfn f() { use local::Inner; }\nlet x = 1; use not_line_start::X;\nuse a:::b;\nuse x asy;\nuse x as\ty;\nuse :::{q};\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "f",
+          "line": 26,
+          "col": 3,
+          "signature": "fn f() { use local::Inner; }",
+          "docComment": "",
+          "scope": "",
+          "text": "f fn f() { use local::Inner; }"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "a",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "a"
+        },
+        {
+          "toName": "x",
+          "callType": "import",
+          "line": 2,
+          "lang": "rs",
+          "module": "x"
+        },
+        {
+          "toName": "HashMap",
+          "callType": "import",
+          "line": 3,
+          "lang": "rs",
+          "module": "std::collections::HashMap"
+        },
+        {
+          "toName": "io",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "std::io"
+        },
+        {
+          "toName": "super",
+          "callType": "import",
+          "line": 5,
+          "lang": "rs",
+          "module": "super"
+        },
+        {
+          "toName": "parse",
+          "callType": "import",
+          "line": 6,
+          "lang": "rs",
+          "module": "crate::parse"
+        },
+        {
+          "toName": "N",
+          "callType": "import",
+          "line": 7,
+          "lang": "rs",
+          "module": "self::m::N"
+        },
+        {
+          "toName": "Path",
+          "callType": "import",
+          "line": 8,
+          "lang": "rs",
+          "module": "abs::Path"
+        },
+        {
+          "toName": "Thing",
+          "callType": "import",
+          "line": 14,
+          "lang": "rs",
+          "module": "long::path::Thing"
+        },
+        {
+          "toName": "b",
+          "callType": "import",
+          "line": 15,
+          "lang": "rs",
+          "module": "a::b::_"
+        },
+        {
+          "toName": "Thing",
+          "callType": "import",
+          "line": 16,
+          "lang": "rs",
+          "module": "indented::Thing"
+        },
+        {
+          "toName": "T",
+          "callType": "import",
+          "line": 17,
+          "lang": "rs",
+          "module": "tabbed::T"
+        },
+        {
+          "toName": "A",
+          "callType": "import",
+          "line": 18,
+          "lang": "rs",
+          "module": "dup::A"
+        },
+        {
+          "toName": "C",
+          "callType": "import",
+          "line": 20,
+          "lang": "rs",
+          "module": "a::b::C"
+        },
+        {
+          "toName": "bar",
+          "callType": "import",
+          "line": 21,
+          "lang": "rs",
+          "module": "foo::bar"
+        },
+        {
+          "toName": ":b",
+          "callType": "import",
+          "line": 28,
+          "lang": "rs",
+          "module": "a:::b"
+        },
+        {
+          "toName": ":",
+          "callType": "import",
+          "line": 31,
+          "lang": "rs",
+          "module": ":"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-extern-crate",
+      "lang": "rs",
+      "file": "C:\\kat\\extern-crate.rs",
+      "content": "extern crate serde;\nextern crate alloc as a;\n#[macro_use]\nextern crate log;\nuse serde::Deserialize;\n",
+      "symbols": [],
+      "refs": [
+        {
+          "toName": "Deserialize",
+          "callType": "import",
+          "line": 5,
+          "lang": "rs",
+          "module": "serde::Deserialize"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-mod-decls",
+      "lang": "rs",
+      "file": "C:\\kat\\mod-decls.rs",
+      "content": "mod foo;\npub mod bar;\nmod baz { }\nmod  spaced ;\nmod r#type;\nmod a\n;\npub(crate) mod c;\npub(in crate::x) mod d;\nmod e {}\nmod nested { mod f; }\n",
+      "symbols": [
+        {
+          "kind": "mod",
+          "name": "foo",
+          "line": 1,
+          "col": 4,
+          "signature": "mod foo;",
+          "docComment": "",
+          "scope": "",
+          "text": "foo mod foo;"
+        },
+        {
+          "kind": "mod",
+          "name": "bar",
+          "line": 2,
+          "col": 8,
+          "signature": "pub mod bar;",
+          "docComment": "",
+          "scope": "",
+          "text": "bar pub mod bar;"
+        },
+        {
+          "kind": "mod",
+          "name": "baz",
+          "line": 3,
+          "col": 4,
+          "signature": "mod baz { }",
+          "docComment": "",
+          "scope": "",
+          "text": "baz mod baz { }"
+        },
+        {
+          "kind": "mod",
+          "name": "spaced",
+          "line": 4,
+          "col": 5,
+          "signature": "mod  spaced ;",
+          "docComment": "",
+          "scope": "",
+          "text": "spaced mod  spaced ;"
+        },
+        {
+          "kind": "mod",
+          "name": "a",
+          "line": 6,
+          "col": 4,
+          "signature": "mod a",
+          "docComment": "",
+          "scope": "",
+          "text": "a mod a"
+        },
+        {
+          "kind": "mod",
+          "name": "c",
+          "line": 8,
+          "col": 15,
+          "signature": "pub(crate) mod c;",
+          "docComment": "",
+          "scope": "",
+          "text": "c pub(crate) mod c;"
+        },
+        {
+          "kind": "mod",
+          "name": "d",
+          "line": 9,
+          "col": 21,
+          "signature": "pub(in crate::x) mod d;",
+          "docComment": "",
+          "scope": "",
+          "text": "d pub(in crate::x) mod d;"
+        },
+        {
+          "kind": "mod",
+          "name": "e",
+          "line": 10,
+          "col": 4,
+          "signature": "mod e {}",
+          "docComment": "",
+          "scope": "",
+          "text": "e mod e {}"
+        },
+        {
+          "kind": "mod",
+          "name": "nested",
+          "line": 11,
+          "col": 4,
+          "signature": "mod nested { mod f; }",
+          "docComment": "",
+          "scope": "",
+          "text": "nested mod nested { mod f; }"
+        },
+        {
+          "kind": "mod",
+          "name": "f",
+          "line": 11,
+          "col": 17,
+          "signature": "mod nested { mod f; }",
+          "docComment": "",
+          "scope": "",
+          "text": "f mod nested { mod f; }"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "foo",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "foo"
+        },
+        {
+          "toName": "bar",
+          "callType": "import",
+          "line": 2,
+          "lang": "rs",
+          "module": "bar"
+        },
+        {
+          "toName": "spaced",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "spaced"
+        },
+        {
+          "toName": "a",
+          "callType": "import",
+          "line": 6,
+          "lang": "rs",
+          "module": "a"
+        },
+        {
+          "toName": "c",
+          "callType": "import",
+          "line": 8,
+          "lang": "rs",
+          "module": "c"
+        },
+        {
+          "toName": "d",
+          "callType": "import",
+          "line": 9,
+          "lang": "rs",
+          "module": "d"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-char-edge",
+      "lang": "rs",
+      "file": "C:\\kat\\char-edge.rs",
+      "content": "let a = '\\x41'; let b = '\\u{10FFFF}'; let c = '\\\\'; fn after_backslash() {}\nlet long = '\\this_is_not_a_char_literal_because_too_long'; fn after_long() {}\nlet lt: &'a str; fn after_lt() {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "after_backslash",
+          "line": 1,
+          "col": 55,
+          "signature": "let a = '\\x41'; let b = '\\u{10FFFF}'; let c = '\\\\'; fn after_backslash() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_backslash let a = '\\x41'; let b = '\\u{10FFFF}'; let c = '\\\\'; fn after_backslash() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_long",
+          "line": 2,
+          "col": 62,
+          "signature": "let long = '\\this_is_not_a_char_literal_because_too_long'; fn after_long() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_long let long = '\\this_is_not_a_char_literal_because_too_long'; fn after_long() {}"
+        },
+        {
+          "kind": "function",
+          "name": "after_lt",
+          "line": 3,
+          "col": 20,
+          "signature": "let lt: &'a str; fn after_lt() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "after_lt let lt: &'a str; fn after_lt() {}"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-dedup",
+      "lang": "rs",
+      "file": "C:\\kat\\dedup.rs",
+      "content": "fn same() {} fn same() {}\nstruct same;\nmod same;\nfn same() {}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "same",
+          "line": 1,
+          "col": 3,
+          "signature": "fn same() {} fn same() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "same fn same() {} fn same() {}"
+        },
+        {
+          "kind": "function",
+          "name": "same",
+          "line": 4,
+          "col": 3,
+          "signature": "fn same() {}",
+          "docComment": "",
+          "scope": "",
+          "text": "same fn same() {}"
+        },
+        {
+          "kind": "struct",
+          "name": "same",
+          "line": 2,
+          "col": 7,
+          "signature": "struct same;",
+          "docComment": "",
+          "scope": "",
+          "text": "same struct same;"
+        },
+        {
+          "kind": "mod",
+          "name": "same",
+          "line": 3,
+          "col": 4,
+          "signature": "mod same;",
+          "docComment": "",
+          "scope": "",
+          "text": "same mod same;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "same",
+          "callType": "import",
+          "line": 3,
+          "lang": "rs",
+          "module": "same"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-sig-truncate",
+      "lang": "rs",
+      "file": "C:\\kat\\sig-truncate.rs",
+      "content": "fn wide() { xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx }\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "wide",
+          "line": 1,
+          "col": 3,
+          "signature": "fn wide() { xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "docComment": "",
+          "scope": "",
+          "text": "wide fn wide() { xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      ],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-trailing-backslash",
+      "lang": "rs",
+      "file": "C:\\kat\\trailing-backslash.rs",
+      "content": "let s = \"abc\\",
+      "symbols": [],
+      "refs": []
+    },
+    {
+      "source": "synthetic:rs-cr-only",
+      "lang": "rs",
+      "file": "C:\\kat\\cr-only.rs",
+      "content": "fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;\r",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 1,
+          "col": 3,
+          "signature": "fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "a fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;"
+        },
+        {
+          "kind": "function",
+          "name": "b",
+          "line": 1,
+          "col": 13,
+          "signature": "fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "b fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;"
+        },
+        {
+          "kind": "mod",
+          "name": "cr_mod",
+          "line": 1,
+          "col": 38,
+          "signature": "fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "cr_mod fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Only",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "cr::Only"
+        },
+        {
+          "toName": "cr_mod",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "cr_mod"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-line-seps",
+      "lang": "rs",
+      "file": "C:\\kat\\line-seps.rs",
+      "content": "fn a() {} use ls::One; mod ps_mod;\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "a",
+          "line": 1,
+          "col": 3,
+          "signature": "fn a() {} use ls::One; mod ps_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "a fn a() {} use ls::One; mod ps_mod;"
+        },
+        {
+          "kind": "mod",
+          "name": "ps_mod",
+          "line": 1,
+          "col": 27,
+          "signature": "fn a() {} use ls::One; mod ps_mod;",
+          "docComment": "",
+          "scope": "",
+          "text": "ps_mod fn a() {} use ls::One; mod ps_mod;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "One",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "ls::One"
+        },
+        {
+          "toName": "ps_mod",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "ps_mod"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:rs-many-imports",
+      "lang": "rs",
+      "file": "C:\\kat\\many-imports.rs",
+      "content": "use m0::Item;\nuse m1::Item;\nuse m2::Item;\nuse m3::Item;\nuse m4::Item;\nuse m5::Item;\nuse m6::Item;\nuse m7::Item;\nuse m8::Item;\nuse m9::Item;\nuse m10::Item;\nuse m11::Item;\nuse m12::Item;\nuse m13::Item;\nuse m14::Item;\nuse m15::Item;\nuse m16::Item;\nuse m17::Item;\nuse m18::Item;\nuse m19::Item;\nuse m20::Item;\nuse m21::Item;\nuse m22::Item;\nuse m23::Item;\nuse m24::Item;\nuse m25::Item;\nuse m26::Item;\nuse m27::Item;\nuse m28::Item;\nuse m29::Item;\nuse m30::Item;\nuse m31::Item;\nuse m32::Item;\nuse m33::Item;\nuse m34::Item;\nuse m35::Item;\nuse m36::Item;\nuse m37::Item;\nuse m38::Item;\nuse m39::Item;\nuse m40::Item;\nuse m41::Item;\nuse m42::Item;\nuse m43::Item;\nuse m44::Item;\nuse m45::Item;\nuse m46::Item;\nuse m47::Item;\nuse m48::Item;\nuse m49::Item;\nuse m50::Item;\nuse m51::Item;\nuse m52::Item;\nuse m53::Item;\nuse m54::Item;\nuse m55::Item;\nuse m56::Item;\nuse m57::Item;\nuse m58::Item;\nuse m59::Item;\nuse m60::Item;\nuse m61::Item;\nuse m62::Item;\nuse m63::Item;\nuse m64::Item;\nuse m65::Item;\nuse m66::Item;\nuse m67::Item;\nuse m68::Item;\nuse m69::Item;\nuse m70::Item;\nuse m71::Item;\nuse m72::Item;\nuse m73::Item;\nuse m74::Item;\nuse m75::Item;\nuse m76::Item;\nuse m77::Item;\nuse m78::Item;\nuse m79::Item;\nuse m80::Item;\nuse m81::Item;\nuse m82::Item;\nuse m83::Item;\nuse m84::Item;\nuse m85::Item;\nuse m86::Item;\nuse m87::Item;\nuse m88::Item;\nuse m89::Item;\nuse m90::Item;\nuse m91::Item;\nuse m92::Item;\nuse m93::Item;\nuse m94::Item;\nuse m95::Item;\nuse m96::Item;\nuse m97::Item;\nuse m98::Item;\nuse m99::Item;\nuse m100::Item;\nuse m101::Item;\nuse m102::Item;\nuse m103::Item;\nuse m104::Item;\nuse m105::Item;\nuse m106::Item;\nuse m107::Item;\nuse m108::Item;\nuse m109::Item;\nuse m110::Item;\nuse m111::Item;\nuse m112::Item;\nuse m113::Item;\nuse m114::Item;\nuse m115::Item;\nuse m116::Item;\nuse m117::Item;\nuse m118::Item;\nuse m119::Item;\nuse m120::Item;\nuse m121::Item;\nuse m122::Item;\nuse m123::Item;\nuse m124::Item;\nuse m125::Item;\nuse m126::Item;\nuse m127::Item;\nuse m128::Item;\nuse m129::Item;\nuse m130::Item;\nuse m131::Item;\nuse m132::Item;\nuse m133::Item;\nuse m134::Item;\nuse m135::Item;\nuse m136::Item;\nuse m137::Item;\nuse m138::Item;\nuse m139::Item;\nuse m140::Item;\nuse m141::Item;\nuse m142::Item;\nuse m143::Item;\nuse m144::Item;\nuse m145::Item;\nuse m146::Item;\nuse m147::Item;\nuse m148::Item;\nuse m149::Item;\nuse m150::Item;\nuse m151::Item;\nuse m152::Item;\nuse m153::Item;\nuse m154::Item;\nuse m155::Item;\nuse m156::Item;\nuse m157::Item;\nuse m158::Item;\nuse m159::Item;\nuse m160::Item;\nuse m161::Item;\nuse m162::Item;\nuse m163::Item;\nuse m164::Item;\nuse m165::Item;\nuse m166::Item;\nuse m167::Item;\nuse m168::Item;\nuse m169::Item;\nuse m170::Item;\nuse m171::Item;\nuse m172::Item;\nuse m173::Item;\nuse m174::Item;\nuse m175::Item;\nuse m176::Item;\nuse m177::Item;\nuse m178::Item;\nuse m179::Item;\nuse m180::Item;\nuse m181::Item;\nuse m182::Item;\nuse m183::Item;\nuse m184::Item;\nuse m185::Item;\nuse m186::Item;\nuse m187::Item;\nuse m188::Item;\nuse m189::Item;\nuse m190::Item;\nuse m191::Item;\nuse m192::Item;\nuse m193::Item;\nuse m194::Item;\nuse m195::Item;\nuse m196::Item;\nuse m197::Item;\nuse m198::Item;\nuse m199::Item;\nuse m200::Item;\nuse m201::Item;\nuse m202::Item;\nuse m203::Item;\nuse m204::Item;\nuse m205::Item;\nuse m206::Item;\nuse m207::Item;\nuse m208::Item;\nuse m209::Item;\nuse m210::Item;\nuse m211::Item;\nuse m212::Item;\nuse m213::Item;\nuse m214::Item;\nuse m215::Item;\nuse m216::Item;\nuse m217::Item;\nuse m218::Item;\nuse m219::Item;\nuse m220::Item;\nuse m221::Item;\nuse m222::Item;\nuse m223::Item;\nuse m224::Item;\nuse m225::Item;\nuse m226::Item;\nuse m227::Item;\nuse m228::Item;\nuse m229::Item;\nuse m230::Item;\nuse m231::Item;\nuse m232::Item;\nuse m233::Item;\nuse m234::Item;\nuse m235::Item;\nuse m236::Item;\nuse m237::Item;\nuse m238::Item;\nuse m239::Item;\nuse m240::Item;\nuse m241::Item;\nuse m242::Item;\nuse m243::Item;\nuse m244::Item;\nuse m245::Item;\nuse m246::Item;\nuse m247::Item;\nuse m248::Item;\nuse m249::Item;\nuse m250::Item;\nuse m251::Item;\nuse m252::Item;\nuse m253::Item;\nuse m254::Item;\nuse m255::Item;\nuse m256::Item;\nuse m257::Item;\nuse m258::Item;\nuse m259::Item;\nuse m260::Item;\nuse m261::Item;\nuse m262::Item;\nuse m263::Item;\nuse m264::Item;\nuse m265::Item;\nuse m266::Item;\nuse m267::Item;\nuse m268::Item;\nuse m269::Item;\nuse m270::Item;\nuse m271::Item;\nuse m272::Item;\nuse m273::Item;\nuse m274::Item;\nuse m275::Item;\nuse m276::Item;\nuse m277::Item;\nuse m278::Item;\nuse m279::Item;\nuse m280::Item;\nuse m281::Item;\nuse m282::Item;\nuse m283::Item;\nuse m284::Item;\nuse m285::Item;\nuse m286::Item;\nuse m287::Item;\nuse m288::Item;\nuse m289::Item;\nuse m290::Item;\nuse m291::Item;\nuse m292::Item;\nuse m293::Item;\nuse m294::Item;\nuse m295::Item;\nuse m296::Item;\nuse m297::Item;\nuse m298::Item;\nuse m299::Item;\nuse m300::Item;\nuse m301::Item;\nuse m302::Item;\nuse m303::Item;\nuse m304::Item;\nuse m305::Item;\nuse m306::Item;\nuse m307::Item;\nuse m308::Item;\nuse m309::Item;\nuse m310::Item;\nuse m311::Item;\nuse m312::Item;\nuse m313::Item;\nuse m314::Item;\nuse m315::Item;\nuse m316::Item;\nuse m317::Item;\nuse m318::Item;\nuse m319::Item;\nuse m320::Item;\nuse m321::Item;\nuse m322::Item;\nuse m323::Item;\nuse m324::Item;\nuse m325::Item;\nuse m326::Item;\nuse m327::Item;\nuse m328::Item;\nuse m329::Item;\nuse m330::Item;\nuse m331::Item;\nuse m332::Item;\nuse m333::Item;\nuse m334::Item;\nuse m335::Item;\nuse m336::Item;\nuse m337::Item;\nuse m338::Item;\nuse m339::Item;\nuse m340::Item;\nuse m341::Item;\nuse m342::Item;\nuse m343::Item;\nuse m344::Item;\nuse m345::Item;\nuse m346::Item;\nuse m347::Item;\nuse m348::Item;\nuse m349::Item;\nuse m350::Item;\nuse m351::Item;\nuse m352::Item;\nuse m353::Item;\nuse m354::Item;\nuse m355::Item;\nuse m356::Item;\nuse m357::Item;\nuse m358::Item;\nuse m359::Item;\nuse m360::Item;\nuse m361::Item;\nuse m362::Item;\nuse m363::Item;\nuse m364::Item;\nuse m365::Item;\nuse m366::Item;\nuse m367::Item;\nuse m368::Item;\nuse m369::Item;\nuse m370::Item;\nuse m371::Item;\nuse m372::Item;\nuse m373::Item;\nuse m374::Item;\nuse m375::Item;\nuse m376::Item;\nuse m377::Item;\nuse m378::Item;\nuse m379::Item;\nuse m380::Item;\nuse m381::Item;\nuse m382::Item;\nuse m383::Item;\nuse m384::Item;\nuse m385::Item;\nuse m386::Item;\nuse m387::Item;\nuse m388::Item;\nuse m389::Item;\nuse m390::Item;\nuse m391::Item;\nuse m392::Item;\nuse m393::Item;\nuse m394::Item;\nuse m395::Item;\nuse m396::Item;\nuse m397::Item;\nuse m398::Item;\nuse m399::Item;\nuse m400::Item;\nuse m401::Item;\nuse m402::Item;\nuse m403::Item;\nuse m404::Item;\nuse m405::Item;\nuse m406::Item;\nuse m407::Item;\nuse m408::Item;\nuse m409::Item;\nuse m410::Item;\nuse m411::Item;\nuse m412::Item;\nuse m413::Item;\nuse m414::Item;\nuse m415::Item;\nuse m416::Item;\nuse m417::Item;\nuse m418::Item;\nuse m419::Item;\nuse m420::Item;\nuse m421::Item;\nuse m422::Item;\nuse m423::Item;\nuse m424::Item;\nuse m425::Item;\nuse m426::Item;\nuse m427::Item;\nuse m428::Item;\nuse m429::Item;\nuse m430::Item;\nuse m431::Item;\nuse m432::Item;\nuse m433::Item;\nuse m434::Item;\nuse m435::Item;\nuse m436::Item;\nuse m437::Item;\nuse m438::Item;\nuse m439::Item;\nuse m440::Item;\nuse m441::Item;\nuse m442::Item;\nuse m443::Item;\nuse m444::Item;\nuse m445::Item;\nuse m446::Item;\nuse m447::Item;\nuse m448::Item;\nuse m449::Item;\nmod last;\n",
+      "symbols": [
+        {
+          "kind": "mod",
+          "name": "last",
+          "line": 451,
+          "col": 4,
+          "signature": "mod last;",
+          "docComment": "",
+          "scope": "",
+          "text": "last mod last;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 1,
+          "lang": "rs",
+          "module": "m0::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 2,
+          "lang": "rs",
+          "module": "m1::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 3,
+          "lang": "rs",
+          "module": "m2::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 4,
+          "lang": "rs",
+          "module": "m3::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 5,
+          "lang": "rs",
+          "module": "m4::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 6,
+          "lang": "rs",
+          "module": "m5::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 7,
+          "lang": "rs",
+          "module": "m6::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 8,
+          "lang": "rs",
+          "module": "m7::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 9,
+          "lang": "rs",
+          "module": "m8::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 10,
+          "lang": "rs",
+          "module": "m9::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 11,
+          "lang": "rs",
+          "module": "m10::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 12,
+          "lang": "rs",
+          "module": "m11::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 13,
+          "lang": "rs",
+          "module": "m12::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 14,
+          "lang": "rs",
+          "module": "m13::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 15,
+          "lang": "rs",
+          "module": "m14::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 16,
+          "lang": "rs",
+          "module": "m15::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 17,
+          "lang": "rs",
+          "module": "m16::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 18,
+          "lang": "rs",
+          "module": "m17::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 19,
+          "lang": "rs",
+          "module": "m18::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 20,
+          "lang": "rs",
+          "module": "m19::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 21,
+          "lang": "rs",
+          "module": "m20::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 22,
+          "lang": "rs",
+          "module": "m21::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 23,
+          "lang": "rs",
+          "module": "m22::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 24,
+          "lang": "rs",
+          "module": "m23::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 25,
+          "lang": "rs",
+          "module": "m24::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 26,
+          "lang": "rs",
+          "module": "m25::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 27,
+          "lang": "rs",
+          "module": "m26::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 28,
+          "lang": "rs",
+          "module": "m27::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 29,
+          "lang": "rs",
+          "module": "m28::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 30,
+          "lang": "rs",
+          "module": "m29::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 31,
+          "lang": "rs",
+          "module": "m30::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 32,
+          "lang": "rs",
+          "module": "m31::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 33,
+          "lang": "rs",
+          "module": "m32::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 34,
+          "lang": "rs",
+          "module": "m33::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 35,
+          "lang": "rs",
+          "module": "m34::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 36,
+          "lang": "rs",
+          "module": "m35::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 37,
+          "lang": "rs",
+          "module": "m36::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 38,
+          "lang": "rs",
+          "module": "m37::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 39,
+          "lang": "rs",
+          "module": "m38::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 40,
+          "lang": "rs",
+          "module": "m39::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 41,
+          "lang": "rs",
+          "module": "m40::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 42,
+          "lang": "rs",
+          "module": "m41::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 43,
+          "lang": "rs",
+          "module": "m42::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 44,
+          "lang": "rs",
+          "module": "m43::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 45,
+          "lang": "rs",
+          "module": "m44::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 46,
+          "lang": "rs",
+          "module": "m45::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 47,
+          "lang": "rs",
+          "module": "m46::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 48,
+          "lang": "rs",
+          "module": "m47::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 49,
+          "lang": "rs",
+          "module": "m48::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 50,
+          "lang": "rs",
+          "module": "m49::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 51,
+          "lang": "rs",
+          "module": "m50::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 52,
+          "lang": "rs",
+          "module": "m51::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 53,
+          "lang": "rs",
+          "module": "m52::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 54,
+          "lang": "rs",
+          "module": "m53::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 55,
+          "lang": "rs",
+          "module": "m54::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 56,
+          "lang": "rs",
+          "module": "m55::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 57,
+          "lang": "rs",
+          "module": "m56::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 58,
+          "lang": "rs",
+          "module": "m57::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 59,
+          "lang": "rs",
+          "module": "m58::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 60,
+          "lang": "rs",
+          "module": "m59::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 61,
+          "lang": "rs",
+          "module": "m60::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 62,
+          "lang": "rs",
+          "module": "m61::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 63,
+          "lang": "rs",
+          "module": "m62::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 64,
+          "lang": "rs",
+          "module": "m63::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 65,
+          "lang": "rs",
+          "module": "m64::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 66,
+          "lang": "rs",
+          "module": "m65::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 67,
+          "lang": "rs",
+          "module": "m66::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 68,
+          "lang": "rs",
+          "module": "m67::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 69,
+          "lang": "rs",
+          "module": "m68::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 70,
+          "lang": "rs",
+          "module": "m69::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 71,
+          "lang": "rs",
+          "module": "m70::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 72,
+          "lang": "rs",
+          "module": "m71::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 73,
+          "lang": "rs",
+          "module": "m72::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 74,
+          "lang": "rs",
+          "module": "m73::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 75,
+          "lang": "rs",
+          "module": "m74::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 76,
+          "lang": "rs",
+          "module": "m75::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 77,
+          "lang": "rs",
+          "module": "m76::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 78,
+          "lang": "rs",
+          "module": "m77::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 79,
+          "lang": "rs",
+          "module": "m78::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 80,
+          "lang": "rs",
+          "module": "m79::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 81,
+          "lang": "rs",
+          "module": "m80::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 82,
+          "lang": "rs",
+          "module": "m81::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 83,
+          "lang": "rs",
+          "module": "m82::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 84,
+          "lang": "rs",
+          "module": "m83::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 85,
+          "lang": "rs",
+          "module": "m84::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 86,
+          "lang": "rs",
+          "module": "m85::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 87,
+          "lang": "rs",
+          "module": "m86::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 88,
+          "lang": "rs",
+          "module": "m87::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 89,
+          "lang": "rs",
+          "module": "m88::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 90,
+          "lang": "rs",
+          "module": "m89::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 91,
+          "lang": "rs",
+          "module": "m90::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 92,
+          "lang": "rs",
+          "module": "m91::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 93,
+          "lang": "rs",
+          "module": "m92::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 94,
+          "lang": "rs",
+          "module": "m93::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 95,
+          "lang": "rs",
+          "module": "m94::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 96,
+          "lang": "rs",
+          "module": "m95::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 97,
+          "lang": "rs",
+          "module": "m96::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 98,
+          "lang": "rs",
+          "module": "m97::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 99,
+          "lang": "rs",
+          "module": "m98::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 100,
+          "lang": "rs",
+          "module": "m99::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 101,
+          "lang": "rs",
+          "module": "m100::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 102,
+          "lang": "rs",
+          "module": "m101::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 103,
+          "lang": "rs",
+          "module": "m102::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 104,
+          "lang": "rs",
+          "module": "m103::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 105,
+          "lang": "rs",
+          "module": "m104::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 106,
+          "lang": "rs",
+          "module": "m105::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 107,
+          "lang": "rs",
+          "module": "m106::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 108,
+          "lang": "rs",
+          "module": "m107::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 109,
+          "lang": "rs",
+          "module": "m108::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 110,
+          "lang": "rs",
+          "module": "m109::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 111,
+          "lang": "rs",
+          "module": "m110::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 112,
+          "lang": "rs",
+          "module": "m111::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 113,
+          "lang": "rs",
+          "module": "m112::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 114,
+          "lang": "rs",
+          "module": "m113::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 115,
+          "lang": "rs",
+          "module": "m114::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 116,
+          "lang": "rs",
+          "module": "m115::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 117,
+          "lang": "rs",
+          "module": "m116::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 118,
+          "lang": "rs",
+          "module": "m117::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 119,
+          "lang": "rs",
+          "module": "m118::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 120,
+          "lang": "rs",
+          "module": "m119::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 121,
+          "lang": "rs",
+          "module": "m120::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 122,
+          "lang": "rs",
+          "module": "m121::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 123,
+          "lang": "rs",
+          "module": "m122::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 124,
+          "lang": "rs",
+          "module": "m123::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 125,
+          "lang": "rs",
+          "module": "m124::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 126,
+          "lang": "rs",
+          "module": "m125::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 127,
+          "lang": "rs",
+          "module": "m126::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 128,
+          "lang": "rs",
+          "module": "m127::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 129,
+          "lang": "rs",
+          "module": "m128::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 130,
+          "lang": "rs",
+          "module": "m129::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 131,
+          "lang": "rs",
+          "module": "m130::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 132,
+          "lang": "rs",
+          "module": "m131::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 133,
+          "lang": "rs",
+          "module": "m132::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 134,
+          "lang": "rs",
+          "module": "m133::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 135,
+          "lang": "rs",
+          "module": "m134::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 136,
+          "lang": "rs",
+          "module": "m135::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 137,
+          "lang": "rs",
+          "module": "m136::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 138,
+          "lang": "rs",
+          "module": "m137::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 139,
+          "lang": "rs",
+          "module": "m138::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 140,
+          "lang": "rs",
+          "module": "m139::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 141,
+          "lang": "rs",
+          "module": "m140::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 142,
+          "lang": "rs",
+          "module": "m141::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 143,
+          "lang": "rs",
+          "module": "m142::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 144,
+          "lang": "rs",
+          "module": "m143::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 145,
+          "lang": "rs",
+          "module": "m144::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 146,
+          "lang": "rs",
+          "module": "m145::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 147,
+          "lang": "rs",
+          "module": "m146::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 148,
+          "lang": "rs",
+          "module": "m147::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 149,
+          "lang": "rs",
+          "module": "m148::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 150,
+          "lang": "rs",
+          "module": "m149::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 151,
+          "lang": "rs",
+          "module": "m150::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 152,
+          "lang": "rs",
+          "module": "m151::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 153,
+          "lang": "rs",
+          "module": "m152::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 154,
+          "lang": "rs",
+          "module": "m153::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 155,
+          "lang": "rs",
+          "module": "m154::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 156,
+          "lang": "rs",
+          "module": "m155::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 157,
+          "lang": "rs",
+          "module": "m156::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 158,
+          "lang": "rs",
+          "module": "m157::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 159,
+          "lang": "rs",
+          "module": "m158::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 160,
+          "lang": "rs",
+          "module": "m159::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 161,
+          "lang": "rs",
+          "module": "m160::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 162,
+          "lang": "rs",
+          "module": "m161::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 163,
+          "lang": "rs",
+          "module": "m162::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 164,
+          "lang": "rs",
+          "module": "m163::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 165,
+          "lang": "rs",
+          "module": "m164::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 166,
+          "lang": "rs",
+          "module": "m165::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 167,
+          "lang": "rs",
+          "module": "m166::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 168,
+          "lang": "rs",
+          "module": "m167::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 169,
+          "lang": "rs",
+          "module": "m168::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 170,
+          "lang": "rs",
+          "module": "m169::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 171,
+          "lang": "rs",
+          "module": "m170::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 172,
+          "lang": "rs",
+          "module": "m171::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 173,
+          "lang": "rs",
+          "module": "m172::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 174,
+          "lang": "rs",
+          "module": "m173::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 175,
+          "lang": "rs",
+          "module": "m174::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 176,
+          "lang": "rs",
+          "module": "m175::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 177,
+          "lang": "rs",
+          "module": "m176::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 178,
+          "lang": "rs",
+          "module": "m177::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 179,
+          "lang": "rs",
+          "module": "m178::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 180,
+          "lang": "rs",
+          "module": "m179::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 181,
+          "lang": "rs",
+          "module": "m180::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 182,
+          "lang": "rs",
+          "module": "m181::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 183,
+          "lang": "rs",
+          "module": "m182::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 184,
+          "lang": "rs",
+          "module": "m183::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 185,
+          "lang": "rs",
+          "module": "m184::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 186,
+          "lang": "rs",
+          "module": "m185::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 187,
+          "lang": "rs",
+          "module": "m186::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 188,
+          "lang": "rs",
+          "module": "m187::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 189,
+          "lang": "rs",
+          "module": "m188::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 190,
+          "lang": "rs",
+          "module": "m189::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 191,
+          "lang": "rs",
+          "module": "m190::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 192,
+          "lang": "rs",
+          "module": "m191::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 193,
+          "lang": "rs",
+          "module": "m192::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 194,
+          "lang": "rs",
+          "module": "m193::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 195,
+          "lang": "rs",
+          "module": "m194::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 196,
+          "lang": "rs",
+          "module": "m195::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 197,
+          "lang": "rs",
+          "module": "m196::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 198,
+          "lang": "rs",
+          "module": "m197::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 199,
+          "lang": "rs",
+          "module": "m198::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 200,
+          "lang": "rs",
+          "module": "m199::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 201,
+          "lang": "rs",
+          "module": "m200::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 202,
+          "lang": "rs",
+          "module": "m201::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 203,
+          "lang": "rs",
+          "module": "m202::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 204,
+          "lang": "rs",
+          "module": "m203::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 205,
+          "lang": "rs",
+          "module": "m204::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 206,
+          "lang": "rs",
+          "module": "m205::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 207,
+          "lang": "rs",
+          "module": "m206::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 208,
+          "lang": "rs",
+          "module": "m207::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 209,
+          "lang": "rs",
+          "module": "m208::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 210,
+          "lang": "rs",
+          "module": "m209::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 211,
+          "lang": "rs",
+          "module": "m210::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 212,
+          "lang": "rs",
+          "module": "m211::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 213,
+          "lang": "rs",
+          "module": "m212::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 214,
+          "lang": "rs",
+          "module": "m213::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 215,
+          "lang": "rs",
+          "module": "m214::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 216,
+          "lang": "rs",
+          "module": "m215::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 217,
+          "lang": "rs",
+          "module": "m216::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 218,
+          "lang": "rs",
+          "module": "m217::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 219,
+          "lang": "rs",
+          "module": "m218::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 220,
+          "lang": "rs",
+          "module": "m219::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 221,
+          "lang": "rs",
+          "module": "m220::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 222,
+          "lang": "rs",
+          "module": "m221::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 223,
+          "lang": "rs",
+          "module": "m222::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 224,
+          "lang": "rs",
+          "module": "m223::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 225,
+          "lang": "rs",
+          "module": "m224::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 226,
+          "lang": "rs",
+          "module": "m225::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 227,
+          "lang": "rs",
+          "module": "m226::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 228,
+          "lang": "rs",
+          "module": "m227::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 229,
+          "lang": "rs",
+          "module": "m228::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 230,
+          "lang": "rs",
+          "module": "m229::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 231,
+          "lang": "rs",
+          "module": "m230::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 232,
+          "lang": "rs",
+          "module": "m231::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 233,
+          "lang": "rs",
+          "module": "m232::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 234,
+          "lang": "rs",
+          "module": "m233::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 235,
+          "lang": "rs",
+          "module": "m234::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 236,
+          "lang": "rs",
+          "module": "m235::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 237,
+          "lang": "rs",
+          "module": "m236::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 238,
+          "lang": "rs",
+          "module": "m237::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 239,
+          "lang": "rs",
+          "module": "m238::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 240,
+          "lang": "rs",
+          "module": "m239::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 241,
+          "lang": "rs",
+          "module": "m240::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 242,
+          "lang": "rs",
+          "module": "m241::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 243,
+          "lang": "rs",
+          "module": "m242::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 244,
+          "lang": "rs",
+          "module": "m243::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 245,
+          "lang": "rs",
+          "module": "m244::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 246,
+          "lang": "rs",
+          "module": "m245::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 247,
+          "lang": "rs",
+          "module": "m246::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 248,
+          "lang": "rs",
+          "module": "m247::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 249,
+          "lang": "rs",
+          "module": "m248::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 250,
+          "lang": "rs",
+          "module": "m249::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 251,
+          "lang": "rs",
+          "module": "m250::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 252,
+          "lang": "rs",
+          "module": "m251::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 253,
+          "lang": "rs",
+          "module": "m252::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 254,
+          "lang": "rs",
+          "module": "m253::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 255,
+          "lang": "rs",
+          "module": "m254::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 256,
+          "lang": "rs",
+          "module": "m255::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 257,
+          "lang": "rs",
+          "module": "m256::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 258,
+          "lang": "rs",
+          "module": "m257::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 259,
+          "lang": "rs",
+          "module": "m258::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 260,
+          "lang": "rs",
+          "module": "m259::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 261,
+          "lang": "rs",
+          "module": "m260::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 262,
+          "lang": "rs",
+          "module": "m261::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 263,
+          "lang": "rs",
+          "module": "m262::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 264,
+          "lang": "rs",
+          "module": "m263::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 265,
+          "lang": "rs",
+          "module": "m264::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 266,
+          "lang": "rs",
+          "module": "m265::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 267,
+          "lang": "rs",
+          "module": "m266::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 268,
+          "lang": "rs",
+          "module": "m267::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 269,
+          "lang": "rs",
+          "module": "m268::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 270,
+          "lang": "rs",
+          "module": "m269::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 271,
+          "lang": "rs",
+          "module": "m270::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 272,
+          "lang": "rs",
+          "module": "m271::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 273,
+          "lang": "rs",
+          "module": "m272::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 274,
+          "lang": "rs",
+          "module": "m273::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 275,
+          "lang": "rs",
+          "module": "m274::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 276,
+          "lang": "rs",
+          "module": "m275::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 277,
+          "lang": "rs",
+          "module": "m276::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 278,
+          "lang": "rs",
+          "module": "m277::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 279,
+          "lang": "rs",
+          "module": "m278::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 280,
+          "lang": "rs",
+          "module": "m279::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 281,
+          "lang": "rs",
+          "module": "m280::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 282,
+          "lang": "rs",
+          "module": "m281::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 283,
+          "lang": "rs",
+          "module": "m282::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 284,
+          "lang": "rs",
+          "module": "m283::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 285,
+          "lang": "rs",
+          "module": "m284::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 286,
+          "lang": "rs",
+          "module": "m285::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 287,
+          "lang": "rs",
+          "module": "m286::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 288,
+          "lang": "rs",
+          "module": "m287::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 289,
+          "lang": "rs",
+          "module": "m288::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 290,
+          "lang": "rs",
+          "module": "m289::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 291,
+          "lang": "rs",
+          "module": "m290::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 292,
+          "lang": "rs",
+          "module": "m291::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 293,
+          "lang": "rs",
+          "module": "m292::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 294,
+          "lang": "rs",
+          "module": "m293::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 295,
+          "lang": "rs",
+          "module": "m294::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 296,
+          "lang": "rs",
+          "module": "m295::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 297,
+          "lang": "rs",
+          "module": "m296::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 298,
+          "lang": "rs",
+          "module": "m297::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 299,
+          "lang": "rs",
+          "module": "m298::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 300,
+          "lang": "rs",
+          "module": "m299::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 301,
+          "lang": "rs",
+          "module": "m300::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 302,
+          "lang": "rs",
+          "module": "m301::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 303,
+          "lang": "rs",
+          "module": "m302::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 304,
+          "lang": "rs",
+          "module": "m303::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 305,
+          "lang": "rs",
+          "module": "m304::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 306,
+          "lang": "rs",
+          "module": "m305::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 307,
+          "lang": "rs",
+          "module": "m306::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 308,
+          "lang": "rs",
+          "module": "m307::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 309,
+          "lang": "rs",
+          "module": "m308::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 310,
+          "lang": "rs",
+          "module": "m309::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 311,
+          "lang": "rs",
+          "module": "m310::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 312,
+          "lang": "rs",
+          "module": "m311::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 313,
+          "lang": "rs",
+          "module": "m312::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 314,
+          "lang": "rs",
+          "module": "m313::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 315,
+          "lang": "rs",
+          "module": "m314::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 316,
+          "lang": "rs",
+          "module": "m315::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 317,
+          "lang": "rs",
+          "module": "m316::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 318,
+          "lang": "rs",
+          "module": "m317::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 319,
+          "lang": "rs",
+          "module": "m318::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 320,
+          "lang": "rs",
+          "module": "m319::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 321,
+          "lang": "rs",
+          "module": "m320::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 322,
+          "lang": "rs",
+          "module": "m321::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 323,
+          "lang": "rs",
+          "module": "m322::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 324,
+          "lang": "rs",
+          "module": "m323::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 325,
+          "lang": "rs",
+          "module": "m324::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 326,
+          "lang": "rs",
+          "module": "m325::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 327,
+          "lang": "rs",
+          "module": "m326::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 328,
+          "lang": "rs",
+          "module": "m327::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 329,
+          "lang": "rs",
+          "module": "m328::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 330,
+          "lang": "rs",
+          "module": "m329::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 331,
+          "lang": "rs",
+          "module": "m330::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 332,
+          "lang": "rs",
+          "module": "m331::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 333,
+          "lang": "rs",
+          "module": "m332::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 334,
+          "lang": "rs",
+          "module": "m333::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 335,
+          "lang": "rs",
+          "module": "m334::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 336,
+          "lang": "rs",
+          "module": "m335::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 337,
+          "lang": "rs",
+          "module": "m336::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 338,
+          "lang": "rs",
+          "module": "m337::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 339,
+          "lang": "rs",
+          "module": "m338::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 340,
+          "lang": "rs",
+          "module": "m339::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 341,
+          "lang": "rs",
+          "module": "m340::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 342,
+          "lang": "rs",
+          "module": "m341::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 343,
+          "lang": "rs",
+          "module": "m342::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 344,
+          "lang": "rs",
+          "module": "m343::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 345,
+          "lang": "rs",
+          "module": "m344::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 346,
+          "lang": "rs",
+          "module": "m345::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 347,
+          "lang": "rs",
+          "module": "m346::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 348,
+          "lang": "rs",
+          "module": "m347::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 349,
+          "lang": "rs",
+          "module": "m348::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 350,
+          "lang": "rs",
+          "module": "m349::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 351,
+          "lang": "rs",
+          "module": "m350::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 352,
+          "lang": "rs",
+          "module": "m351::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 353,
+          "lang": "rs",
+          "module": "m352::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 354,
+          "lang": "rs",
+          "module": "m353::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 355,
+          "lang": "rs",
+          "module": "m354::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 356,
+          "lang": "rs",
+          "module": "m355::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 357,
+          "lang": "rs",
+          "module": "m356::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 358,
+          "lang": "rs",
+          "module": "m357::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 359,
+          "lang": "rs",
+          "module": "m358::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 360,
+          "lang": "rs",
+          "module": "m359::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 361,
+          "lang": "rs",
+          "module": "m360::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 362,
+          "lang": "rs",
+          "module": "m361::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 363,
+          "lang": "rs",
+          "module": "m362::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 364,
+          "lang": "rs",
+          "module": "m363::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 365,
+          "lang": "rs",
+          "module": "m364::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 366,
+          "lang": "rs",
+          "module": "m365::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 367,
+          "lang": "rs",
+          "module": "m366::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 368,
+          "lang": "rs",
+          "module": "m367::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 369,
+          "lang": "rs",
+          "module": "m368::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 370,
+          "lang": "rs",
+          "module": "m369::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 371,
+          "lang": "rs",
+          "module": "m370::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 372,
+          "lang": "rs",
+          "module": "m371::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 373,
+          "lang": "rs",
+          "module": "m372::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 374,
+          "lang": "rs",
+          "module": "m373::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 375,
+          "lang": "rs",
+          "module": "m374::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 376,
+          "lang": "rs",
+          "module": "m375::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 377,
+          "lang": "rs",
+          "module": "m376::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 378,
+          "lang": "rs",
+          "module": "m377::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 379,
+          "lang": "rs",
+          "module": "m378::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 380,
+          "lang": "rs",
+          "module": "m379::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 381,
+          "lang": "rs",
+          "module": "m380::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 382,
+          "lang": "rs",
+          "module": "m381::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 383,
+          "lang": "rs",
+          "module": "m382::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 384,
+          "lang": "rs",
+          "module": "m383::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 385,
+          "lang": "rs",
+          "module": "m384::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 386,
+          "lang": "rs",
+          "module": "m385::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 387,
+          "lang": "rs",
+          "module": "m386::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 388,
+          "lang": "rs",
+          "module": "m387::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 389,
+          "lang": "rs",
+          "module": "m388::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 390,
+          "lang": "rs",
+          "module": "m389::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 391,
+          "lang": "rs",
+          "module": "m390::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 392,
+          "lang": "rs",
+          "module": "m391::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 393,
+          "lang": "rs",
+          "module": "m392::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 394,
+          "lang": "rs",
+          "module": "m393::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 395,
+          "lang": "rs",
+          "module": "m394::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 396,
+          "lang": "rs",
+          "module": "m395::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 397,
+          "lang": "rs",
+          "module": "m396::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 398,
+          "lang": "rs",
+          "module": "m397::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 399,
+          "lang": "rs",
+          "module": "m398::Item"
+        },
+        {
+          "toName": "Item",
+          "callType": "import",
+          "line": 400,
+          "lang": "rs",
+          "module": "m399::Item"
+        }
+      ]
+    },
+    {
       "source": "fixture:tests/fixtures/projects/basic-ts/package.json",
       "lang": "json",
       "file": "<repo>/tests/fixtures/projects/basic-ts/package.json",
@@ -12221,6 +16727,112 @@
         }
       ],
       "refs": 0
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/rs-basic/src/lib.rs",
+      "lang": "rs",
+      "file": "<repo>/tests/fixtures/projects/rs-basic/src/lib.rs",
+      "content": "pub mod shapes;\n\nuse shapes::{Area, Circle as C};\n\n/// Total area of a slice of shapes.\npub fn total<T: Area>(items: &[T]) -> f64 {\n    items.iter().map(|i| i.area()).sum()\n}\n\nmacro_rules! square {\n    ($x:expr) => {\n        $x * $x\n    };\n}\n\npub fn demo() -> f64 {\n    let c = C { r: 2.0 };\n    c.area() + square!(2.0)\n}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "total",
+          "line": 6,
+          "col": 7,
+          "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+          "docComment": "Total area of a slice of shapes.",
+          "scope": "",
+          "text": "total pub fn total<T: Area>(items: &[T]) -> f64 { Total area of a slice of shapes."
+        },
+        {
+          "kind": "function",
+          "name": "demo",
+          "line": 16,
+          "col": 7,
+          "signature": "pub fn demo() -> f64 {",
+          "docComment": "",
+          "scope": "",
+          "text": "demo pub fn demo() -> f64 {"
+        },
+        {
+          "kind": "mod",
+          "name": "shapes",
+          "line": 1,
+          "col": 8,
+          "signature": "pub mod shapes;",
+          "docComment": "",
+          "scope": "",
+          "text": "shapes pub mod shapes;"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "shapes",
+          "callType": "import",
+          "line": 3,
+          "lang": "rs",
+          "module": "shapes"
+        }
+      ]
+    },
+    {
+      "source": "fixture:tests/fixtures/projects/rs-basic/src/shapes.rs",
+      "lang": "rs",
+      "file": "<repo>/tests/fixtures/projects/rs-basic/src/shapes.rs",
+      "content": "pub trait Area {\n    fn area(&self) -> f64;\n}\n\npub struct Circle {\n    pub r: f64,\n}\n\nimpl Area for Circle {\n    fn area(&self) -> f64 {\n        std::f64::consts::PI * self.r * self.r\n    }\n}\n",
+      "symbols": [
+        {
+          "kind": "function",
+          "name": "area",
+          "line": 2,
+          "col": 7,
+          "signature": "fn area(&self) -> f64;",
+          "docComment": "",
+          "scope": "",
+          "text": "area fn area(&self) -> f64;"
+        },
+        {
+          "kind": "function",
+          "name": "area",
+          "line": 10,
+          "col": 7,
+          "signature": "fn area(&self) -> f64 {",
+          "docComment": "",
+          "scope": "",
+          "text": "area fn area(&self) -> f64 {"
+        },
+        {
+          "kind": "struct",
+          "name": "Circle",
+          "line": 5,
+          "col": 11,
+          "signature": "pub struct Circle {",
+          "docComment": "",
+          "scope": "",
+          "text": "Circle pub struct Circle {"
+        },
+        {
+          "kind": "trait",
+          "name": "Area",
+          "line": 1,
+          "col": 10,
+          "signature": "pub trait Area {",
+          "docComment": "",
+          "scope": "",
+          "text": "Area pub trait Area {"
+        },
+        {
+          "kind": "impl",
+          "name": "Area",
+          "line": 9,
+          "col": 5,
+          "signature": "impl Area for Circle {",
+          "docComment": "",
+          "scope": "",
+          "text": "Area impl Area for Circle {"
+        }
+      ],
+      "refs": []
     }
   ]
 }

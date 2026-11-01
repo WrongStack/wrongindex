@@ -3,7 +3,8 @@
 //! Capabilities are ported from WrongStack one at a time and each is gated by
 //! differential evidence against the original implementation; nothing here
 //! is used for writing until its gate passes. Ported so far: the JSON and
-//! YAML symbol extractors (WI-501/502 slice).
+//! YAML symbol extractors (WI-501/502 slice) and the Rust symbol parser with
+//! its regex import refs.
 
 pub mod dbdump;
 pub mod js;
@@ -18,22 +19,22 @@ mod kat {
     use serde_json::Value;
 
     use crate::js::utf16;
-    use crate::parse::{json, yaml};
+    use crate::parse::{json, rs, yaml};
 
     #[test]
-    fn json_and_yaml_ports_match_wrongstack_known_answers() {
+    fn parser_ports_match_wrongstack_known_answers() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../contracts/fixtures/parser-kat.json"
         );
-        assert!(check(path) >= 40);
+        assert!(check(path) >= 70);
     }
 
     /// Real-world corpus produced by
     /// `bun scripts/oracle/parser-kat.ts --wrongstack <oracle> --corpus <dir> --out <file>`.
     #[test]
     #[ignore = "needs WRONGINDEX_PARSER_CORPUS (a corpus KAT file)"]
-    fn json_and_yaml_ports_match_a_real_world_corpus() {
+    fn parser_ports_match_a_real_world_corpus() {
         let path = std::env::var("WRONGINDEX_PARSER_CORPUS").expect("WRONGINDEX_PARSER_CORPUS");
         let n = check(&path);
         eprintln!("{n} corpus files identical");
@@ -48,8 +49,27 @@ mod kat {
             let file = c["file"].as_str().unwrap();
             let parsed = match c["lang"].as_str().unwrap() {
                 "json" => json::parse(file, &content, None),
-                _ => yaml::parse(&content),
+                "yaml" => yaml::parse(&content),
+                "rs" => rs::parse(&content),
+                other => panic!("no port for {other}"),
             };
+            // Rust cases record their refs. JSON/YAML cases record only a
+            // count: YAML infra refs are not ported (the native writer refuses
+            // those files instead), so the count is not compared here.
+            let refs_match = match &c["refs"] {
+                Value::Array(_) => serde_json::to_value(&parsed.refs).unwrap() == c["refs"],
+                _ => true,
+            };
+            if !refs_match {
+                failures.push(format!(
+                    "{} refs differ:
+  want {}
+  got  {}",
+                    c["source"],
+                    c["refs"],
+                    serde_json::to_value(&parsed.refs).unwrap()
+                ));
+            }
             let got = serde_json::to_value(&parsed.symbols).unwrap();
             if got != c["symbols"] {
                 let want = c["symbols"].as_array().unwrap();

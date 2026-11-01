@@ -436,5 +436,6 @@ pub fn parse(content: &U16) -> Parsed {
     Parsed {
         symbols,
         unsupported: None,
+        refs: Vec::new(),
     }
 }

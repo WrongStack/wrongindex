@@ -1,13 +1,19 @@
 /**
- * WI-501/502: known answers for the native JSON and YAML parser ports.
+ * WI-501/502: known answers for the native JSON, YAML and Rust parser ports.
  *
- * Runs WrongStack's own `json-parser.ts` / `yaml-parser.ts` (from a clean
- * oracle prepared by `prepare-clean-wrongstack.ts`) over a corpus of edge
- * cases plus every JSON/YAML file under `tests/fixtures/projects`, and writes
+ * Runs WrongStack's own `json-parser.ts` / `yaml-parser.ts` and, for Rust,
+ * `parseFileContent(file, content, 'rs')` (`rs-parser.ts` plus the
+ * `withRelations` import fallback from `import-extractor.ts`), from a clean
+ * oracle prepared by `prepare-clean-wrongstack.ts`, over a corpus of edge
+ * cases plus every JSON/YAML/Rust file under `tests/fixtures/projects`, and writes
  * `contracts/fixtures/parser-kat.json`. The Rust engine crate is tested
  * against that file; never hand-edit it.
  *
  * Usage: bun scripts/oracle/parser-kat.ts --wrongstack <clean oracle dir>
+ *        [--corpus <dir> --out <file>]   (real-world corpus, not committed)
+ *
+ * JSON/YAML cases record `refs` as a count (those parsers emit none); Rust
+ * cases record the refs themselves.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -33,13 +39,17 @@ const oracle = JSON.parse(readFileSync(marker, 'utf8')) as { commit: string; arc
 const base = `${resolve(wrongstack)}/packages/tools/src/codebase-index`;
 const json = await import(`${base}/json-parser.ts`);
 const yaml = await import(`${base}/yaml-parser.ts`);
+const dispatch = await import(`${base}/parser-dispatch.ts`);
 
-type Case = { lang: 'json' | 'yaml'; file: string; content: string; source: string };
+type Lang = 'json' | 'yaml' | 'rs';
+type Case = { lang: Lang; file: string; content: string; source: string };
 const cases: Case[] = [];
 const J = (name: string, content: string, file = `C:\\kat\\${name}.json`) =>
   cases.push({ lang: 'json', file, content, source: `synthetic:${name}` });
 const Y = (name: string, content: string) =>
   cases.push({ lang: 'yaml', file: `C:\\kat\\${name}.yaml`, content, source: `synthetic:${name}` });
+const R = (name: string, content: string) =>
+  cases.push({ lang: 'rs', file: `C:\\kat\\${name}.rs`, content, source: `synthetic:rs-${name}` });
 
 // ── JSON ────────────────────────────────────────────────────────────────────
 J('empty', '');
@@ -84,6 +94,33 @@ Y('flow', '{a: 1, b: 2}\n[x, y]\nk: {c: 3}\n');
 Y('weird', ':\n::\n  : x\n- :\n-\n- - nested: 1\nk:v\n');
 Y('gha', 'name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Test\n        run: |\n          cargo test\n          key: inside\n');
 
+// ── Rust ────────────────────────────────────────────────────────────────────
+R('empty', '');
+R('items', 'pub struct Point { x: i32 }\nenum Color { Red }\ntrait Draw { fn draw(&self); }\ntype Alias = u32;\nconst MAX: usize = 3;\nstatic NAME: &str = "x";\nmod inner { }\nmod decl;\npub fn run() {}\n');
+R('generics', 'fn parse<T: FromStr>(s: &str) -> Option<T> { None }\nfn  spaced  <T>() {}\nfn tuple ( ) {}\nfn no_paren\n() {}\ntype Map<K, V> = HashMap<K, V>;\ntype Bad<K> where K: X = u8;\ntype Out<A> ;\npub type R<T, E = Error> = Result<T, E>;\ntype G<T> /* c */ = T;\ntype Gt<T: A<B>> = T;\nstruct Wrap<T>(T);\nenum E<\'a> { A(&\'a str) }\n');
+R('impl-blocks', 'impl Foo {}\nimpl<T> Foo<T> {}\nimpl<T: Into<String>> Display for Bar<T> {}\nimpl<T: A<B<C>>> deep::path::Thing for X {}\nimpl<T: A<B<C<D>>>> TooDeep for X {}\n  unsafe impl Send for Raw {}\nunsafe  impl<T> Sync for Raw<T> {}\nfn f() -> impl Iterator<Item = u8> { todo!() }\nimpl a::b::<X> {}\nimpl a:::b {}\nimpl ::std::fmt::Debug for Y {}\nimpl\n<T>\nMultiLine<T> {}\nimpl<T>  {}\nimpl dyn Trait {}\nimpl<\'a> Lt<\'a> {}\nimpl<T unclosed\nstruct AfterUnclosed;\nunsafe implx Bad {}\nimplement Nope {}\n');
+R('traits', 'pub trait Shape: Debug + Clone {\n    const SIDES: u32;\n    type Output;\n    fn area(&self) -> f64;\n    fn default_name() -> String { String::new() }\n}\npub unsafe trait Danger {}\nauto trait Marker {}\n');
+R('macros', 'macro_rules! square {\n    ($x:expr) => { $x * $x };\n}\nmacro_rules! make_fn {\n    ($n:ident) => { fn $n() {} };\n}\nmake_fn!(generated);\nlazy_static! {\n    static ref CACHE: Mutex<u8> = Mutex::new(0);\n}\nthread_local! { static LOCAL: Cell<u8> = Cell::new(0); }\n#[macro_export]\nmacro_rules! exported { () => {} }\n');
+R('nested-mods', 'pub mod outer {\n    pub mod inner {\n        pub fn deep() {}\n        mod deeper;\n    }\n    pub(crate) mod sibling;\n}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn it_works() {}\n}\n');
+R('docs', '//! Crate docs\n//! fn not_a_symbol()\n\n/// First doc line\n/// second line\n#[derive(Debug)]\n#[serde(rename_all = "camelCase")]\npub struct Documented;\n\n///\n///   \n/// after blanks\nfn blank_first() {}\n\n/// Detached\n\nfn detached() {}\n//// four slashes\nfn four() {}\n/** block doc */\nfn block_doc() {}\n/// doc with trailing   \n   #[inline]   \n   fn indented() {}\n' + `/// ${'d'.repeat(250)}\nfn long_doc() {}\n`);
+R('comments-strings', '// fn in_comment()\n/* struct InBlock /* nested */ still comment enum E2 */\nfn real() { let s = "fn in_string() { struct S }"; }\nlet esc = "quote \\" fn after_escape()";\nlet ch = \'"\'; fn after_char_quote() {}\nlet b = b"struct Bytes"; let c = \'\\n\'; let u = \'\\u{1F600}\';\nfn after_chars() {}\n/* unterminated block fn never()\n');
+R('raw-strings', 'let a = r"fn raw_a()";\nlet b = r#"fn raw_b() "quoted" "#;\nlet c = r##"struct "# RawC "##;\nlet d = br"fn byte_raw()"; let e = cr"C:\\"; fn after_c_raw() {}\nlet f = r#ident; fn after_raw_ident() {}\nlet g = xr"not raw"; fn after_xr() {}\nlet h = abr"x"; fn after_abr() {}\nlet unterminated = r#"fn never_closed()\n');
+R('lifetimes', "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { x }\nfn st(s: &'static str) {}\nstruct Holder<'a> { r: &'a u8 }\nlet c = 'x'; let e = '😀'; fn after_emoji_char() {}\nstatic GLOBAL: &'static str = \"g\";\nconst C: &'static [u8] = b\"\";\nfn label() { 'outer: loop { break 'outer; } }\nlet q = '\\''; fn after_escaped_quote() {}\n");
+R('crlf', '/// Doc\r\npub fn crlf_fn() {}\r\nstruct CrlfStruct;\r\nuse std::io;\r\nmod m;\r\n#[cfg(x)]\r\n/// inner\r\nconst K: u8 = 1;\r\n');
+R('unicode', '/// Ünïcödé doc 😀\nfn ünïcode() {}\nfn ascii_after_ünï() {}\nstruct Été;\nlet s = "😀😀"; fn after_emoji() {}\n// 日本語 fn hidden()\nfn 日本() {}\nstruct Tail😀Name;\n');
+R('visibility', 'pub(crate) fn a() {}\npub(super) struct B;\npub(in crate::x) enum C {}\npub(crate) use crate::x::Y;\npub (crate) use spaced::Z;\npub(crate)use tight::W;\npub use plain::P;\npub(crate) mod vis_mod;\npub (in a::b) mod in_path;\npubuse nope::N;\npub(unclosed use x::Q;\n');
+R('fn-qualifiers', 'async fn a() {}\nconst fn b() -> u8 { 0 }\nunsafe fn c() {}\npub async unsafe fn d() {}\nextern "C" fn e() {}\nconst unsafe fn f() {}\nconst async_x: u8 = 0;\nconst fnord: u8 = 1;\nconst extern_ok : u8 = 2;\nconst _: () = ();\nstatic mut COUNTER: u32 = 0;\nstatic mut : u8 = 0;\nstatic mutable: u8 = 0;\nstatic  mut\n  SPLIT: u8 = 0;\nx.const y: u8;\n');
+R('use-trees', 'use a::{b, c::{d, e}};\nuse x as y;\nuse std::collections::HashMap;\nuse std::io::{self, Write};\nuse super::*;\nuse crate::parse::*;\nuse self::m::N;\nuse ::abs::Path;\nuse ::{a, b};\nuse {x, y};\nuse  spaced :: path;\nuse a::b\n    ::c;\nuse long::path::Thing as _;\nuse a::b::_;\n    use indented::Thing;\n\tuse tabbed::T;\nuse dup::A;\nuse dup::A;\nuse a::b::C as D;\nuse foo::bar::{\n    Baz,\n};\nuse ascii::Ünï;\nuse nosemicolon\nfn f() { use local::Inner; }\nlet x = 1; use not_line_start::X;\nuse a:::b;\nuse x asy;\nuse x as\ty;\nuse :::{q};\n');
+R('extern-crate', 'extern crate serde;\nextern crate alloc as a;\n#[macro_use]\nextern crate log;\nuse serde::Deserialize;\n');
+R('mod-decls', 'mod foo;\npub mod bar;\nmod baz { }\nmod  spaced ;\nmod r#type;\nmod a\n;\npub(crate) mod c;\npub(in crate::x) mod d;\nmod e {}\nmod nested { mod f; }\n');
+R('char-edge', "let a = '\\x41'; let b = '\\u{10FFFF}'; let c = '\\\\'; fn after_backslash() {}\nlet long = '\\this_is_not_a_char_literal_because_too_long'; fn after_long() {}\nlet lt: &'a str; fn after_lt() {}\n");
+R('dedup', 'fn same() {} fn same() {}\nstruct same;\nmod same;\nfn same() {}\n');
+R('sig-truncate', `fn wide() { ${'x'.repeat(600)} }\n`);
+R('trailing-backslash', 'let s = "abc\\');
+R('cr-only', 'fn a() {}\rfn b() {}\ruse cr::Only;\rmod cr_mod;\r');
+R('line-seps', 'fn a() {}\u2028use ls::One;\u2029mod ps_mod;\n');
+R('many-imports', `${Array.from({ length: 450 }, (_, i) => `use m${i}::Item;`).join('\n')}\nmod last;\n`);
+
 // ── Optional real-world corpus (not committed): --corpus <dir> --out <file> ──
 const corpus = arg('--corpus');
 if (corpus) {
@@ -95,13 +132,13 @@ if (corpus) {
       const p = join(dir, n);
       const st = statSync(p);
       if (st.isDirectory()) visit(p);
-      else if (/\.(json|ya?ml)$/i.test(n) && st.size < 2_000_000) files.push(p);
+      else if (/\.(json|ya?ml|rs)$/i.test(n) && st.size < 2_000_000) files.push(p);
     }
   };
   visit(resolve(corpus));
   cases.length = 0;
   for (const p of files.sort()) {
-    const lang = /\.json$/i.test(p) ? 'json' : 'yaml';
+    const lang: Lang = /\.json$/i.test(p) ? 'json' : /\.rs$/i.test(p) ? 'rs' : 'yaml';
     cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `corpus:${p}` });
   }
 }
@@ -115,17 +152,26 @@ function walk(dir: string): string[] {
 }
 for (const p of corpus ? [] : walk(join(repo, 'tests/fixtures/projects')).sort()) {
   const lower = p.toLowerCase();
-  const lang = lower.endsWith('.json') ? 'json' : lower.endsWith('.yaml') || lower.endsWith('.yml') ? 'yaml' : null;
+  const lang: Lang | null = lower.endsWith('.json')
+    ? 'json'
+    : lower.endsWith('.yaml') || lower.endsWith('.yml')
+      ? 'yaml'
+      : lower.endsWith('.rs')
+        ? 'rs'
+        : null;
   if (!lang) continue;
   // Exactly what the indexer hands the parser: utf8-decoded file text.
   cases.push({ lang, file: p, content: readFileSync(p, 'utf8'), source: `fixture:${relative(repo, p).split('\\').join('/')}` });
 }
 
-const out = cases.map((c) => {
+const out = [];
+for (const c of cases) {
   const r = c.lang === 'json'
     ? json.parseSymbols({ file: c.file, content: c.content, lang: 'json' })
-    : yaml.parseSymbols({ file: c.file, content: c.content, lang: 'yaml' });
-  return {
+    : c.lang === 'yaml'
+      ? yaml.parseSymbols({ file: c.file, content: c.content, lang: 'yaml' })
+      : await dispatch.parseFileContent(c.file, c.content, 'rs');
+  out.push({
     source: c.source,
     lang: c.lang,
     // Fixture files are referenced by path relative to the repo, so the KAT
@@ -136,9 +182,13 @@ const out = cases.map((c) => {
       kind: s.kind, name: s.name, line: s.line, col: s.col, signature: s.signature,
       docComment: s.docComment, scope: s.scope, text: s.text,
     })),
-    refs: (r.refs ?? []).length,
-  };
-});
+    refs: c.lang === 'rs'
+      ? (r.refs ?? []).map((x: Record<string, unknown>) => ({
+          toName: x.toName, callType: x.callType, line: x.line, lang: x.lang, module: x.module,
+        }))
+      : (r.refs ?? []).length,
+  });
+}
 
 const doc = {
   generator: 'scripts/oracle/parser-kat.ts',
@@ -146,8 +196,14 @@ const doc = {
   parsers: {
     'json-parser.ts': createHash('sha256').update(readFileSync(`${base}/json-parser.ts`)).digest('hex'),
     'yaml-parser.ts': createHash('sha256').update(readFileSync(`${base}/yaml-parser.ts`)).digest('hex'),
+    'rs-parser.ts': createHash('sha256').update(readFileSync(`${base}/rs-parser.ts`)).digest('hex'),
+    'import-extractor.ts': createHash('sha256').update(readFileSync(`${base}/import-extractor.ts`)).digest('hex'),
+    'parser-dispatch.ts': createHash('sha256').update(readFileSync(`${base}/parser-dispatch.ts`)).digest('hex'),
   },
   cases: out,
 };
 writeFileSync(arg('--out') ?? join(repo, 'contracts/fixtures/parser-kat.json'), `${JSON.stringify(doc, null, 2)}\n`);
-console.log(`parser-kat: ${out.length} cases, ${out.reduce((n, c) => n + c.symbols.length, 0)} symbols`);
+const refCount = out.reduce((n, c) => n + (Array.isArray(c.refs) ? c.refs.length : 0), 0);
+console.log(
+  `parser-kat: ${out.length} cases (${out.filter((c) => c.lang === 'rs').length} rs), ${out.reduce((n, c) => n + c.symbols.length, 0)} symbols, ${refCount} refs`,
+);

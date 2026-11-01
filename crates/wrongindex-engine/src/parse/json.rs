@@ -235,5 +235,6 @@ pub fn parse(file: &str, content: &U16, max_symbols: Option<usize>) -> Parsed {
     Parsed {
         symbols: ctx.symbols,
         unsupported: None,
+        refs: Vec::new(),
     }
 }
