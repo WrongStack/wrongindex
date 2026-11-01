@@ -271,9 +271,14 @@ mod tests {
     #[test]
     fn case_variant_spelling_maps_to_on_disk_case() {
         let tmp = tempfile::tempdir().unwrap();
-        let checkout = tmp.path().join("MixedCase");
+        // Use the long-name spelling: CI temp paths contain 8.3 short names
+        // (RUNNER~1), and WrongStack deliberately keeps a spelling that differs
+        // from the real path by more than letter case, so a case-only test must
+        // start from the canonical long path.
+        let long = PathBuf::from(strip_verbatim(&std::fs::canonicalize(tmp.path()).unwrap()));
+        let checkout = long.join("MixedCase");
         std::fs::create_dir(&checkout).unwrap();
-        let global = tmp.path().join("ws");
+        let global = long.join("ws");
         let a = resolve_index_dir(&checkout, &global);
         let upper = PathBuf::from(checkout.to_string_lossy().to_uppercase());
         let b = resolve_index_dir(&upper, &global);

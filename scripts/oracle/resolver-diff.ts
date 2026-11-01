@@ -53,6 +53,19 @@ const symbolsOnly = join(base, '___');
 mkdirSync(symbolsOnly);
 scenarios.push(['name without slug characters', symbolsOnly]);
 
+// 8.3 short-name spelling (differs from the real path by more than case, so
+// WrongStack keeps it as given: a different identity than the long name).
+if (process.platform === 'win32') {
+  // Path passed through the environment: no shell quoting involved.
+  const r = Bun.spawnSync(
+    ['powershell', '-NoProfile', '-NonInteractive', '-Command', '(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:WI_TARGET).ShortPath'],
+    { stdout: 'pipe', env: { ...process.env, WI_TARGET: plain } },
+  );
+  const short = r.stdout.toString().trim();
+  if (short && short.toLowerCase() !== plain.toLowerCase()) scenarios.push(['8.3 short-name spelling', short]);
+  else console.log('SKIP  8.3 short-name spelling (short names disabled on this volume)');
+}
+
 // Real git worktree.
 const main = join(base, 'MainRepo');
 mkdirSync(main);
