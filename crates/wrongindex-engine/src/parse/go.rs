@@ -1,10 +1,10 @@
 //! Go, as WrongStack parses it: its own `go/ast` extraction program
-//! (`GO_BATCH_SCRIPT`, vendored in `toolchain/go_batch.go`) run with
-//! `go run` over chunks of files (`runGoBatch`), and `go-parser.ts`'s regex
+//! (`GO_BATCH_SCRIPT`, vendored in `toolchain/go_batch.go`) built once per
+//! run (`go run` = build + run) and run over chunks of files (`runGoBatch`), and `go-parser.ts`'s regex
 //! extractor (`parseGoWithoutToolchain`) for files the program rejects and
 //! for machines without Go.
 //!
-//! `go run` builds only the vendored program, from a private temporary
+//! `go build` builds only the vendored program, from a private temporary
 //! directory, with `GOTOOLCHAIN=local` and `GOWORK=off` (`goSpawnOptions`):
 //! the indexed project's `go.mod`/`go.work` are never read and none of its
 //! code is built or run.
@@ -43,16 +43,20 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             .map(|f| finish(without_toolchain(&utf16(f.text)), f))
             .collect());
     };
-    let (_dir, script) = private_script("wi-go-parse-", "batch.go", GO_BATCH_SCRIPT)?;
+    let (dir, script) = private_script("wi-go-parse-", "batch.go", GO_BATCH_SCRIPT)?;
+    // `go run` is build + run. Building once, with a deadline that covers a
+    // cold build cache, keeps the per-chunk `batchTimeoutMs` about parsing
+    // (a cold `go run` can exceed it, which made results timing-dependent);
+    // the program, and so its output, is the same.
+    let exe = dir
+        .path()
+        .join(if cfg!(windows) { "batch.exe" } else { "batch" });
+    build(go, &script, &exe)?;
     let mut out = Vec::with_capacity(files.len());
     for chunk in chunks(files) {
-        let mut cmd = Command::new(go);
-        cmd.arg("run")
-            .arg(&script)
-            .env("GOTOOLCHAIN", "local")
-            .env("GOWORK", "off");
+        let cmd = Command::new(&exe);
         let stdout = run_chunk(cmd, &script, chunk)?
-            .ok_or_else(|| "go run failed on a chunk".to_string())?;
+            .ok_or_else(|| "go parser failed on a chunk".to_string())?;
         let results = decode_batch(&stdout, "go")?;
         for f in chunk {
             let ok = results
@@ -74,6 +78,47 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
         }
     }
     Ok(out)
+}
+
+/// Deadline for building the parser program (cold build cache included).
+const BUILD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// `go build -o <exe> batch.go` from the program's private directory with
+/// `goSpawnOptions`' environment.
+fn build(
+    go: &std::path::Path,
+    script: &std::path::Path,
+    exe: &std::path::Path,
+) -> Result<(), String> {
+    let mut cmd = Command::new(go);
+    cmd.arg("build")
+        .arg("-o")
+        .arg(exe)
+        .arg(script)
+        .current_dir(script.parent().unwrap_or(std::path::Path::new(".")))
+        .env("GOTOOLCHAIN", "local")
+        .env("GOWORK", "off")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = super::py::hidden(&mut cmd)
+        .spawn()
+        .map_err(|e| format!("cannot start {}: {e}", go.display()))?;
+    let deadline = std::time::Instant::now() + BUILD_DEADLINE;
+    loop {
+        match child.try_wait() {
+            Ok(Some(s)) if s.success() => return Ok(()),
+            Ok(Some(s)) => return Err(format!("go build of the parser failed ({s})")),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("go build of the parser timed out".into());
+            }
+        }
+    }
 }
 
 fn re(cell: &'static OnceLock<Regex>, src: &str, flags: &str) -> &'static Regex {
