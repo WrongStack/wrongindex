@@ -191,23 +191,46 @@ fn match_parts(
     is_start: &dyn Fn(usize, &[char]) -> bool,
     is_end: &dyn Fn(usize, &[char]) -> bool,
 ) -> bool {
-    let Some((first, rest)) = parts.split_first() else {
+    // Equivalent to WrongStack's recursive search, in polynomial time. Every
+    // middle part ends at a '/' index k, and the next part may start at any
+    // i > k preceded by '/'. That start set shrinks as k grows, so the
+    // smallest reachable k dominates all others: track only it. A hostile
+    // `.gitignore` with many `/**/` parts can no longer cause exponential work.
+    let Some((last, init)) = parts.split_last() else {
         return false;
     };
-    if rest.is_empty() {
-        return first.test_span(p, is_start, is_end);
-    }
-    for k in (0..p.len()).filter(|&k| p[k] == '/') {
-        if !first.test_span(p, is_start, &|i, _| i == k) {
-            continue;
+    let mut prev_end: Option<usize> = None;
+    for (j, part) in init.iter().enumerate() {
+        let next = (0..p.len()).filter(|&k| p[k] == '/').find(|&k| {
+            let end = move |i: usize, _: &[char]| i == k;
+            if j == 0 {
+                part.test_span(p, is_start, &end)
+            } else {
+                let after = prev_end.unwrap_or(0);
+                let start = move |i: usize, input: &[char]| i > after && input[i - 1] == '/';
+                part.test_span(p, &start, &end)
+            }
+        });
+        match next {
+            Some(k) => prev_end = Some(k),
+            None => return false,
         }
-        let after = move |i: usize, input: &[char]| i > k && input[i - 1] == '/';
-        if match_parts(rest, p, &after, is_end) {
-            return true;
+    }
+    match prev_end {
+        None => last.test_span(p, is_start, is_end),
+        Some(after) => {
+            let start = move |i: usize, input: &[char]| i > after && input[i - 1] == '/';
+            last.test_span(p, &start, is_end)
         }
     }
-    false
 }
+
+/// Resource caps for an untrusted `.gitignore`. WrongStack's glob compiler
+/// rejects parts over 1024 characters (that throws there); here such a rule
+/// is dropped. The rule/part caps bound total matching work.
+const MAX_RULES: usize = 10_000;
+const MAX_PARTS_PER_RULE: usize = 64;
+const MAX_PART_CHARS: usize = 1024;
 
 /// Compiled root `.gitignore` (WrongStack only reads the project root file).
 pub struct Gitignore {
@@ -262,7 +285,16 @@ impl Gitignore {
             }
             // `/**/**/` is one "zero or more directories".
             let collapsed = collapse_globstar_dirs(&line);
-            let parts = collapsed.split("/**/").map(Glob::compile).collect();
+            let raw_parts: Vec<&str> = collapsed.split("/**/").collect();
+            if raw_parts.len() > MAX_PARTS_PER_RULE
+                || raw_parts.iter().any(|p| p.chars().count() > MAX_PART_CHARS)
+            {
+                continue;
+            }
+            if rules.len() >= MAX_RULES {
+                break;
+            }
+            let parts = raw_parts.into_iter().map(Glob::compile).collect();
             rules.push(Rule {
                 parts,
                 anchored,
@@ -409,6 +441,24 @@ mod tests {
         assert!(g.is_ignored("bx.js", false));
         assert!(!g.is_ignored("ax.js", false));
         assert!(g.is_ignored("#hash", false));
+    }
+
+    #[test]
+    fn hostile_globstar_chain_is_polynomial() {
+        let pattern = format!("{}x", "a/**/".repeat(40));
+        let path = format!("{}y", "a/".repeat(400));
+        let g = gi(&pattern);
+        let started = std::time::Instant::now();
+        assert!(!g.is_ignored(&path, false));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        let g = gi("a/**/b/**/c\n");
+        assert!(g.is_ignored("a/x/b/y/z/c", false));
+        assert!(g.is_ignored("a/b/c", false));
+        assert!(!g.is_ignored("a/c/b", false));
     }
 
     #[test]

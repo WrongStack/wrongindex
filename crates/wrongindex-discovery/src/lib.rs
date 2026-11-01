@@ -67,6 +67,11 @@ pub struct Discovery {
     pub snapshot_key: Option<String>,
     /// Git only: content hash of every dirty indexed file.
     pub dirty_hashes: BTreeMap<String, String>,
+    /// Git only: listed paths that are symbolic links resolving outside the
+    /// checkout (or unresolvable). Containment policy: their targets are never
+    /// read by discovery; a native backend must not index them. WrongStack
+    /// itself follows such links, so this is a deliberate difference.
+    pub outside_root: Vec<String>,
 }
 
 /// Node `path.resolve(root, rel)` as a string.
@@ -128,6 +133,22 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
             files.push(full);
         }
     }
+    // Containment: a listed symlink whose target leaves the checkout is never
+    // followed by discovery.
+    let root_key = comparable(&root.to_string_lossy());
+    let outside_root: BTreeSet<String> = files
+        .iter()
+        .filter(|f| {
+            std::fs::symlink_metadata(f).is_ok_and(|m| m.file_type().is_symlink())
+                && std::fs::canonicalize(f).map_or(true, |real| {
+                    let real = strip_verbatim(&real);
+                    let key = comparable(&real);
+                    key != root_key
+                        && !key.starts_with(&format!("{root_key}{}", std::path::MAIN_SEPARATOR))
+                })
+        })
+        .cloned()
+        .collect();
     let indexed: BTreeSet<&String> = files.iter().collect();
     // Snapshot: listing bytes, then each dirty indexed file in sorted order.
     let mut snapshot = Sha256::new();
@@ -139,6 +160,14 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
     for f in dirty {
         if !indexed.contains(f) || worktree.deleted.contains(f) {
             continue;
+        }
+        if outside_root.contains(f) {
+            continue;
+        }
+        // Only regular files are read (no FIFOs or devices that could block).
+        match std::fs::metadata(f) {
+            Ok(m) if m.is_file() => {}
+            _ => return None,
         }
         let Ok(bytes) = std::fs::read(f) else {
             // WrongStack's readFile would throw and abandon the git path.
@@ -164,7 +193,19 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
         clean_blobs,
         snapshot_key: Some(hex::encode(snapshot.finalize())),
         dirty_hashes,
+        outside_root: outside_root.into_iter().collect(),
     })
+}
+
+fn strip_verbatim(p: &Path) -> String {
+    let s = p.to_string_lossy().into_owned();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        s
+    }
 }
 
 /// JS default sort (UTF-16 code unit order).
@@ -198,6 +239,7 @@ fn discover_walk(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Discover
         clean_blobs: BTreeMap::new(),
         snapshot_key: None,
         dirty_hashes: BTreeMap::new(),
+        outside_root: Vec::new(),
     }
 }
 
@@ -295,6 +337,39 @@ mod tests {
             .collect();
         names.sort();
         assert_eq!(names, vec!["Makefile", "src/a.ts"]);
+    }
+
+    #[test]
+    fn listed_symlink_leaving_the_checkout_is_never_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let r = tmp.path().join("repo");
+        let outside = tmp.path().join("secret.ts");
+        write(&outside, "export const secret = 1;\n");
+        write(&r.join("a.ts"), "export const a = 1;\n");
+        let link = r.join("link.ts");
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_file(&outside, &link);
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(&outside, &link);
+        if made.is_err() {
+            eprintln!("SKIP: cannot create file symlinks on this machine");
+            return;
+        }
+        assert!(
+            std::process::Command::new("git")
+                .current_dir(&r)
+                .args(["init", "-q"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let d = discover(&r, &[]);
+        assert_eq!(d.source, Source::Git);
+        let link_s = wrongindex_storage::wrongstack_paths::node_resolve(&link)
+            .to_string_lossy()
+            .into_owned();
+        assert!(d.outside_root.contains(&link_s), "{:?}", d.outside_root);
+        assert!(!d.dirty_hashes.contains_key(&link_s), "outside target was read");
     }
 
     #[test]
