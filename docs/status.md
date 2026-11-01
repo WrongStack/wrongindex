@@ -23,7 +23,9 @@ Finding recorded during M0: `files.content_hash` is xxHash64 of `utf8(readFile(f
 
 Finding: the oracle shows an import alias (`import { greet as hello }`) whose call ref stays unresolved (`to_id = NULL`). This is baseline behavior to preserve, not a WrongIndex bug.
 
-Finding (resolver port): `crates/wrongindex-storage/src/wrongstack_paths.rs` ports `resolveWstackPaths(...).projectCodebaseIndex` (on-disk case, linked-worktree identity, slug + SHA-256 prefix, per-worktree index dirs, `WRONGSTACK_HOME`). `scripts/oracle/resolver-diff.ts` compares it with the real resolver on live scenarios: 14/14 match (plain, case variants, trailing/forward slashes, dot segments, non-ASCII, 40-char slug cap, slug-less name, real `git worktree` main + linked, submodule-style gitdir, malformed `.git`, junction). `wrongindex project add` no longer needs `--index-dir`; `wrongindex resolve-index-dir` prints the location.
+Finding (resolver port): `crates/wrongindex-storage/src/wrongstack_paths.rs` ports `resolveWstackPaths(...).projectCodebaseIndex` (on-disk case, linked-worktree identity, slug + SHA-256 prefix, per-worktree index dirs, `WRONGSTACK_HOME`). `scripts/oracle/resolver-diff.ts` compares it with the real resolver on live scenarios: 15/15 match (plain, case variants, 8.3 short-name spelling, trailing/forward slashes, dot segments, non-ASCII, 40-char slug cap, slug-less name, real `git worktree` main + linked, submodule-style gitdir, malformed `.git`, junction). `wrongindex project add` no longer needs `--index-dir`; `wrongindex resolve-index-dir` prints the location.
+
+Finding (resolver, found by CI): WrongStack keeps a path spelling that differs from the real path by more than letter case. An 8.3 short-name spelling (`C:\Users\RUNNER~1\...`) therefore gets a different identity, slug, and index directory than the long name of the same folder. The port reproduces this (differential scenario added). Because two spellings can map one checkout to two indexes, WrongIndex must keep using the WrongStack-resolved location passed by the client (INV-07) rather than re-deriving identity from its own canonical path.
 
 Finding (production check): read-only `wrongindex inspect` of this machine's live WrongStack index (343 MB; 19,352 files, 172,152 symbols, 680,728 refs) returns `compatible` with no unknown metadata keys; `index.db` SHA-256 identical before and after.
 
@@ -60,7 +62,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
 | `cargo test --workspace` | PASS — 54 tests (contracts 4, storage 21, registry 11, ipc 14, daemon integration 4); storage includes oracle-hash parity over all fixture files and resolver KATs |
-| `bun scripts/oracle/resolver-diff.ts` | PASS — 14/14 live scenarios match WrongStack |
+| `bun scripts/oracle/resolver-diff.ts` | PASS — 15/15 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
 | Manual CLI smoke against a temp data root | start/idempotent start/add/conflict/check/rebuild-refused/status/doctor/stop/inspect behaved as specified |
