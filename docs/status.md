@@ -55,7 +55,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 48 tests (contracts 4, storage 15, registry 11, ipc 14, daemon integration 4) |
+| `cargo test --workspace` | PASS — 49 tests (contracts 4, storage 16, registry 11, ipc 14, daemon integration 4); storage includes oracle-hash parity over all 28 fixture files |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
 | Manual CLI smoke against a temp data root | start/idempotent start/add/conflict/check/rebuild-refused/status/doctor/stop/inspect behaved as specified |

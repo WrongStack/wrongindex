@@ -78,4 +78,46 @@ mod tests {
     fn empty_input_is_reference_value() {
         assert_eq!(xxhash64_hex(b""), "ef46db3751d8e999");
     }
+
+    /// Every `files.content_hash` the WrongStack oracle recorded must equal the
+    /// Rust hash of the checked-out fixture source. This is cross-runtime parity
+    /// over real files, and it fails if a checkout rewrote fixture bytes (for
+    /// example CRLF -> LF normalization).
+    #[test]
+    fn oracle_recorded_hashes_match_fixture_sources() {
+        use std::path::PathBuf;
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+        let mut checked = 0;
+        let mut saw_crlf = false;
+        for entry in std::fs::read_dir(base.join("oracle")).unwrap() {
+            let dir = entry.unwrap().path();
+            let snapshot = dir.join("snapshot.json");
+            if !snapshot.is_file() {
+                continue;
+            }
+            let snap: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&snapshot).unwrap()).unwrap();
+            let fixture = snap["fixture"].as_str().unwrap();
+            for file in snap["files"].as_array().unwrap() {
+                let rel = file["file"]
+                    .as_str()
+                    .unwrap()
+                    .strip_prefix("<root>/")
+                    .unwrap();
+                let path = base.join("projects").join(fixture).join(rel);
+                let bytes =
+                    std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                saw_crlf |= bytes.windows(2).any(|w| w == b"\r\n");
+                assert_eq!(
+                    file_content_hash(&bytes),
+                    file["content_hash"].as_str().unwrap(),
+                    "{fixture}/{rel}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked >= 25, "only {checked} files checked");
+        // Control: the corpus must still contain a CRLF source after checkout.
+        assert!(saw_crlf, "CRLF fixture was normalized by the checkout");
+    }
 }
