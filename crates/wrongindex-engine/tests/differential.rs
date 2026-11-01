@@ -685,6 +685,66 @@ fn scenario_components(root: &Path) {
     );
 }
 
+/// YAML infra artifacts (`infra-parser.ts` refs): Compose services and
+/// images, workflow jobs/needs/local and remote actions, OpenAPI `$ref`s,
+/// Kubernetes manifests (by directory and by content), and kinds a `.yaml`
+/// name selects (`Dockerfile.yaml`, `.env.yaml`).
+fn scenario_infra_yaml(root: &Path) {
+    write(
+        root,
+        "package.json",
+        "{\"name\": \"infra\", \"scripts\": {\"build\": \"tsc\"}}",
+    );
+    write(
+        root,
+        "docker-compose.yml",
+        "services:\n  web:\n    build: .\n    image: \"infra/web:1\"\n    depends_on:\n      - db\n      - cache\n  db:\n    image: postgres:16\n  cache:\n    image: redis\n    depends_on:\n      db:\n        condition: service_healthy\n",
+    );
+    write(
+        root,
+        "Dockerfile",
+        "FROM node:20 AS build\nCOPY --from=build /a /b\nEXPOSE 80\n",
+    );
+    write(
+        root,
+        ".github/workflows/ci.yml",
+        "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup\n  test:\n    needs: build\n    steps:\n      - run: echo\n  release:\n    needs: [build, 'test']\n    uses: ./.github/workflows/release.yml\n",
+    );
+    write(
+        root,
+        ".github/workflows/release.yml",
+        "on: workflow_call\njobs:\n  publish:\n    runs-on: ubuntu-latest\n",
+    );
+    write(
+        root,
+        ".github/actions/setup/action.yml",
+        "name: setup\nruns:\n  using: composite\n  steps:\n    - uses: actions/setup-node@v4\n",
+    );
+    write(
+        root,
+        "api/openapi.yaml",
+        "openapi: 3.1.0\npaths:\n  /users:\n    get:\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/User'\n  /users/{id}:\n    get: {}\ncomponents:\n  schemas:\n    User:\n      properties:\n        pet:\n          $ref: '#/components/schemas/Pet'\n    Pet:\n      type: object\n",
+    );
+    write(
+        root,
+        "k8s/deploy.yaml",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          image: infra/web:1\n      volumes:\n        - persistentVolumeClaim:\n            claimName: data\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: web-svc\nspec:\n  backend:\n    serviceName: web\n",
+    );
+    write(
+        root,
+        "config/pvc.yml",
+        "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: data\n",
+    );
+    write(root, "config/app.yaml", "server:\n  port: 8080\n");
+    write(root, "deploy/Dockerfile.yaml", "FROM alpine:3 AS base\n");
+    write(root, "deploy/.env.yaml", "A=1\nB=${A}\n");
+    write(
+        root,
+        "README.md",
+        "# Infra\n\nSee [API](api/openapi.yaml) and [k8s](k8s/deploy.yaml).\n",
+    );
+}
+
 #[test]
 #[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
 fn native_matches_wrongstack_on_generic_language_projects() {
@@ -692,11 +752,12 @@ fn native_matches_wrongstack_on_generic_language_projects() {
     let base = long(tmp.path());
     let mut failures = Vec::new();
     type Scenario = fn(&Path);
-    let scenarios: [(&str, Scenario); 4] = [
+    let scenarios: [(&str, Scenario); 5] = [
         ("documented-crate", scenario_documented_crate),
         ("static-site", scenario_static_site),
         ("misc-languages", scenario_misc_languages),
         ("components", scenario_components),
+        ("infra-yaml", scenario_infra_yaml),
     ];
     for (name, build) in scenarios {
         let s = base.join(name);
@@ -723,6 +784,14 @@ fn native_matches_wrongstack_on_generic_language_projects() {
     git(&root, &["add", "-A"]);
     git(&root, &["commit", "-q", "-m", "init"]);
     failures.extend(compare("documented-git", &root, &s));
+    // The infra project in a clean Git checkout.
+    let s = base.join("infra-git");
+    let root = s.join("project");
+    scenario_infra_yaml(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("infra-git", &root, &s));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

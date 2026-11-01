@@ -80,8 +80,12 @@ mod kat {
             .iter()
             .filter(|c| parse::ts::LANGS.contains(&c["lang"].as_str().unwrap()))
             .count();
+        let yaml_infra = cases
+            .iter()
+            .filter(|c| c["lang"] == "yaml" && c["refs"].is_array())
+            .count();
         assert!(
-            cases.len() >= 180 && generic >= 50 && ts >= 55,
+            cases.len() >= 200 && generic >= 50 && ts >= 55 && yaml_infra >= 15,
             "{} cases",
             cases.len()
         );
@@ -203,9 +207,16 @@ mod kat {
         if let Some(why) = &parsed.unsupported {
             out.push(format!("{} unsupported: {why}", c["source"]));
         }
-        // JSON/YAML cases record only a ref count: YAML infra refs are not
-        // ported (the native writer refuses those files instead), so the
-        // count is not compared.
+        // JSON cases, and YAML cases without infra refs, record a count.
+        if let Some(n) = c["refs"].as_u64()
+            && n as usize != parsed.refs.len()
+        {
+            out.push(format!(
+                "{} refs: want {n}, got {}",
+                c["source"],
+                parsed.refs.len()
+            ));
+        }
         if c["refs"].is_array() && serde_json::to_value(&parsed.refs).unwrap() != c["refs"] {
             let want = c["refs"].as_array().unwrap();
             let got = serde_json::to_value(&parsed.refs).unwrap();

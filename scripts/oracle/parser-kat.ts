@@ -211,6 +211,12 @@ if (!corpus) {
   }
 }
 
+// ── YAML infra artifacts (appended so earlier cases stay byte-identical) ──
+if (!corpus) {
+  const { addYamlInfraCases } = await import('./parser-kat-yaml-infra.ts');
+  addYamlInfraCases(cases);
+}
+
 /**
  * TS/JS signatures and doc comments are cut with `slice`, which can split a
  * surrogate pair; SQLite stores such a string with U+FFFD, and JSON parsers
@@ -246,7 +252,10 @@ for (const c of cases) {
             kind: s.kind, name: s.name, line: s.line, col: s.col, signature: s.signature,
             docComment: s.docComment, scope: s.scope, text: s.text,
           }),
-    refs: c.lang !== 'json' && c.lang !== 'yaml'
+    // JSON never has refs; YAML refs (infra artifacts) are recorded in full
+    // when present and as a count of 0 otherwise, so the pre-existing cases
+    // stay byte-identical.
+    refs: c.lang !== 'json' && (c.lang !== 'yaml' || (r.refs ?? []).length > 0)
       ? (r.refs ?? []).map((x: Record<string, unknown>) => ({
           toName: wf(x.toName), callType: x.callType, line: x.line, lang: x.lang, module: wf(x.module),
         }))

@@ -328,12 +328,26 @@ fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
     assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
 
-    // A Kubernetes-looking YAML could carry infra refs: refused.
+    // A Kubernetes manifest is indexed with its infra refs (formerly
+    // refused; parity is covered by the KAT and the differential tests).
     let k8s = base.join("k8s-like");
     std::fs::create_dir_all(&k8s).unwrap();
-    std::fs::write(k8s.join("deploy.yaml"), "apiVersion: v1\nkind: Pod\n").unwrap();
-    let err = index_fresh(&k8s, &base.join("idx-k8s")).unwrap_err();
-    assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
+    std::fs::write(
+        k8s.join("deploy.yaml"),
+        "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\nspec:\n  containers:\n    - image: busybox\n",
+    )
+    .unwrap();
+    let idx = base.join("idx-k8s");
+    index_fresh(&k8s, &idx).unwrap();
+    let c = rusqlite::Connection::open(idx.join("index.db")).unwrap();
+    let image: String = c
+        .query_row(
+            "SELECT to_name FROM refs WHERE call_type = 'import'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(image, "busybox");
 }
 
 #[test]

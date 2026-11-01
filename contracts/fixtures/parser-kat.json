@@ -37489,6 +37489,2393 @@
           "lang": "ts"
         }
       ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-basic",
+      "lang": "yaml",
+      "file": "C:\\kat\\app\\docker-compose.yml",
+      "content": "version: \"3.9\"\nservices:\n  web:\n    image: \"nginx:1.25\"\n    depends_on:\n      - db\n      - cache\n  db:\n    image: postgres:16\n  cache:\n    image: 'redis'\nvolumes:\n  data:\n",
+      "symbols": [
+        {
+          "kind": "literal",
+          "name": "version",
+          "line": 1,
+          "col": 0,
+          "signature": "version: \"3.9\"",
+          "docComment": "",
+          "scope": "",
+          "text": "version version: \"3.9\""
+        },
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 2,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        },
+        {
+          "kind": "property",
+          "name": "web",
+          "line": 3,
+          "col": 2,
+          "signature": "web: ",
+          "docComment": "",
+          "scope": "",
+          "text": "web web:"
+        },
+        {
+          "kind": "literal",
+          "name": "image",
+          "line": 4,
+          "col": 4,
+          "signature": "image: \"nginx:1.25\"",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: \"nginx:1.25\""
+        },
+        {
+          "kind": "property",
+          "name": "depends_on",
+          "line": 5,
+          "col": 4,
+          "signature": "depends_on: ",
+          "docComment": "",
+          "scope": "",
+          "text": "depends_on depends_on:"
+        },
+        {
+          "kind": "property",
+          "name": "db",
+          "line": 8,
+          "col": 2,
+          "signature": "db: ",
+          "docComment": "",
+          "scope": "",
+          "text": "db db:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 9,
+          "col": 4,
+          "signature": "image: postgres:16",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: postgres:16"
+        },
+        {
+          "kind": "property",
+          "name": "cache",
+          "line": 10,
+          "col": 2,
+          "signature": "cache: ",
+          "docComment": "",
+          "scope": "",
+          "text": "cache cache:"
+        },
+        {
+          "kind": "literal",
+          "name": "image",
+          "line": 11,
+          "col": 4,
+          "signature": "image: 'redis'",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: 'redis'"
+        },
+        {
+          "kind": "property",
+          "name": "volumes",
+          "line": 12,
+          "col": 0,
+          "signature": "volumes: ",
+          "docComment": "",
+          "scope": "",
+          "text": "volumes volumes:"
+        },
+        {
+          "kind": "property",
+          "name": "data",
+          "line": 13,
+          "col": 2,
+          "signature": "data: ",
+          "docComment": "",
+          "scope": "",
+          "text": "data data:"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "nginx:1.25",
+          "callType": "import",
+          "line": 4,
+          "lang": "yaml",
+          "module": "nginx:1.25"
+        },
+        {
+          "toName": "db",
+          "callType": "call",
+          "line": 6,
+          "lang": "yaml"
+        },
+        {
+          "toName": "cache",
+          "callType": "call",
+          "line": 7,
+          "lang": "yaml"
+        },
+        {
+          "toName": "postgres:16",
+          "callType": "import",
+          "line": 9,
+          "lang": "yaml",
+          "module": "postgres:16"
+        },
+        {
+          "toName": "redis",
+          "callType": "import",
+          "line": 11,
+          "lang": "yaml",
+          "module": "redis"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-four-space-map-depends",
+      "lang": "yaml",
+      "file": "C:\\kat\\compose.yaml",
+      "content": "services:\n    api:\n        build: .\n        depends_on:\n            db:\n                condition: service_healthy\n            queue:\n                condition: service_started\n        image: ghcr.io/x/api:latest # trailing\n    db:\n        image: postgres\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 1,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        },
+        {
+          "kind": "property",
+          "name": "api",
+          "line": 2,
+          "col": 4,
+          "signature": "api: ",
+          "docComment": "",
+          "scope": "",
+          "text": "api api:"
+        },
+        {
+          "kind": "property",
+          "name": "build",
+          "line": 3,
+          "col": 8,
+          "signature": "build: .",
+          "docComment": "",
+          "scope": "",
+          "text": "build build: ."
+        },
+        {
+          "kind": "property",
+          "name": "depends_on",
+          "line": 4,
+          "col": 8,
+          "signature": "depends_on: ",
+          "docComment": "",
+          "scope": "",
+          "text": "depends_on depends_on:"
+        },
+        {
+          "kind": "property",
+          "name": "db",
+          "line": 5,
+          "col": 12,
+          "signature": "db: ",
+          "docComment": "",
+          "scope": "",
+          "text": "db db:"
+        },
+        {
+          "kind": "property",
+          "name": "queue",
+          "line": 7,
+          "col": 12,
+          "signature": "queue: ",
+          "docComment": "",
+          "scope": "",
+          "text": "queue queue:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 9,
+          "col": 8,
+          "signature": "image: ghcr.io/x/api:latest # trailing",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: ghcr.io/x/api:latest # trailing"
+        },
+        {
+          "kind": "property",
+          "name": "db",
+          "line": 10,
+          "col": 4,
+          "signature": "db: ",
+          "docComment": "",
+          "scope": "",
+          "text": "db db:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 11,
+          "col": 8,
+          "signature": "image: postgres",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: postgres"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "db",
+          "callType": "call",
+          "line": 5,
+          "lang": "yaml"
+        },
+        {
+          "toName": "queue",
+          "callType": "call",
+          "line": 7,
+          "lang": "yaml"
+        },
+        {
+          "toName": "ghcr.io/x/api:latest",
+          "callType": "import",
+          "line": 9,
+          "lang": "yaml",
+          "module": "ghcr.io/x/api:latest"
+        },
+        {
+          "toName": "postgres",
+          "callType": "import",
+          "line": 11,
+          "lang": "yaml",
+          "module": "postgres"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-crlf-comments",
+      "lang": "yaml",
+      "file": "C:\\kat\\docker-compose.yaml",
+      "content": "# top comment\r\nservices:\r\n  # svc comment\r\n  a:\r\n    depends_on: [b]\r\n    image: x/a\r\n\r\n  b:\r\n    image:   b@sha256:abc\r\nnetworks:\r\n  a:\r\n    image: not-a-service\r\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 2,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 4,
+          "col": 2,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "depends_on",
+          "line": 5,
+          "col": 4,
+          "signature": "depends_on: [b]",
+          "docComment": "",
+          "scope": "",
+          "text": "depends_on depends_on: [b]"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 6,
+          "col": 4,
+          "signature": "image: x/a",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: x/a"
+        },
+        {
+          "kind": "property",
+          "name": "b",
+          "line": 8,
+          "col": 2,
+          "signature": "b: ",
+          "docComment": "",
+          "scope": "",
+          "text": "b b:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 9,
+          "col": 4,
+          "signature": "image: b@sha256:abc",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: b@sha256:abc"
+        },
+        {
+          "kind": "property",
+          "name": "networks",
+          "line": 10,
+          "col": 0,
+          "signature": "networks: ",
+          "docComment": "",
+          "scope": "",
+          "text": "networks networks:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 11,
+          "col": 2,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 12,
+          "col": 4,
+          "signature": "image: not-a-service",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: not-a-service"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "x/a",
+          "callType": "import",
+          "line": 6,
+          "lang": "yaml",
+          "module": "x/a"
+        },
+        {
+          "toName": "b@sha256:abc",
+          "callType": "import",
+          "line": 9,
+          "lang": "yaml",
+          "module": "b@sha256:abc"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-weird",
+      "lang": "yaml",
+      "file": "C:\\kat\\x\\COMPOSE.YML",
+      "content": "services:\n  -bad: 1\n  ok.name_1:\n    depends_on:\n    - inline-list\n    - condition\n    environment:\n      - A=1\n  second:\n   odd-indent: 1\n   image: three\n  third:\n    image:\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 1,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        },
+        {
+          "kind": "literal",
+          "name": "-bad",
+          "line": 2,
+          "col": 2,
+          "signature": "-bad: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "-bad -bad: 1"
+        },
+        {
+          "kind": "property",
+          "name": "ok.name_1",
+          "line": 3,
+          "col": 2,
+          "signature": "ok.name_1: ",
+          "docComment": "",
+          "scope": "",
+          "text": "ok.name_1 ok.name_1:"
+        },
+        {
+          "kind": "property",
+          "name": "depends_on",
+          "line": 4,
+          "col": 4,
+          "signature": "depends_on: ",
+          "docComment": "",
+          "scope": "",
+          "text": "depends_on depends_on:"
+        },
+        {
+          "kind": "property",
+          "name": "environment",
+          "line": 7,
+          "col": 4,
+          "signature": "environment: ",
+          "docComment": "",
+          "scope": "",
+          "text": "environment environment:"
+        },
+        {
+          "kind": "property",
+          "name": "second",
+          "line": 9,
+          "col": 2,
+          "signature": "second: ",
+          "docComment": "",
+          "scope": "",
+          "text": "second second:"
+        },
+        {
+          "kind": "literal",
+          "name": "odd-indent",
+          "line": 10,
+          "col": 3,
+          "signature": "odd-indent: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "odd-indent odd-indent: 1"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 11,
+          "col": 3,
+          "signature": "image: three",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: three"
+        },
+        {
+          "kind": "property",
+          "name": "third",
+          "line": 12,
+          "col": 2,
+          "signature": "third: ",
+          "docComment": "",
+          "scope": "",
+          "text": "third third:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 13,
+          "col": 4,
+          "signature": "image: ",
+          "docComment": "",
+          "scope": "",
+          "text": "image image:"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "three",
+          "callType": "import",
+          "line": 11,
+          "lang": "yaml",
+          "module": "three"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-empty-services",
+      "lang": "yaml",
+      "file": "C:\\kat\\compose.yml",
+      "content": "services:\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 1,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-no-services",
+      "lang": "yaml",
+      "file": "C:\\kat\\compose.yml",
+      "content": "x:\n  image: a\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "x",
+          "line": 1,
+          "col": 0,
+          "signature": "x: ",
+          "docComment": "",
+          "scope": "",
+          "text": "x x:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 2,
+          "col": 2,
+          "signature": "image: a",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: a"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-gha-full",
+      "lang": "yaml",
+      "file": "C:\\kat\\repo\\.github\\workflows\\ci.yml",
+      "content": "name: CI\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Setup\n        uses: \"dtolnay/rust-toolchain@stable\"\n      - run: cargo test\n  test:\n    needs: build\n    runs-on: windows-latest\n    steps:\n      - uses: './.github/actions/local'\n  deploy:\n    needs: [build, \"test\", 'lint' ]\n    uses: org/repo/.github/workflows/deploy.yml@main\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 1,
+          "col": 0,
+          "signature": "name: CI",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: CI"
+        },
+        {
+          "kind": "property",
+          "name": "on",
+          "line": 2,
+          "col": 0,
+          "signature": "on: ",
+          "docComment": "",
+          "scope": "",
+          "text": "on on:"
+        },
+        {
+          "kind": "property",
+          "name": "push",
+          "line": 3,
+          "col": 2,
+          "signature": "push: ",
+          "docComment": "",
+          "scope": "",
+          "text": "push push:"
+        },
+        {
+          "kind": "property",
+          "name": "branches",
+          "line": 4,
+          "col": 4,
+          "signature": "branches: [main]",
+          "docComment": "",
+          "scope": "",
+          "text": "branches branches: [main]"
+        },
+        {
+          "kind": "property",
+          "name": "jobs",
+          "line": 5,
+          "col": 0,
+          "signature": "jobs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "jobs jobs:"
+        },
+        {
+          "kind": "property",
+          "name": "build",
+          "line": 6,
+          "col": 2,
+          "signature": "build: ",
+          "docComment": "",
+          "scope": "",
+          "text": "build build:"
+        },
+        {
+          "kind": "property",
+          "name": "runs-on",
+          "line": 7,
+          "col": 4,
+          "signature": "runs-on: ubuntu-latest",
+          "docComment": "",
+          "scope": "",
+          "text": "runs-on runs-on: ubuntu-latest"
+        },
+        {
+          "kind": "property",
+          "name": "steps",
+          "line": 8,
+          "col": 4,
+          "signature": "steps: ",
+          "docComment": "",
+          "scope": "",
+          "text": "steps steps:"
+        },
+        {
+          "kind": "literal",
+          "name": "uses",
+          "line": 11,
+          "col": 8,
+          "signature": "uses: \"dtolnay/rust-toolchain@stable\"",
+          "docComment": "",
+          "scope": "",
+          "text": "uses uses: \"dtolnay/rust-toolchain@stable\""
+        },
+        {
+          "kind": "property",
+          "name": "test",
+          "line": 13,
+          "col": 2,
+          "signature": "test: ",
+          "docComment": "",
+          "scope": "",
+          "text": "test test:"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 14,
+          "col": 4,
+          "signature": "needs: build",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: build"
+        },
+        {
+          "kind": "property",
+          "name": "runs-on",
+          "line": 15,
+          "col": 4,
+          "signature": "runs-on: windows-latest",
+          "docComment": "",
+          "scope": "",
+          "text": "runs-on runs-on: windows-latest"
+        },
+        {
+          "kind": "property",
+          "name": "steps",
+          "line": 16,
+          "col": 4,
+          "signature": "steps: ",
+          "docComment": "",
+          "scope": "",
+          "text": "steps steps:"
+        },
+        {
+          "kind": "property",
+          "name": "deploy",
+          "line": 18,
+          "col": 2,
+          "signature": "deploy: ",
+          "docComment": "",
+          "scope": "",
+          "text": "deploy deploy:"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 19,
+          "col": 4,
+          "signature": "needs: [build, \"test\", 'lint' ]",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: [build, \"test\", 'lint' ]"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 20,
+          "col": 4,
+          "signature": "uses: org/repo/.github/workflows/deploy.yml@main",
+          "docComment": "",
+          "scope": "",
+          "text": "uses uses: org/repo/.github/workflows/deploy.yml@main"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 9,
+          "col": 8,
+          "signature": "- uses: actions/checkout@v4",
+          "docComment": "",
+          "scope": "",
+          "text": "uses - uses: actions/checkout@v4"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 10,
+          "col": 8,
+          "signature": "- name: Setup",
+          "docComment": "",
+          "scope": "",
+          "text": "name - name: Setup"
+        },
+        {
+          "kind": "property",
+          "name": "run",
+          "line": 12,
+          "col": 8,
+          "signature": "- run: cargo test",
+          "docComment": "",
+          "scope": "",
+          "text": "run - run: cargo test"
+        },
+        {
+          "kind": "literal",
+          "name": "uses",
+          "line": 17,
+          "col": 8,
+          "signature": "- uses: './.github/actions/local'",
+          "docComment": "",
+          "scope": "",
+          "text": "uses - uses: './.github/actions/local'"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "actions/checkout@v4",
+          "callType": "import",
+          "line": 9,
+          "lang": "yaml",
+          "module": "actions/checkout@v4"
+        },
+        {
+          "toName": "dtolnay/rust-toolchain@stable",
+          "callType": "import",
+          "line": 11,
+          "lang": "yaml",
+          "module": "dtolnay/rust-toolchain@stable"
+        },
+        {
+          "toName": "build",
+          "callType": "call",
+          "line": 14,
+          "lang": "yaml"
+        },
+        {
+          "toName": "./.github/actions/local",
+          "callType": "import",
+          "line": 17,
+          "lang": "yaml",
+          "module": "./.github/actions/local"
+        },
+        {
+          "toName": "build",
+          "callType": "call",
+          "line": 19,
+          "lang": "yaml"
+        },
+        {
+          "toName": "test",
+          "callType": "call",
+          "line": 19,
+          "lang": "yaml"
+        },
+        {
+          "toName": "lint",
+          "callType": "call",
+          "line": 19,
+          "lang": "yaml"
+        },
+        {
+          "toName": "org/repo/.github/workflows/deploy.yml@main",
+          "callType": "import",
+          "line": 20,
+          "lang": "yaml",
+          "module": "org/repo/.github/workflows/deploy.yml@main"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-gha-edge",
+      "lang": "yaml",
+      "file": "C:\\kat\\.github\\workflows\\x.yaml",
+      "content": "jobs:\n    a:\n        needs: [ ]\n        steps:\n            - uses: docker://alpine:3\n    b:\n        needs: a   \n        needs: a b\n        needs:\n            - a\n    c.d-e_f:\n        if: x\n#comment\nenv:\n  uses: not/ajob\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "jobs",
+          "line": 1,
+          "col": 0,
+          "signature": "jobs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "jobs jobs:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 2,
+          "col": 4,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 3,
+          "col": 8,
+          "signature": "needs: [ ]",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: [ ]"
+        },
+        {
+          "kind": "property",
+          "name": "steps",
+          "line": 4,
+          "col": 8,
+          "signature": "steps: ",
+          "docComment": "",
+          "scope": "",
+          "text": "steps steps:"
+        },
+        {
+          "kind": "property",
+          "name": "b",
+          "line": 6,
+          "col": 4,
+          "signature": "b: ",
+          "docComment": "",
+          "scope": "",
+          "text": "b b:"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 7,
+          "col": 8,
+          "signature": "needs: a",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: a"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 8,
+          "col": 8,
+          "signature": "needs: a b",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: a b"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 9,
+          "col": 8,
+          "signature": "needs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs:"
+        },
+        {
+          "kind": "property",
+          "name": "c.d-e_f",
+          "line": 11,
+          "col": 4,
+          "signature": "c.d-e_f: ",
+          "docComment": "",
+          "scope": "",
+          "text": "c.d-e_f c.d-e_f:"
+        },
+        {
+          "kind": "property",
+          "name": "if",
+          "line": 12,
+          "col": 8,
+          "signature": "if: x",
+          "docComment": "",
+          "scope": "",
+          "text": "if if: x"
+        },
+        {
+          "kind": "property",
+          "name": "env",
+          "line": 14,
+          "col": 0,
+          "signature": "env: ",
+          "docComment": "",
+          "scope": "",
+          "text": "env env:"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 15,
+          "col": 2,
+          "signature": "uses: not/ajob",
+          "docComment": "",
+          "scope": "",
+          "text": "uses uses: not/ajob"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 5,
+          "col": 14,
+          "signature": "- uses: docker://alpine:3",
+          "docComment": "",
+          "scope": "",
+          "text": "uses - uses: docker://alpine:3"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "docker://alpine:3",
+          "callType": "import",
+          "line": 5,
+          "lang": "yaml",
+          "module": "docker://alpine:3"
+        },
+        {
+          "toName": "a",
+          "callType": "call",
+          "line": 7,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-gha-quotes",
+      "lang": "yaml",
+      "file": "C:\\kat\\.github\\workflows\\q.yml",
+      "content": "jobs:\n  q:\n    needs: [\"'\", '\"', \"\", \"x'\"]\n    steps:\n      -   uses:   a/b@v1\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "jobs",
+          "line": 1,
+          "col": 0,
+          "signature": "jobs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "jobs jobs:"
+        },
+        {
+          "kind": "property",
+          "name": "q",
+          "line": 2,
+          "col": 2,
+          "signature": "q: ",
+          "docComment": "",
+          "scope": "",
+          "text": "q q:"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 3,
+          "col": 4,
+          "signature": "needs: [\"'\", '\"', \"\", \"x'\"]",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: [\"'\", '\"', \"\", \"x'\"]"
+        },
+        {
+          "kind": "property",
+          "name": "steps",
+          "line": 4,
+          "col": 4,
+          "signature": "steps: ",
+          "docComment": "",
+          "scope": "",
+          "text": "steps steps:"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 5,
+          "col": 10,
+          "signature": "- uses: a/b@v1",
+          "docComment": "",
+          "scope": "",
+          "text": "uses - uses: a/b@v1"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "'",
+          "callType": "call",
+          "line": 3,
+          "lang": "yaml"
+        },
+        {
+          "toName": "\"",
+          "callType": "call",
+          "line": 3,
+          "lang": "yaml"
+        },
+        {
+          "toName": "x'",
+          "callType": "call",
+          "line": 3,
+          "lang": "yaml"
+        },
+        {
+          "toName": "a/b@v1",
+          "callType": "import",
+          "line": 5,
+          "lang": "yaml",
+          "module": "a/b@v1"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-gha-not-workflows-dir",
+      "lang": "yaml",
+      "file": "C:\\kat\\.github\\ci.yml",
+      "content": "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "jobs",
+          "line": 1,
+          "col": 0,
+          "signature": "jobs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "jobs jobs:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 2,
+          "col": 2,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "steps",
+          "line": 3,
+          "col": 4,
+          "signature": "steps: ",
+          "docComment": "",
+          "scope": "",
+          "text": "steps steps:"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 4,
+          "col": 8,
+          "signature": "- uses: actions/checkout@v4",
+          "docComment": "",
+          "scope": "",
+          "text": "uses - uses: actions/checkout@v4"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-openapi-basic",
+      "lang": "yaml",
+      "file": "C:\\kat\\api\\openapi.yaml",
+      "content": "openapi: 3.1.0\npaths:\n  /users:\n    get:\n      responses:\n        \"200\":\n          content:\n            application/json:\n              schema:\n                $ref: \"#/components/schemas/User\"\n  \"/users/{id}\":\n    get: {}\ncomponents:\n  schemas:\n    User:\n      type: object\n      properties:\n        pet:\n          $ref: '#/components/schemas/Pet'\n    Pet:\n      type: object\n    _Private.v2:\n      type: string\n  responses:\n    NotFound: {}\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "openapi",
+          "line": 1,
+          "col": 0,
+          "signature": "openapi: 3.1.0",
+          "docComment": "",
+          "scope": "",
+          "text": "openapi openapi: 3.1.0"
+        },
+        {
+          "kind": "property",
+          "name": "paths",
+          "line": 2,
+          "col": 0,
+          "signature": "paths: ",
+          "docComment": "",
+          "scope": "",
+          "text": "paths paths:"
+        },
+        {
+          "kind": "property",
+          "name": "/users",
+          "line": 3,
+          "col": 2,
+          "signature": "/users: ",
+          "docComment": "",
+          "scope": "",
+          "text": "/users /users:"
+        },
+        {
+          "kind": "property",
+          "name": "get",
+          "line": 4,
+          "col": 4,
+          "signature": "get: ",
+          "docComment": "",
+          "scope": "",
+          "text": "get get:"
+        },
+        {
+          "kind": "property",
+          "name": "responses",
+          "line": 5,
+          "col": 6,
+          "signature": "responses: ",
+          "docComment": "",
+          "scope": "",
+          "text": "responses responses:"
+        },
+        {
+          "kind": "property",
+          "name": "200",
+          "line": 6,
+          "col": 8,
+          "signature": "200: ",
+          "docComment": "",
+          "scope": "",
+          "text": "200 200:"
+        },
+        {
+          "kind": "property",
+          "name": "content",
+          "line": 7,
+          "col": 10,
+          "signature": "content: ",
+          "docComment": "",
+          "scope": "",
+          "text": "content content:"
+        },
+        {
+          "kind": "property",
+          "name": "application/json",
+          "line": 8,
+          "col": 12,
+          "signature": "application/json: ",
+          "docComment": "",
+          "scope": "",
+          "text": "application/json application/json:"
+        },
+        {
+          "kind": "property",
+          "name": "/users/{id}",
+          "line": 11,
+          "col": 2,
+          "signature": "/users/{id}: ",
+          "docComment": "",
+          "scope": "",
+          "text": "/users/{id} /users/{id}:"
+        },
+        {
+          "kind": "property",
+          "name": "get",
+          "line": 12,
+          "col": 4,
+          "signature": "get: {}",
+          "docComment": "",
+          "scope": "",
+          "text": "get get: {}"
+        },
+        {
+          "kind": "property",
+          "name": "components",
+          "line": 13,
+          "col": 0,
+          "signature": "components: ",
+          "docComment": "",
+          "scope": "",
+          "text": "components components:"
+        },
+        {
+          "kind": "property",
+          "name": "schemas",
+          "line": 14,
+          "col": 2,
+          "signature": "schemas: ",
+          "docComment": "",
+          "scope": "",
+          "text": "schemas schemas:"
+        },
+        {
+          "kind": "property",
+          "name": "User",
+          "line": 15,
+          "col": 4,
+          "signature": "User: ",
+          "docComment": "",
+          "scope": "",
+          "text": "User User:"
+        },
+        {
+          "kind": "property",
+          "name": "type",
+          "line": 16,
+          "col": 6,
+          "signature": "type: object",
+          "docComment": "",
+          "scope": "",
+          "text": "type type: object"
+        },
+        {
+          "kind": "property",
+          "name": "properties",
+          "line": 17,
+          "col": 6,
+          "signature": "properties: ",
+          "docComment": "",
+          "scope": "",
+          "text": "properties properties:"
+        },
+        {
+          "kind": "property",
+          "name": "pet",
+          "line": 18,
+          "col": 8,
+          "signature": "pet: ",
+          "docComment": "",
+          "scope": "",
+          "text": "pet pet:"
+        },
+        {
+          "kind": "literal",
+          "name": "$ref",
+          "line": 19,
+          "col": 10,
+          "signature": "$ref: '#/components/schemas/Pet'",
+          "docComment": "",
+          "scope": "",
+          "text": "$ref $ref: '#/components/schemas/Pet'"
+        },
+        {
+          "kind": "property",
+          "name": "Pet",
+          "line": 20,
+          "col": 4,
+          "signature": "Pet: ",
+          "docComment": "",
+          "scope": "",
+          "text": "Pet Pet:"
+        },
+        {
+          "kind": "property",
+          "name": "type",
+          "line": 21,
+          "col": 6,
+          "signature": "type: object",
+          "docComment": "",
+          "scope": "",
+          "text": "type type: object"
+        },
+        {
+          "kind": "property",
+          "name": "_Private.v2",
+          "line": 22,
+          "col": 4,
+          "signature": "_Private.v2: ",
+          "docComment": "",
+          "scope": "",
+          "text": "_Private.v2 _Private.v2:"
+        },
+        {
+          "kind": "property",
+          "name": "type",
+          "line": 23,
+          "col": 6,
+          "signature": "type: string",
+          "docComment": "",
+          "scope": "",
+          "text": "type type: string"
+        },
+        {
+          "kind": "property",
+          "name": "responses",
+          "line": 24,
+          "col": 2,
+          "signature": "responses: ",
+          "docComment": "",
+          "scope": "",
+          "text": "responses responses:"
+        },
+        {
+          "kind": "property",
+          "name": "NotFound",
+          "line": 25,
+          "col": 4,
+          "signature": "NotFound: {}",
+          "docComment": "",
+          "scope": "",
+          "text": "NotFound NotFound: {}"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "User",
+          "callType": "type_ref",
+          "line": 10,
+          "lang": "yaml"
+        },
+        {
+          "toName": "Pet",
+          "callType": "type_ref",
+          "line": 19,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-openapi-swagger-indent",
+      "lang": "yaml",
+      "file": "C:\\kat\\swagger.yml",
+      "content": "swagger: \"2.0\"\npaths:\n    /a/b-c:\n        post:\n            parameters:\n                - $ref: \"#/components/schemas/Body\"\ncomponents:\n    schemas:\n        Body:\n            type: object\n          Odd:\n            x: 1\nschemas:\n  Top:\n    a: 1\n  /not-a-path-in-schemas: 1\n",
+      "symbols": [
+        {
+          "kind": "literal",
+          "name": "swagger",
+          "line": 1,
+          "col": 0,
+          "signature": "swagger: \"2.0\"",
+          "docComment": "",
+          "scope": "",
+          "text": "swagger swagger: \"2.0\""
+        },
+        {
+          "kind": "property",
+          "name": "paths",
+          "line": 2,
+          "col": 0,
+          "signature": "paths: ",
+          "docComment": "",
+          "scope": "",
+          "text": "paths paths:"
+        },
+        {
+          "kind": "property",
+          "name": "/a/b-c",
+          "line": 3,
+          "col": 4,
+          "signature": "/a/b-c: ",
+          "docComment": "",
+          "scope": "",
+          "text": "/a/b-c /a/b-c:"
+        },
+        {
+          "kind": "property",
+          "name": "post",
+          "line": 4,
+          "col": 8,
+          "signature": "post: ",
+          "docComment": "",
+          "scope": "",
+          "text": "post post:"
+        },
+        {
+          "kind": "property",
+          "name": "parameters",
+          "line": 5,
+          "col": 12,
+          "signature": "parameters: ",
+          "docComment": "",
+          "scope": "",
+          "text": "parameters parameters:"
+        },
+        {
+          "kind": "property",
+          "name": "components",
+          "line": 7,
+          "col": 0,
+          "signature": "components: ",
+          "docComment": "",
+          "scope": "",
+          "text": "components components:"
+        },
+        {
+          "kind": "property",
+          "name": "schemas",
+          "line": 8,
+          "col": 4,
+          "signature": "schemas: ",
+          "docComment": "",
+          "scope": "",
+          "text": "schemas schemas:"
+        },
+        {
+          "kind": "property",
+          "name": "Body",
+          "line": 9,
+          "col": 8,
+          "signature": "Body: ",
+          "docComment": "",
+          "scope": "",
+          "text": "Body Body:"
+        },
+        {
+          "kind": "property",
+          "name": "type",
+          "line": 10,
+          "col": 12,
+          "signature": "type: object",
+          "docComment": "",
+          "scope": "",
+          "text": "type type: object"
+        },
+        {
+          "kind": "property",
+          "name": "Odd",
+          "line": 11,
+          "col": 10,
+          "signature": "Odd: ",
+          "docComment": "",
+          "scope": "",
+          "text": "Odd Odd:"
+        },
+        {
+          "kind": "literal",
+          "name": "x",
+          "line": 12,
+          "col": 12,
+          "signature": "x: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "x x: 1"
+        },
+        {
+          "kind": "property",
+          "name": "schemas",
+          "line": 13,
+          "col": 0,
+          "signature": "schemas: ",
+          "docComment": "",
+          "scope": "",
+          "text": "schemas schemas:"
+        },
+        {
+          "kind": "property",
+          "name": "Top",
+          "line": 14,
+          "col": 2,
+          "signature": "Top: ",
+          "docComment": "",
+          "scope": "",
+          "text": "Top Top:"
+        },
+        {
+          "kind": "literal",
+          "name": "a",
+          "line": 15,
+          "col": 4,
+          "signature": "a: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "a a: 1"
+        },
+        {
+          "kind": "literal",
+          "name": "/not-a-path-in-schemas",
+          "line": 16,
+          "col": 2,
+          "signature": "/not-a-path-in-schemas: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "/not-a-path-in-schemas /not-a-path-in-schemas: 1"
+        },
+        {
+          "kind": "literal",
+          "name": "$ref",
+          "line": 6,
+          "col": 18,
+          "signature": "- $ref: \"#/components/schemas/Body\"",
+          "docComment": "",
+          "scope": "",
+          "text": "$ref - $ref: \"#/components/schemas/Body\""
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Body",
+          "callType": "type_ref",
+          "line": 6,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-openapi-refs-inline",
+      "lang": "yaml",
+      "file": "C:\\kat\\openapi.yml",
+      "content": "x: { $ref: \"#/components/schemas/Inline\" }\nitems: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]\n/path: 1\n'/quoted': 2\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "x",
+          "line": 1,
+          "col": 0,
+          "signature": "x: { $ref: \"#/components/schemas/Inline\" }",
+          "docComment": "",
+          "scope": "",
+          "text": "x x: { $ref: \"#/components/schemas/Inline\" }"
+        },
+        {
+          "kind": "property",
+          "name": "items",
+          "line": 2,
+          "col": 0,
+          "signature": "items: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/sch…",
+          "docComment": "",
+          "scope": "",
+          "text": "items items: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/sch…"
+        },
+        {
+          "kind": "literal",
+          "name": "/path",
+          "line": 3,
+          "col": 0,
+          "signature": "/path: 1",
+          "docComment": "",
+          "scope": "",
+          "text": "/path /path: 1"
+        },
+        {
+          "kind": "literal",
+          "name": "/quoted",
+          "line": 4,
+          "col": 0,
+          "signature": "/quoted: 2",
+          "docComment": "",
+          "scope": "",
+          "text": "/quoted /quoted: 2"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "Inline",
+          "callType": "type_ref",
+          "line": 1,
+          "lang": "yaml"
+        },
+        {
+          "toName": "A",
+          "callType": "type_ref",
+          "line": 2,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-multi-doc",
+      "lang": "yaml",
+      "file": "C:\\kat\\deploy\\k8s\\app.yaml",
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  labels:\n    app: web\n  name: web\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          image: \"ghcr.io/x/web:1.2\"\n        - image: busybox\n      volumes:\n        - persistentVolumeClaim:\n            claimName: data\n        - configMap:\n            configMapName: cfg\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: 'web-svc'\nspec:\n  backend:\n    serviceName: web\n    secretName: tls\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "apiVersion",
+          "line": 1,
+          "col": 0,
+          "signature": "apiVersion: apps/v1",
+          "docComment": "",
+          "scope": "",
+          "text": "apiVersion apiVersion: apps/v1"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 2,
+          "col": 0,
+          "signature": "kind: Deployment",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Deployment"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 3,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "labels",
+          "line": 4,
+          "col": 2,
+          "signature": "labels: ",
+          "docComment": "",
+          "scope": "",
+          "text": "labels labels:"
+        },
+        {
+          "kind": "property",
+          "name": "app",
+          "line": 5,
+          "col": 4,
+          "signature": "app: web",
+          "docComment": "",
+          "scope": "",
+          "text": "app app: web"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 6,
+          "col": 2,
+          "signature": "name: web",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: web"
+        },
+        {
+          "kind": "property",
+          "name": "spec",
+          "line": 7,
+          "col": 0,
+          "signature": "spec: ",
+          "docComment": "",
+          "scope": "",
+          "text": "spec spec:"
+        },
+        {
+          "kind": "property",
+          "name": "template",
+          "line": 8,
+          "col": 2,
+          "signature": "template: ",
+          "docComment": "",
+          "scope": "",
+          "text": "template template:"
+        },
+        {
+          "kind": "property",
+          "name": "spec",
+          "line": 9,
+          "col": 4,
+          "signature": "spec: ",
+          "docComment": "",
+          "scope": "",
+          "text": "spec spec:"
+        },
+        {
+          "kind": "property",
+          "name": "containers",
+          "line": 10,
+          "col": 6,
+          "signature": "containers: ",
+          "docComment": "",
+          "scope": "",
+          "text": "containers containers:"
+        },
+        {
+          "kind": "literal",
+          "name": "image",
+          "line": 12,
+          "col": 10,
+          "signature": "image: \"ghcr.io/x/web:1.2\"",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: \"ghcr.io/x/web:1.2\""
+        },
+        {
+          "kind": "property",
+          "name": "volumes",
+          "line": 14,
+          "col": 6,
+          "signature": "volumes: ",
+          "docComment": "",
+          "scope": "",
+          "text": "volumes volumes:"
+        },
+        {
+          "kind": "property",
+          "name": "claimName",
+          "line": 16,
+          "col": 12,
+          "signature": "claimName: data",
+          "docComment": "",
+          "scope": "",
+          "text": "claimName claimName: data"
+        },
+        {
+          "kind": "property",
+          "name": "configMapName",
+          "line": 18,
+          "col": 12,
+          "signature": "configMapName: cfg",
+          "docComment": "",
+          "scope": "",
+          "text": "configMapName configMapName: cfg"
+        },
+        {
+          "kind": "property",
+          "name": "apiVersion",
+          "line": 20,
+          "col": 0,
+          "signature": "apiVersion: v1",
+          "docComment": "",
+          "scope": "",
+          "text": "apiVersion apiVersion: v1"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 21,
+          "col": 0,
+          "signature": "kind: Service",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Service"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 22,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "literal",
+          "name": "name",
+          "line": 23,
+          "col": 2,
+          "signature": "name: 'web-svc'",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: 'web-svc'"
+        },
+        {
+          "kind": "property",
+          "name": "spec",
+          "line": 24,
+          "col": 0,
+          "signature": "spec: ",
+          "docComment": "",
+          "scope": "",
+          "text": "spec spec:"
+        },
+        {
+          "kind": "property",
+          "name": "backend",
+          "line": 25,
+          "col": 2,
+          "signature": "backend: ",
+          "docComment": "",
+          "scope": "",
+          "text": "backend backend:"
+        },
+        {
+          "kind": "property",
+          "name": "serviceName",
+          "line": 26,
+          "col": 4,
+          "signature": "serviceName: web",
+          "docComment": "",
+          "scope": "",
+          "text": "serviceName serviceName: web"
+        },
+        {
+          "kind": "property",
+          "name": "secretName",
+          "line": 27,
+          "col": 4,
+          "signature": "secretName: tls",
+          "docComment": "",
+          "scope": "",
+          "text": "secretName secretName: tls"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 11,
+          "col": 10,
+          "signature": "- name: web",
+          "docComment": "",
+          "scope": "",
+          "text": "name - name: web"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 13,
+          "col": 10,
+          "signature": "- image: busybox",
+          "docComment": "",
+          "scope": "",
+          "text": "image - image: busybox"
+        },
+        {
+          "kind": "property",
+          "name": "persistentVolumeClaim",
+          "line": 15,
+          "col": 10,
+          "signature": "- persistentVolumeClaim: ",
+          "docComment": "",
+          "scope": "",
+          "text": "persistentVolumeClaim - persistentVolumeClaim:"
+        },
+        {
+          "kind": "property",
+          "name": "configMap",
+          "line": 17,
+          "col": 10,
+          "signature": "- configMap: ",
+          "docComment": "",
+          "scope": "",
+          "text": "configMap - configMap:"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "ghcr.io/x/web:1.2",
+          "callType": "import",
+          "line": 12,
+          "lang": "yaml",
+          "module": "ghcr.io/x/web:1.2"
+        },
+        {
+          "toName": "busybox",
+          "callType": "import",
+          "line": 13,
+          "lang": "yaml",
+          "module": "busybox"
+        },
+        {
+          "toName": "data",
+          "callType": "call",
+          "line": 16,
+          "lang": "yaml"
+        },
+        {
+          "toName": "cfg",
+          "callType": "call",
+          "line": 18,
+          "lang": "yaml"
+        },
+        {
+          "toName": "web",
+          "callType": "call",
+          "line": 26,
+          "lang": "yaml"
+        },
+        {
+          "toName": "tls",
+          "callType": "call",
+          "line": 27,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-by-content",
+      "lang": "yaml",
+      "file": "C:\\kat\\any\\thing.yml",
+      "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n    namespace: x\n    name: cfg\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "apiVersion",
+          "line": 1,
+          "col": 0,
+          "signature": "apiVersion: v1",
+          "docComment": "",
+          "scope": "",
+          "text": "apiVersion apiVersion: v1"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 2,
+          "col": 0,
+          "signature": "kind: ConfigMap",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: ConfigMap"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 3,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "namespace",
+          "line": 4,
+          "col": 4,
+          "signature": "namespace: x",
+          "docComment": "",
+          "scope": "",
+          "text": "namespace namespace: x"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 5,
+          "col": 4,
+          "signature": "name: cfg",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: cfg"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-metadata-first",
+      "lang": "yaml",
+      "file": "C:\\kat\\manifests\\m.yaml",
+      "content": "metadata:\n  name: before-kind\nkind: Pod\nmetadata:\n  name: after\n  extra:\n    name: nested\n  ---\nkind: Job\nmetadata:\n    image: odd\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 1,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 2,
+          "col": 2,
+          "signature": "name: before-kind",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: before-kind"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 3,
+          "col": 0,
+          "signature": "kind: Pod",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Pod"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 4,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 5,
+          "col": 2,
+          "signature": "name: after",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: after"
+        },
+        {
+          "kind": "property",
+          "name": "extra",
+          "line": 6,
+          "col": 2,
+          "signature": "extra: ",
+          "docComment": "",
+          "scope": "",
+          "text": "extra extra:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 7,
+          "col": 4,
+          "signature": "name: nested",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: nested"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 9,
+          "col": 0,
+          "signature": "kind: Job",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Job"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 10,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 11,
+          "col": 4,
+          "signature": "image: odd",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: odd"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "odd",
+          "callType": "import",
+          "line": 11,
+          "lang": "yaml",
+          "module": "odd"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-suffix",
+      "lang": "yaml",
+      "file": "C:\\kat\\a.k8s.YAML",
+      "content": "kind: Secret\nmetadata:\n  name: s\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 1,
+          "col": 0,
+          "signature": "kind: Secret",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Secret"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 2,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 3,
+          "col": 2,
+          "signature": "name: s",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: s"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-kubernetes-dir",
+      "lang": "yaml",
+      "file": "C:\\kat\\kubernetes\\x.yml",
+      "content": "---\nkind: \"Namespace\"\nmetadata:\n  name: ns\n",
+      "symbols": [
+        {
+          "kind": "literal",
+          "name": "kind",
+          "line": 2,
+          "col": 0,
+          "signature": "kind: \"Namespace\"",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: \"Namespace\""
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 3,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 4,
+          "col": 2,
+          "signature": "name: ns",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: ns"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-k8s-api-not-at-col0",
+      "lang": "yaml",
+      "file": "C:\\kat\\plain.yaml",
+      "content": " apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "apiVersion",
+          "line": 1,
+          "col": 1,
+          "signature": "apiVersion: v1",
+          "docComment": "",
+          "scope": "",
+          "text": "apiVersion apiVersion: v1"
+        },
+        {
+          "kind": "property",
+          "name": "kind",
+          "line": 2,
+          "col": 0,
+          "signature": "kind: Pod",
+          "docComment": "",
+          "scope": "",
+          "text": "kind kind: Pod"
+        },
+        {
+          "kind": "property",
+          "name": "metadata",
+          "line": 3,
+          "col": 0,
+          "signature": "metadata: ",
+          "docComment": "",
+          "scope": "",
+          "text": "metadata metadata:"
+        },
+        {
+          "kind": "property",
+          "name": "name",
+          "line": 4,
+          "col": 2,
+          "signature": "name: p",
+          "docComment": "",
+          "scope": "",
+          "text": "name name: p"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-dockerfile-yaml",
+      "lang": "yaml",
+      "file": "C:\\kat\\Dockerfile.yaml",
+      "content": "FROM rust:1 AS build\nCOPY --from=build /a /b\n",
+      "symbols": [],
+      "refs": [
+        {
+          "toName": "rust:1",
+          "callType": "import",
+          "line": 1,
+          "lang": "yaml",
+          "module": "rust:1"
+        },
+        {
+          "toName": "build",
+          "callType": "call",
+          "line": 2,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-dotenv-yaml",
+      "lang": "yaml",
+      "file": "C:\\kat\\.env.yaml",
+      "content": "A=1\nB=${A}\n",
+      "symbols": [],
+      "refs": [
+        {
+          "toName": "A",
+          "callType": "call",
+          "line": 2,
+          "lang": "yaml"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-bom",
+      "lang": "yaml",
+      "file": "C:\\kat\\bom\\compose.yml",
+      "content": "﻿services:\n  a:\n    image: x\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 2,
+          "col": 2,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 3,
+          "col": 4,
+          "signature": "image: x",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: x"
+        }
+      ],
+      "refs": 0
+    },
+    {
+      "source": "synthetic:yaml-infra-compose-tabs-nbsp",
+      "lang": "yaml",
+      "file": "C:\\kat\\tabs\\compose.yml",
+      "content": "services:\n\ta:\n\t\timage: t\n b:\n  image: n\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "services",
+          "line": 1,
+          "col": 0,
+          "signature": "services: ",
+          "docComment": "",
+          "scope": "",
+          "text": "services services:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 2,
+          "col": 1,
+          "signature": "a: ",
+          "docComment": "",
+          "scope": "",
+          "text": "a a:"
+        },
+        {
+          "kind": "property",
+          "name": "image",
+          "line": 3,
+          "col": 2,
+          "signature": "image: t",
+          "docComment": "",
+          "scope": "",
+          "text": "image image: t"
+        }
+      ],
+      "refs": [
+        {
+          "toName": "t",
+          "callType": "import",
+          "line": 3,
+          "lang": "yaml",
+          "module": "t"
+        },
+        {
+          "toName": "n",
+          "callType": "import",
+          "line": 5,
+          "lang": "yaml",
+          "module": "n"
+        }
+      ]
+    },
+    {
+      "source": "synthetic:yaml-infra-gha-line-seps",
+      "lang": "yaml",
+      "file": "C:\\kat\\.github\\workflows\\ls.yml",
+      "content": "jobs:\n  a:     uses: x/y@1\n  b:\r    needs: a\n",
+      "symbols": [
+        {
+          "kind": "property",
+          "name": "jobs",
+          "line": 1,
+          "col": 0,
+          "signature": "jobs: ",
+          "docComment": "",
+          "scope": "",
+          "text": "jobs jobs:"
+        },
+        {
+          "kind": "property",
+          "name": "a",
+          "line": 2,
+          "col": 2,
+          "signature": "a: uses: x/y@1",
+          "docComment": "",
+          "scope": "",
+          "text": "a a: uses: x/y@1"
+        },
+        {
+          "kind": "property",
+          "name": "uses",
+          "line": 2,
+          "col": 9,
+          "signature": "uses: x/y@1",
+          "docComment": "",
+          "scope": "",
+          "text": "uses uses: x/y@1"
+        },
+        {
+          "kind": "property",
+          "name": "b",
+          "line": 3,
+          "col": 2,
+          "signature": "b: needs: a",
+          "docComment": "",
+          "scope": "",
+          "text": "b b: needs: a"
+        },
+        {
+          "kind": "property",
+          "name": "needs",
+          "line": 3,
+          "col": 9,
+          "signature": "needs: a",
+          "docComment": "",
+          "scope": "",
+          "text": "needs needs: a"
+        }
+      ],
+      "refs": 0
     }
   ]
 }

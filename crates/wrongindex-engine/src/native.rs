@@ -13,9 +13,7 @@
 //! ([`crate::rank`]) and `PRAGMA optimize`. Every situation not ported is
 //! refused with [`NativeError::Unsupported`] before anything is written:
 //!
-//! - any other language (Go, Python and the tree-sitter languages),
-//!   a YAML file that could carry infra references (`infra-parser.ts`:
-//!   compose, GitHub workflows, OpenAPI, Kubernetes - not ported), or a
+//! - any other language (Go, Python and the tree-sitter languages), or a
 //!   parser result flagged as not ported (TS/JS files with syntax errors
 //!   TypeScript recovers from, or script-level `await` it parses
 //!   differently - see [`crate::parse::ts`]);
@@ -166,23 +164,6 @@ struct FileRow {
     refs: Vec<ParsedRef>,
 }
 
-/// Conservative superset of `detectInfraArtifactKind` for YAML: anything
-/// that might produce infra refs is refused.
-fn may_have_infra_refs(file: &str, content: &str) -> bool {
-    let p = file.replace('\\', "/").to_lowercase();
-    let base = p.rsplit('/').next().unwrap_or("");
-    base.starts_with("docker-compose.")
-        || base.starts_with("compose.")
-        || base.starts_with("openapi.")
-        || base.starts_with("swagger.")
-        || base.contains(".k8s.")
-        || p.contains(".github/workflows/")
-        || p.contains("k8s/")
-        || p.contains("kubernetes/")
-        || p.contains("manifests/")
-        || (content.contains("apiVersion") && content.contains("kind"))
-}
-
 pub(crate) fn ladder(mut remaining: usize, max: usize) -> Vec<usize> {
     let mut out = Vec::new();
     while remaining > 0 {
@@ -280,11 +261,6 @@ fn collect_on_this_thread(
         let bytes = std::fs::read(&path)?;
         let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
         let text = String::from_utf8_lossy(&bytes);
-        if lang == "yaml" && may_have_infra_refs(&path, &text) {
-            return Err(NativeError::Unsupported(format!(
-                "YAML infra artifact references ({path})"
-            )));
-        }
         let content = utf16(&text);
         // A parser panic (e.g. a regex construct the JS-regex engine refuses
         // to approximate) must never take the service down: the project is

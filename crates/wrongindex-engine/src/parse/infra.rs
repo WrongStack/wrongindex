@@ -2,10 +2,10 @@
 //! `parseInfraArtifact`) for the artifact kinds a file routed to the regex
 //! extractor (`generic-parser.ts`) can have: Dockerfile, Makefile/justfile,
 //! CMakeLists.txt, dotenv, Terraform, SQL, GraphQL, Protobuf and Markdown
-//! links. The YAML-only kinds (compose, GitHub workflows, OpenAPI,
-//! Kubernetes) and `shell` can never be reached through a generic language
-//! (their names map to `yaml`/`json`/`shell`); they are reported as not
-//! ported instead of being parsed.
+//! links, plus the YAML kinds `yaml-parser.ts` adds refs from (Docker
+//! Compose, GitHub workflows, OpenAPI, Kubernetes). `shell` is reachable from
+//! neither route (its files are `shell`, not ported) and is reported as not
+//! ported.
 //!
 //! Every regex is the TypeScript source text run by [`crate::jsre`].
 
@@ -189,6 +189,24 @@ fn starts_with(s: &U16, lit: &str) -> bool {
 
 fn concat(parts: &[&U16]) -> Vec<u16> {
     parts.iter().flat_map(|p| p.iter().copied()).collect()
+}
+
+/// `line.length - line.trimStart().length`.
+fn indent_of(line: &U16) -> isize {
+    (line.len() - js::trim_start(line).len()) as isize
+}
+
+/// `s.replace(/^['"]|['"]$/g, '')`: at most one quote off each end.
+fn strip_one_quote_each_end(s: &U16) -> &U16 {
+    let q = |c: u16| c == b'"' as u16 || c == b'\'' as u16;
+    let s = match s.first() {
+        Some(&c) if q(c) => &s[1..],
+        _ => s,
+    };
+    match s.last() {
+        Some(&c) if q(c) => &s[..s.len() - 1],
+        _ => s,
+    }
 }
 
 fn remove_quotes(s: &U16) -> Vec<u16> {
@@ -538,11 +556,258 @@ pub fn parse(file: &str, content: &U16, lang: &'static str) -> Infra {
                 }
             }
         }
-        Kind::DockerCompose
-        | Kind::GithubWorkflow
-        | Kind::Openapi
-        | Kind::Kubernetes
-        | Kind::Shell => {
+        Kind::DockerCompose => {
+            let mut in_services = false;
+            let mut current: Vec<u16> = Vec::new();
+            let mut in_depends_on = false;
+            let mut service_indent: isize = -1;
+            let mut prop_indent: isize = -1;
+            for (i, line) in lines.iter().enumerate() {
+                let trimmed = js::trim(line);
+                if trimmed.is_empty() || starts_with(trimmed, "#") {
+                    continue;
+                }
+                let indent = indent_of(line);
+                let n = i + 1;
+                if indent == 0 {
+                    in_services = regex!(r"^services\s*:", "").test(trimmed);
+                    current.clear();
+                    in_depends_on = false;
+                    service_indent = -1;
+                    prop_indent = -1;
+                    continue;
+                }
+                if !in_services {
+                    continue;
+                }
+                if service_indent < 0 {
+                    service_indent = indent;
+                }
+                if !current.is_empty() && indent > service_indent && prop_indent < 0 {
+                    prop_indent = indent;
+                }
+                if indent == service_indent {
+                    let svc = regex!(r"^([A-Za-z0-9_.-]+)\s*:", "");
+                    if let Some(name) = svc.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !name.is_empty()
+                    {
+                        current = name.to_vec();
+                        in_depends_on = false;
+                        prop_indent = -1;
+                        let sig = concat(&[&utf16("service "), name]);
+                        syms.push(make_sym("namespace", name, n, &sig, &utf16("services")));
+                    }
+                    continue;
+                }
+                if !current.is_empty() && indent == prop_indent {
+                    in_depends_on = regex!(r"^depends_on\s*:", "").test(trimmed);
+                    let image = regex!(r#"^image\s*:\s*['"]?([^\s'"]+)"#, "");
+                    if let Some(t) = image.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !t.is_empty()
+                    {
+                        refs.push(mk_ref(lang, t, n, "import", true));
+                    }
+                    continue;
+                }
+                if !current.is_empty() && in_depends_on && indent >= prop_indent {
+                    let list = regex!(r"^-\s*([A-Za-z0-9_.-]+)", "");
+                    let map = regex!(r"^([A-Za-z0-9_.-]+)\s*:", "");
+                    let target = list
+                        .exec(trimmed)
+                        .and_then(|m| m.text(trimmed, 1))
+                        .or_else(|| map.exec(trimmed).and_then(|m| m.text(trimmed, 1)));
+                    if let Some(t) = target
+                        && !t.is_empty()
+                        && t != utf16("condition").as_slice()
+                    {
+                        refs.push(mk_ref(lang, t, n, "call", false));
+                    }
+                }
+            }
+        }
+        Kind::GithubWorkflow => {
+            let mut in_jobs = false;
+            let mut current: Vec<u16> = Vec::new();
+            let mut job_indent: isize = -1;
+            for (i, line) in lines.iter().enumerate() {
+                let trimmed = js::trim(line);
+                if trimmed.is_empty() || starts_with(trimmed, "#") {
+                    continue;
+                }
+                let indent = indent_of(line);
+                let n = i + 1;
+                if indent == 0 {
+                    in_jobs = regex!(r"^jobs\s*:", "").test(trimmed);
+                    current.clear();
+                    job_indent = -1;
+                    continue;
+                }
+                if !in_jobs {
+                    continue;
+                }
+                if job_indent < 0 {
+                    job_indent = indent;
+                }
+                if indent == job_indent {
+                    let job = regex!(r"^([A-Za-z0-9_.-]+)\s*:", "");
+                    if let Some(name) = job.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !name.is_empty()
+                    {
+                        current = name.to_vec();
+                        let sig = concat(&[&utf16("job "), name]);
+                        syms.push(make_sym("function", name, n, &sig, &utf16("jobs")));
+                    }
+                    continue;
+                }
+                if current.is_empty() || indent <= job_indent {
+                    continue;
+                }
+                let inline = regex!(r"^needs\s*:\s*\[([^\]]+)\]", "");
+                if let Some(list) = inline
+                    .exec(trimmed)
+                    .and_then(|m| m.text(trimmed, 1))
+                    .filter(|t| !t.is_empty())
+                {
+                    for raw in list.split(|&c| c == b',' as u16) {
+                        let need = strip_one_quote_each_end(js::trim(raw));
+                        if !need.is_empty() {
+                            refs.push(mk_ref(lang, need, n, "call", false));
+                        }
+                    }
+                } else {
+                    let single = regex!(r"^needs\s*:\s*([A-Za-z0-9_.-]+)\s*$", "");
+                    if let Some(t) = single.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !t.is_empty()
+                    {
+                        refs.push(mk_ref(lang, t, n, "call", false));
+                    }
+                }
+                let uses = regex!(r#"^(?:-\s*)?uses\s*:\s*['"]?([^\s'"]+)"#, "");
+                if let Some(t) = uses.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                    && !t.is_empty()
+                {
+                    refs.push(mk_ref(lang, t, n, "import", true));
+                }
+            }
+        }
+        Kind::Openapi => {
+            let mut in_schemas = false;
+            let mut schemas_indent: isize = 0;
+            for (i, line) in lines.iter().enumerate() {
+                let trimmed = js::trim(line);
+                if trimmed.is_empty() || starts_with(trimmed, "#") {
+                    continue;
+                }
+                let n = i + 1;
+                let indent = indent_of(line);
+                if regex!(r"^schemas\s*:", "").test(trimmed) {
+                    in_schemas = true;
+                    schemas_indent = indent;
+                    continue;
+                }
+                if in_schemas && indent <= schemas_indent {
+                    in_schemas = false;
+                }
+                if in_schemas && indent == schemas_indent + 2 {
+                    let schema = regex!(r"^([A-Za-z_][A-Za-z0-9_.-]*)\s*:", "");
+                    if let Some(name) = schema.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !name.is_empty()
+                    {
+                        let sig = concat(&[&utf16("schema "), name]);
+                        syms.push(make_sym(
+                            "type",
+                            name,
+                            n,
+                            &sig,
+                            &utf16("components.schemas"),
+                        ));
+                        continue;
+                    }
+                }
+                let path = regex!(r#"^['"]?(\/[A-Za-z0-9_/{}-]+)['"]?\s*:"#, "");
+                if let Some(name) = path.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                    && !name.is_empty()
+                {
+                    let sig = concat(&[&utf16("endpoint "), name]);
+                    syms.push(make_sym("function", name, n, &sig, &utf16("paths")));
+                    continue;
+                }
+                let r = regex!(
+                    r#"\$ref\s*:\s*['"]?#\/components\/schemas\/([A-Za-z0-9_.-]+)['"]?"#,
+                    ""
+                );
+                if let Some(t) = r.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                    && !t.is_empty()
+                {
+                    refs.push(mk_ref(lang, t, n, "type_ref", false));
+                }
+            }
+        }
+        Kind::Kubernetes => {
+            let mut current_kind: Vec<u16> = Vec::new();
+            let mut in_metadata = false;
+            let mut metadata_line = 1usize;
+            let mut metadata_indent: isize = -1;
+            for (i, line) in lines.iter().enumerate() {
+                let trimmed = js::trim(line);
+                if trimmed.is_empty() || starts_with(trimmed, "#") {
+                    continue;
+                }
+                let n = i + 1;
+                let indent = indent_of(line);
+                if trimmed == utf16("---").as_slice() {
+                    current_kind.clear();
+                    in_metadata = false;
+                    continue;
+                }
+                if indent == 0 {
+                    let k = regex!(r#"^kind\s*:\s*['"]?([A-Za-z0-9_.-]+)['"]?"#, "");
+                    if let Some(t) = k.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !t.is_empty()
+                    {
+                        current_kind = t.to_vec();
+                        continue;
+                    }
+                    in_metadata = regex!(r"^metadata\s*:", "").test(trimmed);
+                    if in_metadata {
+                        metadata_line = n;
+                    }
+                    metadata_indent = -1;
+                    continue;
+                }
+                if in_metadata && metadata_indent < 0 {
+                    metadata_indent = indent;
+                }
+                if in_metadata && indent == metadata_indent && !current_kind.is_empty() {
+                    let name = regex!(r#"^name\s*:\s*['"]?([A-Za-z0-9_.-]+)['"]?"#, "");
+                    if let Some(t) = name.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                        && !t.is_empty()
+                    {
+                        let full = concat(&[&current_kind, &utf16(":"), t]);
+                        let sig = concat(&[&utf16("k8s "), &current_kind, &utf16(" "), t]);
+                        syms.push(make_sym("class", &full, metadata_line, &sig, &current_kind));
+                        in_metadata = false;
+                        continue;
+                    }
+                }
+                let image = regex!(r#"^(?:-\s*)?image\s*:\s*['"]?([^\s'"]+)"#, "");
+                if let Some(t) = image.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                    && !t.is_empty()
+                {
+                    refs.push(mk_ref(lang, t, n, "import", true));
+                }
+                let svc = regex!(
+                    r#"^(?:serviceName|claimName|configMapName|secretName)\s*:\s*['"]?([A-Za-z0-9_.-]+)['"]?"#,
+                    ""
+                );
+                if let Some(t) = svc.exec(trimmed).and_then(|m| m.text(trimmed, 1))
+                    && !t.is_empty()
+                {
+                    refs.push(mk_ref(lang, t, n, "call", false));
+                }
+            }
+        }
+        Kind::Shell => {
             out.unsupported = Some(format!("infra artifact {kind:?} not ported"));
         }
     }

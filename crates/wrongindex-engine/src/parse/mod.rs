@@ -101,12 +101,23 @@ pub fn is_native_lang(lang: &str) -> bool {
 
 /// `parseFileContent(file, content, lang)` (`parser-dispatch.ts`): the
 /// language's parser, then `withRelations` - the regex import fallback when
-/// the parser produced no refs, and `lang` stamped on every ref. YAML infra
-/// references are not ported; callers refuse those files before parsing.
+/// the parser produced no refs, and `lang` stamped on every ref. YAML files
+/// carry the refs of `parseInfraArtifact` (compose, workflows, OpenAPI,
+/// Kubernetes, and any other kind their name selects); its symbols are
+/// dropped, as `yaml-parser.ts` does.
 pub fn parse_file(file: &str, lang: &'static str, content: &U16) -> Parsed {
     let parsed = match lang {
         "json" => json::parse(file, content, None),
-        "yaml" => yaml::parse(content),
+        "yaml" => {
+            let mut parsed = yaml::parse(content);
+            let infra = infra::parse(file, content, "yaml");
+            if let Some(why) = infra.unsupported {
+                parsed.unsupported = Some(why);
+            } else if !infra.refs.is_empty() {
+                parsed.refs = infra.refs;
+            }
+            parsed
+        }
         // `rs::parse` already applies `withRelations`.
         "rs" => return rs::parse(content),
         // `ts-parser.ts` refs are stamped with `lang`; TS/JS have no regex
