@@ -43,6 +43,13 @@ type ImportPattern = (&'static str, &'static str, bool);
 
 const GENERIC_IMPORTS: &[(&str, &[ImportPattern])] = &[
     (
+        "go",
+        &[
+            (r#"^[ \t]*import\s+(?:[\w.]+\s+)?"([^"]+)""#, "gm", false),
+            (r#"^[ \t]*(?:[A-Za-z_.]\w*\s+)?"([^"]+)"\s*$"#, "gm", false),
+        ],
+    ),
+    (
         "py",
         &[
             (r"^[ \t]*import\s+([\w.]+)", "gm", false),

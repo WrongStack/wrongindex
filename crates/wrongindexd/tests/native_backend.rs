@@ -216,10 +216,10 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    // 5. Unsupported project (Go is not native yet): refused with the
-    // reason, nothing written.
-    let go = base.join("go");
-    copy_dir(&repo().join("tests/fixtures/projects/go-basic"), &go);
+    // 5. Unsupported project (tree-sitter languages are not native yet):
+    // refused with the reason, nothing written.
+    let go = base.join("ts-mix");
+    copy_dir(&repo().join("tests/fixtures/projects/treesitter-mix"), &go);
     let go_index = base.join("go-index");
     let go_pid = register(&mut c, &go, &go_index).await;
     let job = run_job(&mut c, &go_pid, json!({"kind": "full"})).await;
@@ -229,7 +229,7 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
         job["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("language go"),
+            .contains("language "),
         "{job}"
     );
     assert!(!go_index.join("index.db").exists());

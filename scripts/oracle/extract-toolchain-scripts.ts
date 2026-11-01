@@ -4,8 +4,8 @@
  *
  *   bun scripts/oracle/extract-toolchain-scripts.ts --wrongstack <clean oracle>
  *
- * Writes `crates/wrongindex-engine/src/parse/toolchain/py_batch.py` and
- * `provenance.json` (oracle commit, archive hash, source hash, script hash).
+ * Writes `crates/wrongindex-engine/src/parse/toolchain/py_batch.py`,
+ * `go_batch.go` and `provenance.json` (oracle commit, archive hash, source hash, script hash).
  * Do not edit the outputs by hand.
  */
 import { createHash } from 'node:crypto';
@@ -35,7 +35,9 @@ const out = join(repo, 'crates/wrongindex-engine/src/parse/toolchain');
 mkdirSync(out, { recursive: true });
 const sha = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
 const py: string = mod.PY_BATCH_SCRIPT;
+const go: string = mod.GO_BATCH_SCRIPT;
 writeFileSync(join(out, 'py_batch.py'), py);
+writeFileSync(join(out, 'go_batch.go'), go);
 writeFileSync(
   join(out, 'provenance.json'),
   `${JSON.stringify(
@@ -45,9 +47,10 @@ writeFileSync(
       archiveSha256: oracle.archiveSha256,
       'toolchain-scripts.ts': sha(readFileSync(source)),
       'py_batch.py': sha(py),
+      'go_batch.go': sha(go),
     },
     null,
     2,
   )}\n`,
 );
-console.log(`py_batch.py: ${py.length} chars, sha256 ${sha(py)}`);
+console.log(`py_batch.py ${sha(py)}, go_batch.go ${sha(go)}`);

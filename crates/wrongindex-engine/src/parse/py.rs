@@ -22,11 +22,11 @@ use crate::js::{self, utf16};
 
 const PY_BATCH_SCRIPT: &str = include_str!("toolchain/py_batch.py");
 /// `MAX_BATCH_FILES` / `MAX_BATCH_BYTES` of `parser-batch.ts`.
-const MAX_BATCH_FILES: usize = 100;
+pub(super) const MAX_BATCH_FILES: usize = 100;
 const MAX_BATCH_BYTES: usize = 8 * 1024 * 1024;
 
-/// One Python file to parse.
-pub struct PyFile<'a> {
+/// One file for an out-of-process parser.
+pub struct SourceFile<'a> {
     pub file: &'a str,
     /// The file text as the indexer decoded it (lossy UTF-8).
     pub text: &'a str,
@@ -54,7 +54,7 @@ pub fn python() -> Option<&'static Path> {
 /// `resolveWin32Command` followed by what Node's `spawn` (no shell) can
 /// start: the first PATH x PATHEXT match; a `.cmd`/`.bat` shim cannot be
 /// spawned without a shell, so such a candidate is unavailable.
-fn resolve_command(name: &str) -> Option<PathBuf> {
+pub(super) fn resolve_command(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let exts: Vec<String> = if cfg!(windows) {
         std::env::var("PATHEXT")
@@ -83,7 +83,7 @@ fn resolve_command(name: &str) -> Option<PathBuf> {
     None
 }
 
-fn hidden(cmd: &mut Command) -> &mut Command {
+pub(super) fn hidden(cmd: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -122,7 +122,7 @@ fn answers_version(p: &Path) -> bool {
 /// `parseGeneric` + `withRelations`. A chunk the interpreter could not
 /// complete (crash, timeout) is an error: WrongStack would then re-parse its
 /// files one by one, which is not reproduced here.
-pub fn parse_all(files: &[PyFile<'_>]) -> Result<Vec<Parsed>, String> {
+pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
     let Some(py) = python() else {
         return Ok(files
             .iter()
@@ -132,20 +132,13 @@ pub fn parse_all(files: &[PyFile<'_>]) -> Result<Vec<Parsed>, String> {
             })
             .collect());
     };
-    let dir = tempfile::Builder::new()
-        .prefix("wi-py-parse-")
-        .tempdir()
-        .map_err(|e| format!("python parser directory: {e}"))?;
-    let script = dir.path().join("batch.py");
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&script)
-        .and_then(|mut f| f.write_all(PY_BATCH_SCRIPT.as_bytes()))
-        .map_err(|e| format!("python parser script: {e}"))?;
+    let (_dir, script) = private_script("wi-py-parse-", "batch.py", PY_BATCH_SCRIPT)?;
     let mut out = Vec::with_capacity(files.len());
     for chunk in chunks(files) {
-        let results = run_chunk(py, &script, chunk)?;
+        let mut cmd = Command::new(py);
+        cmd.arg("-I").arg(&script);
+        let results = run_chunk(cmd, &script, chunk, "py")?
+            .ok_or_else(|| "python parser failed on a chunk".to_string())?;
         for f in chunk {
             let content = utf16(f.text);
             // `collectBatch` keeps the last entry without an error.
@@ -171,8 +164,29 @@ pub fn parse_all(files: &[PyFile<'_>]) -> Result<Vec<Parsed>, String> {
     Ok(out)
 }
 
+/// `privateScriptPath`: the program in a fresh private directory (removed
+/// when the returned guard drops).
+pub(super) fn private_script(
+    prefix: &str,
+    name: &str,
+    body: &str,
+) -> Result<(tempfile::TempDir, PathBuf), String> {
+    let dir = tempfile::Builder::new()
+        .prefix(prefix)
+        .tempdir()
+        .map_err(|e| format!("parser directory: {e}"))?;
+    let script = dir.path().join(name);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&script)
+        .and_then(|mut f| f.write_all(body.as_bytes()))
+        .map_err(|e| format!("parser script: {e}"))?;
+    Ok((dir, script))
+}
+
 /// `chunkBatchFiles`.
-fn chunks<'a, 'b>(files: &'b [PyFile<'a>]) -> Vec<&'b [PyFile<'a>]> {
+pub(super) fn chunks<'a, 'b>(files: &'b [SourceFile<'a>]) -> Vec<&'b [SourceFile<'a>]> {
     let mut out = Vec::new();
     let (mut start, mut bytes) = (0usize, 0usize);
     for (i, f) in files.iter().enumerate() {
@@ -190,30 +204,36 @@ fn chunks<'a, 'b>(files: &'b [PyFile<'a>]) -> Vec<&'b [PyFile<'a>]> {
     out
 }
 
-struct FileResult {
-    file: String,
-    error: Option<String>,
-    symbols: Vec<ParsedSymbol>,
-    refs: Vec<ParsedRef>,
+pub(super) struct FileResult {
+    pub file: String,
+    pub error: Option<String>,
+    pub symbols: Vec<ParsedSymbol>,
+    pub refs: Vec<ParsedRef>,
 }
 
-fn run_chunk(py: &Path, script: &Path, chunk: &[PyFile<'_>]) -> Result<Vec<FileResult>, String> {
+/// `runToolchainChild` for one chunk: `Ok(None)` when the program exited
+/// non-zero or printed nothing (the caller's `result?.code !== 0` branch),
+/// `Err` when it could not be started or overran `batchTimeoutMs`.
+pub(super) fn run_chunk(
+    mut cmd: Command,
+    script: &Path,
+    chunk: &[SourceFile<'_>],
+    lang: &'static str,
+) -> Result<Option<Vec<FileResult>>, String> {
     let payload: Vec<Value> = chunk
         .iter()
         .map(|f| serde_json::json!({"file": f.file, "content": f.text}))
         .collect();
     let payload = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+    let program = cmd.get_program().to_string_lossy().into_owned();
     let mut child = hidden(
-        Command::new(py)
-            .arg("-I")
-            .arg(script)
-            .current_dir(script.parent().unwrap_or(Path::new(".")))
+        cmd.current_dir(script.parent().unwrap_or(Path::new(".")))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("cannot start {}: {e}", py.display()))?;
+    .map_err(|e| format!("cannot start {program}: {e}"))?;
     let mut stdin = child.stdin.take().expect("piped stdin");
     let writer = std::thread::spawn(move || {
         // A child that exits early closes the pipe; that is not an error here.
@@ -235,7 +255,7 @@ fn run_chunk(py: &Path, script: &Path, chunk: &[PyFile<'_>]) -> Result<Vec<FileR
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("python parser timed out".into());
+                return Err(format!("{program} parser timed out"));
             }
         }
     };
@@ -243,13 +263,13 @@ fn run_chunk(py: &Path, script: &Path, chunk: &[PyFile<'_>]) -> Result<Vec<FileR
     let stdout = reader.join().unwrap_or_default();
     let text = String::from_utf8_lossy(&stdout);
     if !status.success() || text.trim().is_empty() {
-        return Err(format!("python parser failed ({status})"));
+        return Ok(None);
     }
-    decode_batch(text.trim())
+    decode_batch(text.trim(), lang).map(Some)
 }
 
 /// `parseParserBatchOutput` + `collectBatch` + `toIndexSymbols`.
-fn decode_batch(stdout: &str) -> Result<Vec<FileResult>, String> {
+fn decode_batch(stdout: &str, lang: &'static str) -> Result<Vec<FileResult>, String> {
     let v: Value =
         serde_json::from_str(stdout).map_err(|e| format!("python parser output: {e}"))?;
     let Some(results) = v.get("results").and_then(Value::as_array) else {
@@ -276,7 +296,7 @@ fn decode_batch(stdout: &str) -> Result<Vec<FileResult>, String> {
             file: file.to_string(),
             error,
             symbols: symbols(obj.get("symbols"))?,
-            refs: dedupe(refs(obj.get("refs"))),
+            refs: dedupe(refs(obj.get("refs"), lang)),
         });
     }
     Ok(out)
@@ -290,7 +310,7 @@ fn string(v: Option<&Value>) -> String {
     v.and_then(Value::as_str).unwrap_or("").to_string()
 }
 
-/// Kinds the extraction program emits.
+/// Kinds the extraction programs emit (Python's; Go's are a subset).
 fn static_kind(k: &str) -> Option<&'static str> {
     [
         "class", "function", "method", "property", "var", "const", "type",
@@ -338,7 +358,7 @@ fn symbols(v: Option<&Value>) -> Result<Vec<ParsedSymbol>, String> {
 }
 
 /// `coerceRefs`.
-fn refs(v: Option<&Value>) -> Vec<ParsedRef> {
+fn refs(v: Option<&Value>, lang: &'static str) -> Vec<ParsedRef> {
     let Some(list) = v.and_then(Value::as_array) else {
         return Vec::new();
     };
@@ -352,7 +372,7 @@ fn refs(v: Option<&Value>) -> Vec<ParsedRef> {
                 to_name: to_name.to_string(),
                 call_type,
                 line: num(r.get("line"), 1),
-                lang: "py",
+                lang,
                 module: r
                     .get("module")
                     .and_then(Value::as_str)
@@ -385,8 +405,8 @@ mod tests {
     #[test]
     fn chunks_respect_file_and_byte_limits() {
         let big = "x".repeat(5 * 1024 * 1024);
-        let small: Vec<PyFile<'_>> = (0..250)
-            .map(|_| PyFile {
+        let small: Vec<SourceFile<'_>> = (0..250)
+            .map(|_| SourceFile {
                 file: "a.py",
                 text: "",
             })
@@ -396,17 +416,17 @@ mod tests {
             [100, 100, 50]
         );
         let two = [
-            PyFile {
+            SourceFile {
                 file: "a.py",
                 text: &big,
             },
-            PyFile {
+            SourceFile {
                 file: "b.py",
                 text: &big,
             },
         ];
         assert_eq!(chunks(&two).len(), 2);
-        let one = [PyFile {
+        let one = [SourceFile {
             file: "a.py",
             text: &big,
         }];
@@ -420,7 +440,7 @@ mod tests {
              "refs":[{"toName":"g","callType":"call","line":3},{"toName":"g","callType":"call","line":3},{"toName":"","callType":"call"},{"toName":"x","callType":"weird"},{"toName":"os","callType":"import","line":1,"module":""}]},
             {"file":"b.py","error":"invalid syntax","symbols":[],"refs":[]},
             null, {"file":""}]}"#;
-        let r = decode_batch(out).unwrap();
+        let r = decode_batch(out, "py").unwrap();
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].symbols.len(), 1);
         assert_eq!(r[0].symbols[0].text, "f def f() Doc.");

@@ -1075,3 +1075,79 @@ fn native_matches_wrongstack_on_python_projects() {
     failures.extend(compare("python-git", &root, &s));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Go module (`go run` of WrongStack's `go/ast` program): packages and
+/// module-path imports, methods with generic receivers, grouped declarations,
+/// a syntax error (regex fallback), a test file, an aliased/dot import.
+fn scenario_go(root: &Path) {
+    write(root, "go.mod", "module example.com/shop\n\ngo 1.22\n");
+    write(
+        root,
+        "main.go",
+        "package main\n\nimport (\n\t\"fmt\"\n\tm \"example.com/shop/internal/models\"\n\t. \"example.com/shop/internal/util\"\n)\n\nfunc main() {\n\to := m.NewOrder(3)\n\tfmt.Println(o.Total(), Clamp(5))\n}\n",
+    );
+    write(
+        root,
+        "internal/models/order.go",
+        "// Package models holds orders.\npackage models\n\nimport \"example.com/shop/internal/util\"\n\n// Order is an order.\ntype Order struct {\n\tItems []Item\n}\n\ntype (\n\tItem struct{ Price float64 }\n\tID   int\n)\n\nconst (\n\tMax, Min = 10, 0\n\t_        = 3\n)\n\nvar Default = NewOrder(0)\n\n// NewOrder makes one.\nfunc NewOrder(n int) *Order {\n\treturn &Order{Items: make([]Item, n)}\n}\n\n// Total sums.\nfunc (o *Order) Total() float64 {\n\tvar t float64\n\tfor _, i := range o.Items {\n\t\tt += i.Price\n\t}\n\treturn util.Clamp(t)\n}\n\ntype Set[T comparable] struct{ m map[T]struct{} }\n\nfunc (s *Set[T]) Has(x T) bool { _, ok := s.m[x]; return ok }\n\ntype Shape interface {\n\tArea() float64\n}\n",
+    );
+    write(
+        root,
+        "internal/util/util.go",
+        "package util\n\nimport \"math\"\n\nfunc Clamp(x float64) float64 { return math.Max(0, math.Min(100, x)) }\n",
+    );
+    write(
+        root,
+        "internal/util/util_test.go",
+        "package util\n\nimport \"testing\"\n\nfunc TestClamp(t *testing.T) {\n\tif Clamp(200) != 100 {\n\t\tt.Fatal(\"x\")\n\t}\n}\n",
+    );
+    write(
+        root,
+        "internal/broken/broken.go",
+        "package broken\n\nimport \"fmt\"\n\nfunc Ok() { fmt.Println(1) }\n\nfunc Bad( {\n}\n",
+    );
+    write(
+        root,
+        "internal/broken/half.go",
+        "package broken\n\nimport \"strings\"\n\nfunc Half() string { return strings.Repeat(\"a\", 2) \n",
+    );
+    // Balanced but invalid: `go/parser` rejects it, the regex fallback keeps
+    // its declarations.
+    write(
+        root,
+        "internal/broken/balanced.go",
+        "package broken\n\nimport \"os\"\n\nfunc Exit() { os.Exit(1) }\n\nconst (\n\tA, B = 1, 2\n)\n\nvar x = = 1\n\nfunc (r *Recv) M() {}\n",
+    );
+    write(
+        root,
+        "README.md",
+        "# Shop\n\nSee [models](internal/models/order.go).\n",
+    );
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine), bun and Go"]
+fn native_matches_wrongstack_on_go_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    let s = base.join("go");
+    let root = s.join("project");
+    scenario_go(&root);
+    failures.extend(compare("go", &root, &s));
+    let idx = s.join("idx-native");
+    eprintln!(
+        "go: {} refs, {} resolved to a file, {} bound to a symbol",
+        scalar(&idx, "SELECT count(*) FROM refs"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_id IS NOT NULL"),
+    );
+    let s = base.join("go-git");
+    let root = s.join("project");
+    scenario_go(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("go-git", &root, &s));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

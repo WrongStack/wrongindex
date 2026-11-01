@@ -3,6 +3,7 @@
 //! TypeScript implementation (`contracts/fixtures/parser-kat.json`).
 
 pub mod generic;
+pub mod go;
 pub mod imports;
 pub mod infra;
 pub mod json;
@@ -95,7 +96,7 @@ pub struct ParsedRef {
 /// Languages parsed natively: [`parse_file`] reproduces `parseFileContent`
 /// for each of them.
 pub fn is_native_lang(lang: &str) -> bool {
-    matches!(lang, "json" | "yaml" | "rs" | "py")
+    matches!(lang, "json" | "yaml" | "rs" | "py" | "go")
         || generic::LANGS.contains(&lang)
         || ts::LANGS.contains(&lang)
 }
@@ -125,10 +126,11 @@ pub fn parse_file(file: &str, lang: &'static str, content: &U16) -> Parsed {
         // import fallback.
         l if ts::LANGS.contains(&l) => return ts::parse(file, l, content),
         l if generic::LANGS.contains(&l) => generic::parse(file, l, content),
-        // Python runs through an interpreter in batches: [`py::parse_all`].
-        "py" => {
+        // Python and Go run through their toolchains in batches:
+        // [`py::parse_all`], [`go::parse_all`].
+        "py" | "go" => {
             return Parsed {
-                unsupported: Some("python files are parsed in batches (parse::py)".into()),
+                unsupported: Some(format!("{lang} files are parsed in toolchain batches")),
                 ..Parsed::default()
             };
         }

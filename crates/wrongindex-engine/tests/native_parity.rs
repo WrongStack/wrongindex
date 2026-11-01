@@ -308,11 +308,14 @@ fn encodings_match_the_wrongstack_oracle() {
 fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
-    let go_root = base.join("go");
-    copy_dir(&repo().join("tests/fixtures/projects/go-basic"), &go_root);
-    let index = base.join("idx-go");
+    let go_root = base.join("ts-mix");
+    copy_dir(
+        &repo().join("tests/fixtures/projects/treesitter-mix"),
+        &go_root,
+    );
+    let index = base.join("idx-ts-mix");
     let err = index_fresh(&go_root, &index).unwrap_err();
-    assert!(err.to_string().contains("language go"), "{err}");
+    assert!(err.to_string().contains("language "), "{err}");
     assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
     assert!(
         !index.exists(),
@@ -473,4 +476,14 @@ fn py_basic_matches_the_wrongstack_oracle() {
         return;
     }
     assert_eq!(assert_matches_oracle("py-basic"), (3, 0, 9));
+}
+
+/// Go through `go run` of WrongStack's own `go/ast` program.
+#[test]
+fn go_basic_matches_the_wrongstack_oracle() {
+    if wrongindex_engine::parse::go::go().is_none() {
+        eprintln!("NOT RUN: no Go toolchain");
+        return;
+    }
+    assert_eq!(assert_matches_oracle("go-basic"), (2, 0, 6));
 }

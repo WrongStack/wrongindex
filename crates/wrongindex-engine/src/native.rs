@@ -238,8 +238,9 @@ fn collect_on_this_thread(
         ));
     }
     let mut rows = Vec::with_capacity(d.files.len());
-    // Python is parsed afterwards, in interpreter batches: (row, text).
+    // Python and Go are parsed afterwards, in toolchain batches: (row, text).
     let mut py: Vec<(usize, String)> = Vec::new();
+    let mut go: Vec<(usize, String)> = Vec::new();
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
             Some(l) if parse::is_native_lang(l) => l,
@@ -263,8 +264,9 @@ fn collect_on_this_thread(
         let bytes = std::fs::read(&path)?;
         let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
         let text = String::from_utf8_lossy(&bytes);
-        if lang == "py" {
-            py.push((rows.len(), text.into_owned()));
+        if lang == "py" || lang == "go" {
+            let batch = if lang == "py" { &mut py } else { &mut go };
+            batch.push((rows.len(), text.into_owned()));
             rows.push(FileRow {
                 path,
                 lang,
@@ -302,16 +304,23 @@ fn collect_on_this_thread(
             refs: parsed.refs,
         });
     }
-    if !py.is_empty() {
-        let files: Vec<parse::py::PyFile<'_>> = py
+    type Batch = fn(&[parse::py::SourceFile<'_>]) -> Result<Vec<Parsed>, String>;
+    for (batch, run) in [
+        (&py, parse::py::parse_all as Batch),
+        (&go, parse::go::parse_all as Batch),
+    ] {
+        if batch.is_empty() {
+            continue;
+        }
+        let files: Vec<parse::py::SourceFile<'_>> = batch
             .iter()
-            .map(|(i, text)| parse::py::PyFile {
+            .map(|(i, text)| parse::py::SourceFile {
                 file: &rows[*i].path,
                 text,
             })
             .collect();
-        let parsed = parse::py::parse_all(&files).map_err(NativeError::Unsupported)?;
-        for ((i, _), p) in py.iter().zip(parsed) {
+        let parsed = run(&files).map_err(NativeError::Unsupported)?;
+        for ((i, _), p) in batch.iter().zip(parsed) {
             rows[*i].symbols = p.symbols;
             rows[*i].refs = p.refs;
         }
