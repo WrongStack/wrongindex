@@ -185,6 +185,29 @@ async fn vertical_slice_admits_and_completes_a_durable_check_job() {
     assert_eq!(result["counts"]["symbols"], 14);
     assert_eq!(sha(&db), before, "check job mutated index.db");
 
+    // A finished job is not cancelable; an unknown one is a typed error.
+    let cancel = c
+        .call_raw(
+            method::JOB_CANCEL,
+            None,
+            json!({"jobId": first.job.job_id}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancel["canceled"], false);
+    assert_eq!(cancel["job"]["state"], "succeeded");
+    let err = c
+        .call_raw(
+            method::JOB_CANCEL,
+            None,
+            json!({"jobId": "j_missing"}),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Some(ErrorCode::JobNotFound));
+
     // Mutating kinds are refused before admission in this build.
     let err = c
         .call_raw(

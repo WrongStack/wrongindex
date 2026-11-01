@@ -207,6 +207,7 @@ pub mod method {
     pub const INDEX_QUERY: &str = "index.query";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
+    pub const JOB_CANCEL: &str = "job.cancel";
     pub const OWNERSHIP_ACQUIRE: &str = "ownership.acquire";
     pub const OWNERSHIP_RELEASE: &str = "ownership.release";
     pub const OWNERSHIP_STATUS: &str = "ownership.status";
@@ -230,6 +231,7 @@ pub mod method {
         INDEX_QUERY,
         JOB_GET,
         JOB_LIST,
+        JOB_CANCEL,
         OWNERSHIP_ACQUIRE,
         OWNERSHIP_RELEASE,
         OWNERSHIP_STATUS,

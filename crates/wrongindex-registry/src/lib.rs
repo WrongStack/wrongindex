@@ -575,6 +575,25 @@ impl Registry {
         Ok(n == 1)
     }
 
+    /// Cancel a job that has not started. Returns the job and whether this
+    /// call canceled it; a running or finished job is returned unchanged (the
+    /// preview engine has no cooperative cancellation, so a started write is
+    /// never interrupted and its commit is never ambiguous).
+    pub fn cancel_job(&mut self, job_id: &str) -> Result<(JobRecord, bool), ErrorBody> {
+        let error =
+            serde_json::to_string(&ErrorBody::new(ErrorCode::Canceled, "canceled by request"))
+                .unwrap_or_default();
+        let n = self
+            .conn
+            .execute(
+                "UPDATE jobs SET state = 'canceled', completed_at_ms = ?2, error_json = ?3
+                 WHERE job_id = ?1 AND state = 'queued'",
+                params![job_id, now_ms(), error],
+            )
+            .map_err(db_err)?;
+        Ok((self.get_job(job_id)?, n == 1))
+    }
+
     pub fn complete_job(
         &mut self,
         job_id: &str,
@@ -1302,6 +1321,41 @@ mod tests {
                 "owned",
                 "negotiating"
             ]
+        );
+    }
+
+    #[test]
+    fn only_queued_jobs_cancel() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut reg = Registry::open_in_memory().unwrap();
+        let (p, _) = reg
+            .register_project(&params(tmp.path(), &tmp.path().join("idx")))
+            .unwrap();
+        let a = reg
+            .admit_job(&p.project_id, JobKind::Check, &json!({}), "cli", None)
+            .unwrap()
+            .job;
+        let b = reg
+            .admit_job(&p.project_id, JobKind::Check, &json!({}), "cli", None)
+            .unwrap()
+            .job;
+        let (job, canceled) = reg.cancel_job(&a.job_id).unwrap();
+        assert!(canceled);
+        assert_eq!(job.state, JobState::Canceled);
+        assert_eq!(job.error.unwrap().code, ErrorCode::Canceled);
+        // A canceled job is never claimed by the worker.
+        assert!(!reg.mark_running(&a.job_id).unwrap());
+        assert_eq!(reg.queued_jobs().unwrap().len(), 1);
+        // Running and terminal jobs are left alone.
+        assert!(reg.mark_running(&b.job_id).unwrap());
+        let (job, canceled) = reg.cancel_job(&b.job_id).unwrap();
+        assert!(!canceled);
+        assert_eq!(job.state, JobState::Running);
+        let (_, again) = reg.cancel_job(&a.job_id).unwrap();
+        assert!(!again);
+        assert_eq!(
+            reg.cancel_job("j_missing").unwrap_err().code,
+            ErrorCode::JobNotFound
         );
     }
 

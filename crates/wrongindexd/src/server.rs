@@ -887,6 +887,25 @@ async fn dispatch_inner(
                 "result": result,
             }))
         }
+        method::JOB_CANCEL => {
+            let p: JobGetParams = parse(req.params)?;
+            let (job, canceled) = shared.registry(move |r| r.cancel_job(&p.job_id)).await?;
+            if canceled {
+                info!("job_canceled", {"jobId": job.job_id, "projectId": job.project_id, "client": client});
+                crate::events::job_event(shared, "job.finished", &job);
+            }
+            Ok(json!({
+                "job": job,
+                "canceled": canceled,
+                "reason": if canceled {
+                    None
+                } else if job.state == JobState::Running {
+                    Some("running jobs complete; the preview engine has no cooperative cancellation")
+                } else {
+                    Some("job already finished")
+                },
+            }))
+        }
         method::JOB_GET => {
             let p: JobGetParams = parse(req.params)?;
             let job = shared.registry(move |r| r.get_job(&p.job_id)).await?;

@@ -200,6 +200,10 @@ enum JobAction {
     Status {
         job_id: String,
     },
+    /// Cancel a job that has not started yet.
+    Cancel {
+        job_id: String,
+    },
     List {
         #[arg(long)]
         project: Option<String>,
@@ -928,6 +932,23 @@ async fn job(root: &DataRoot, action: JobAction, json: bool) -> Outcome {
                 .call(method::JOB_GET, None, &json!({"jobId": job_id}))
                 .await?;
             report_job(&job, json)
+        }
+        JobAction::Cancel { job_id } => {
+            let v = c
+                .call_raw(method::JOB_CANCEL, None, json!({"jobId": job_id}), None)
+                .await?;
+            if json {
+                print_json(&v);
+            } else if v["canceled"] == true {
+                println!("{job_id}: canceled");
+            } else {
+                println!(
+                    "{job_id}: not canceled ({}; state {})",
+                    v["reason"].as_str().unwrap_or("?"),
+                    v["job"]["state"].as_str().unwrap_or("?")
+                );
+            }
+            Ok(exit_code::SUCCESS)
         }
         JobAction::List { project, limit } => {
             let v = c
