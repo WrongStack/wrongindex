@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 wrongindex-contracts.workspace = true
 wrongindex-storage.workspace = true
+wrongindex-discovery.workspace = true
 wrongindex-ipc.workspace = true
 anyhow.workspace = true
 clap.workspace = true

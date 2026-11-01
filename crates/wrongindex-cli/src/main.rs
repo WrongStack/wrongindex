@@ -58,6 +58,12 @@ enum Command {
         /// Path to index.db or the directory containing it.
         path: PathBuf,
     },
+    /// Developer diagnostics used by the differential oracle scripts.
+    #[command(hide = true)]
+    Debug {
+        #[command(subcommand)]
+        action: DebugAction,
+    },
     /// Print where WrongStack keeps the index for a checkout (read-only).
     ResolveIndexDir {
         root: PathBuf,
@@ -65,6 +71,15 @@ enum Command {
         #[arg(long)]
         wrongstack_home: Option<PathBuf>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum DebugAction {
+    /// Run full source discovery (read-only) and print the result as JSON.
+    Discover { root: PathBuf },
+    /// Read {"gitignore": str, "cases": [{"path": str, "isDir": bool}]} from
+    /// stdin and print one boolean verdict per case.
+    Gitignore,
 }
 
 #[derive(Debug, Subcommand)]
@@ -228,6 +243,7 @@ async fn run(cli: Cli) -> Outcome {
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
         Command::Inspect { path } => inspect(&path, json),
+        Command::Debug { action } => debug(action),
         Command::ResolveIndexDir {
             root,
             wrongstack_home,
@@ -849,6 +865,37 @@ async fn doctor(root: &DataRoot, json: bool) -> Outcome {
     } else {
         exit_code::SUCCESS
     })
+}
+
+fn debug(action: DebugAction) -> Outcome {
+    match action {
+        DebugAction::Discover { root } => {
+            let d = wrongindex_discovery::discover(&root, &[]);
+            print_json(&serde_json::to_value(&d).unwrap_or_default());
+        }
+        DebugAction::Gitignore => {
+            let mut input = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+                .map_err(|e| fail(exit_code::INVALID_INPUT, e.to_string()))?;
+            let v: Value = serde_json::from_str(&input)
+                .map_err(|e| fail(exit_code::INVALID_INPUT, e.to_string()))?;
+            let gi =
+                wrongindex_discovery::Gitignore::compile(v["gitignore"].as_str().unwrap_or(""));
+            let verdicts: Vec<bool> = v["cases"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|c| {
+                    gi.is_ignored(
+                        c["path"].as_str().unwrap_or(""),
+                        c["isDir"].as_bool().unwrap_or(false),
+                    )
+                })
+                .collect();
+            println!("{}", serde_json::to_string(&verdicts).unwrap_or_default());
+        }
+    }
+    Ok(exit_code::SUCCESS)
 }
 
 fn resolve_default_index_dir(

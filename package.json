@@ -9,6 +9,7 @@
     "inventory:languages": "bun scripts/inventory/languages.ts",
     "inventory:writers": "bun scripts/inventory/writers.ts",
     "oracle:resolver-diff": "bun scripts/oracle/resolver-diff.ts",
+    "oracle:discovery-diff": "bun scripts/oracle/discovery-diff.ts",
     "bench:baseline": "bun scripts/bench/baseline.ts",
     "profile:semantic": "bun scripts/profile/semantic.ts",
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked"

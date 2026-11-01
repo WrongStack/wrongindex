@@ -1,0 +1,21 @@
+[package]
+name = "wrongindex-discovery"
+description = "WrongStack-compatible source discovery: git listing with isolation, gitignore, filesystem walk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+wrongindex-storage.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
