@@ -677,6 +677,9 @@ pub enum Rebuild {
 /// (another connection may have it open).
 pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
     let db = index_dir.join("index.db");
+    // A run that died (crash, kill, power loss) leaves its staging directory
+    // behind; writes to one project are serialized, so any is stale now.
+    sweep_staging(index_dir);
     // Read (and hash) before parsing anything: an unchanged project costs a
     // discovery and a read, and a changed one is not scanned twice.
     let first = scan(project_root)?;
@@ -702,12 +705,42 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
                 )));
             }
         }
+        fault_point("before-publish");
         std::fs::rename(staging.join("index.db"), &db)?;
+        fault_point("after-publish");
         Ok(Rebuild::Written(report))
     })();
     let _ = std::fs::remove_dir_all(&staging);
     result
 }
+
+/// Remove `.wrongindex-staging-*` directories left by runs that died.
+fn sweep_staging(index_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(index_dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name();
+        if name.to_string_lossy().starts_with(".wrongindex-staging-")
+            && e.file_type().is_ok_and(|t| t.is_dir())
+        {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// Fault injection for the publication boundary (WI-601), debug builds only:
+/// `WRONGINDEX_NATIVE_FAULT=<point>` aborts the process there, as a crash or
+/// a kill would.
+#[cfg(debug_assertions)]
+fn fault_point(point: &str) {
+    if std::env::var("WRONGINDEX_NATIVE_FAULT").is_ok_and(|v| v == point) {
+        std::process::abort();
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn fault_point(_point: &str) {}
 
 /// `(file, content_hash)` rows (sorted) and `graph_stamp` of an existing
 /// WrongStack v5 index; `None` when it is not one.

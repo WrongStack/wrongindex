@@ -1,0 +1,131 @@
+//! Fault injection at the native publication boundary (WI-601).
+//!
+//! A native run writes a complete index in a private staging directory and
+//! then renames it over `index.db`. A run that dies just before or just after
+//! the rename (here: `abort()` through the debug-only
+//! `WRONGINDEX_NATIVE_FAULT` hook, in the same child process the daemon uses)
+//! must leave either the previous or the new complete index - never a partial
+//! one - and the next run must clean up and converge.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use serde_json::Value;
+use wrongindex_storage::inspect::Verdict;
+
+fn repo() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn copy_dir(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for e in std::fs::read_dir(src).unwrap() {
+        let e = e.unwrap();
+        let to = dst.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir(&e.path(), &to);
+        } else {
+            std::fs::copy(e.path(), to).unwrap();
+        }
+    }
+}
+
+/// One `wrongindexd --native-rebuild` child; `None` when it did not exit
+/// normally (the injected abort).
+fn rebuild(root: &Path, index: &Path, fault: Option<&str>) -> Option<Value> {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_wrongindexd"));
+    cmd.arg("--native-rebuild").arg(root).arg(index);
+    match fault {
+        Some(f) => cmd.env("WRONGINDEX_NATIVE_FAULT", f),
+        None => cmd.env_remove("WRONGINDEX_NATIVE_FAULT"),
+    };
+    let out = cmd.output().unwrap();
+    if !out.status.success() {
+        return None;
+    }
+    serde_json::from_slice(&out.stdout).ok()
+}
+
+fn staging_dirs(index: &Path) -> usize {
+    std::fs::read_dir(index)
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(".wrongindex-staging-")
+        })
+        .count()
+}
+
+fn files_table(index: &Path) -> Vec<(String, String)> {
+    let c = rusqlite::Connection::open_with_flags(
+        index.join("index.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    let mut rows: Vec<(String, String)> = c
+        .prepare("SELECT file, content_hash FROM files")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    rows.sort();
+    rows
+}
+
+fn assert_complete(index: &Path) {
+    let i = wrongindex_storage::inspect_index(&index.join("index.db"));
+    assert_eq!(i.verdict, Verdict::Compatible, "{i:?}");
+}
+
+#[test]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "the fault hook exists in debug builds only"
+)]
+fn a_run_dying_at_the_publication_boundary_never_leaves_a_partial_index() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let index = tmp.path().join("index");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    std::fs::create_dir_all(&index).unwrap();
+
+    let first = rebuild(&root, &index, None).expect("first run");
+    assert_eq!(first["result"]["outcome"], "written", "{first}");
+    let before = files_table(&index);
+    let before_bytes = std::fs::read(index.join("index.db")).unwrap();
+
+    // Change the project, then die just before the rename: the previous
+    // index stays byte for byte; only a staging directory is left behind.
+    std::fs::write(root.join("extra.json"), "{\"added\": true}\n").unwrap();
+    assert!(rebuild(&root, &index, Some("before-publish")).is_none());
+    assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before_bytes);
+    assert_complete(&index);
+    assert_eq!(staging_dirs(&index), 1, "the dead run's staging directory");
+
+    // Die just after the rename: the new index is complete and published.
+    assert!(rebuild(&root, &index, Some("after-publish")).is_none());
+    assert_complete(&index);
+    let after = files_table(&index);
+    assert_ne!(after, before);
+    assert!(
+        after.iter().any(|(f, _)| f.ends_with("extra.json")),
+        "{after:?}"
+    );
+
+    // The next run sweeps the leftovers and converges (no-op: same files).
+    let next = rebuild(&root, &index, None).expect("recovery run");
+    assert_eq!(next["result"]["outcome"], "unchanged", "{next}");
+    assert_eq!(staging_dirs(&index), 0);
+    assert_eq!(files_table(&index), after);
+
+    // And a real change after the faults is written normally.
+    std::fs::remove_file(root.join("extra.json")).unwrap();
+    let last = rebuild(&root, &index, None).expect("write after recovery");
+    assert_eq!(last["result"]["outcome"], "written", "{last}");
+    assert_eq!(files_table(&index), before);
+    assert_eq!(staging_dirs(&index), 0);
+    assert_complete(&index);
+}
