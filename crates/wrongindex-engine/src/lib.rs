@@ -9,6 +9,7 @@ pub mod dbdump;
 pub mod js;
 pub mod native;
 pub mod parse;
+pub mod query;
 pub mod rows;
 pub mod unicode;
 

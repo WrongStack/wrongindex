@@ -137,6 +137,32 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
     assert_eq!(r["native"]["outcome"], "written");
     assert_eq!(r["native"]["symbolsIndexed"], 10);
     assert_eq!(r["generation"], 1);
+    // Native reads, no engine: stats is served; an op not ported yet says so.
+    let q = c
+        .call_raw(
+            method::INDEX_QUERY,
+            Some(&pid),
+            json!({"op": "stats", "args": {}}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(q["backend"], "native");
+    assert_eq!(q["result"]["totalSymbols"], 10);
+    assert_eq!(q["generation"], 1);
+    let err = c
+        .call_raw(
+            method::INDEX_QUERY,
+            Some(&pid),
+            json!({"op": "notAnOp", "args": {}}),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.code(),
+        Some(wrongindex_contracts::ErrorCode::NotImplemented)
+    );
     let check = run_job(&mut c, &pid, json!({"kind": "check"})).await;
     assert_eq!(check["result"]["verdict"], "compatible", "{check}");
 

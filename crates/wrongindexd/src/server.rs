@@ -717,7 +717,7 @@ async fn dispatch_inner(
                         "backend": "native",
                         "selection": shared.backend.as_str(),
                         "writes": "JSON/YAML-only projects (full runs; no-op when unchanged)",
-                        "queries": false,
+                        "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),
                     json!({"engineHello": shared.engine.hello().await}).to_string(),
@@ -905,23 +905,74 @@ async fn dispatch_inner(
             // The daemon, never the client, decides which index is read.
             args["projectRoot"] = json!(project.checkout_root);
             args["indexDir"] = json!(project.index_dir);
-            let result = shared
-                .engine
-                .call(
-                    "query",
-                    json!({"op": q.op, "args": args}),
-                    Duration::from_secs(60),
-                )
-                .await?;
+            // Native read first (read-only connection, never mutates the
+            // index); operations it has not ported fall back to the worker.
+            let mut native_skipped = None;
+            let mut served = None;
+            if shared.backend != Backend::Legacy {
+                let (dir, op, a2) = (
+                    std::path::PathBuf::from(&project.index_dir),
+                    q.op.clone(),
+                    args.clone(),
+                );
+                let r = tokio::task::spawn_blocking(move || {
+                    wrongindex_engine::query::Reader::open(&dir)?.call(&op, &a2)
+                })
+                .await
+                .map_err(|e| ErrorBody::new(ErrorCode::Internal, format!("query task: {e}")))?;
+                use wrongindex_engine::query::QueryError;
+                match r {
+                    Ok(v) => served = Some((v, "native")),
+                    Err(QueryError::Unsupported(why))
+                        if shared.backend == Backend::Auto && shared.engine.configured() =>
+                    {
+                        native_skipped = Some(why);
+                    }
+                    Err(QueryError::Unsupported(why)) => {
+                        return Err(ErrorBody::new(
+                            ErrorCode::NotImplemented,
+                            format!("native engine: {why}"),
+                        ));
+                    }
+                    Err(QueryError::InvalidArgs(m)) => {
+                        return Err(ErrorBody::new(ErrorCode::InvalidRequest, m));
+                    }
+                    Err(QueryError::Sqlite(e)) => {
+                        return Err(ErrorBody::new(
+                            ErrorCode::IndexDegraded,
+                            format!("reading the index failed: {e}"),
+                        ));
+                    }
+                }
+            }
+            let (result, backend) = match served {
+                Some(x) => x,
+                None => (
+                    shared
+                        .engine
+                        .call(
+                            "query",
+                            json!({"op": q.op, "args": args}),
+                            Duration::from_secs(60),
+                        )
+                        .await?,
+                    "legacy-bun-worker",
+                ),
+            };
             drop(in_use);
-            Ok(json!({
+            let mut out = json!({
                 "projectId": pid,
                 "daemonInstanceId": shared.instance_id,
                 "generation": publication.generation,
                 "graphStamp": publication.graph_stamp,
                 "observedAt": now_ms(),
+                "backend": backend,
                 "result": result,
-            }))
+            });
+            if let Some(why) = native_skipped {
+                out["nativeSkipped"] = json!(why);
+            }
+            Ok(out)
         }
         method::JOB_CANCEL => {
             let p: JobGetParams = parse(req.params)?;
