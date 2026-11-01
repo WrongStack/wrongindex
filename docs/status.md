@@ -62,6 +62,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 | WI-202 | Done (Windows) | `notify` 8.2.1 recursive watcher per project; events filtered by default-ignored dirs, the root `.gitignore`, and the index directory; `.gitignore` change -> reconciliation; rescan flag / watcher error / bounded queue (10k) overflow -> reconciliation. Polling fallback: NOT DONE. |
 | WI-203 | Done | Dirty set with per-path revisions, 400 ms debounce, 2 s max wait, 10k cap collapsing to a reconcile marker; a finished batch clears only revisions it covered (unit tests for burst, continuous saves, edits during a run, failure, overflow). |
 | WI-204 | Partial | One automatic job per project; one engine worker serializes all runs. Fairness across projects, parser slots, and query-vs-index admission budgets: NOT DONE (single worker). |
+| Events (arch. §8.3) | Done | `events.subscribe` turns a connection into a one-way stream; every event carries `instanceId` + per-instance monotonically increasing `seq`. A 1,024-event ring serves replay from `sinceSeq`; an evicted position or another instance's sequence returns `gap: true` (resync with `events.snapshot`, which returns `seq` + all project statuses). A lagging subscriber gets `stream.gap` instead of unbounded buffering. Kinds: `project.registered/configured/detached`, `job.queued/started/finished`, `ownership.changed`, `index.published` (generation, graphStamp), `daemon.draining`. Optional project filter. CLI: `wrongindex events [--project id] [--snapshot]`. Test `event_stream_orders_replays_and_resynchronizes`: gapless order, replay, foreign-instance gap, snapshot consistency, drain notice before close; 5/5 runs PASS. Watcher dirty/freshness transitions are not yet evented (poll `project.get`). |
 | WI-206 | Done | Attach registers the watcher before queuing the full reconciliation; events during the scan stay dirty and run afterwards. |
 | WI-207 | Partial | Restart -> reattach + full reconciliation (edit made while the daemon was down is indexed; stale symbol removed). Sleep/resume and root restore handling: NOT TESTED. |
 
@@ -88,7 +89,7 @@ Engine acceptance test (`crates/wrongindexd/tests/engine.rs`, ignored by default
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 81 tests + 3 engine-backed tests ignored without an engine (contracts 4, storage 25, registry 13, discovery 13, ipc 14, daemon unit 5, daemon integration 6); storage includes oracle-hash parity over all fixture files and resolver KATs |
+| `cargo test --workspace` | PASS — 85 tests + 3 engine-backed tests ignored without an engine (contracts 4, storage 25, registry 13, discovery 13, ipc 14, daemon unit 8, daemon integration 7); storage includes oracle-hash parity over all fixture files and resolver KATs |
 | `bun scripts/oracle/resolver-diff.ts` | PASS — 15/15 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |

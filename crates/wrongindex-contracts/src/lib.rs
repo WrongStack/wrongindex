@@ -214,6 +214,8 @@ pub mod method {
     pub const SESSION_ACQUIRE: &str = "session.acquire";
     pub const SESSION_HEARTBEAT: &str = "session.heartbeat";
     pub const SESSION_RELEASE: &str = "session.release";
+    pub const EVENTS_SUBSCRIBE: &str = "events.subscribe";
+    pub const EVENTS_SNAPSHOT: &str = "events.snapshot";
 
     pub const ALL: &[&str] = &[
         DAEMON_HELLO,
@@ -235,6 +237,8 @@ pub mod method {
         SESSION_ACQUIRE,
         SESSION_HEARTBEAT,
         SESSION_RELEASE,
+        EVENTS_SUBSCRIBE,
+        EVENTS_SNAPSHOT,
     ];
 }
 

@@ -174,6 +174,11 @@ pub async fn acquire(shared: &Arc<Shared>, project_id: &str) -> Result<Ownership
                 .await?;
             shared.owners.insert(project_id, guard);
             info!("ownership_acquired", {"projectId": project_id, "epoch": epoch});
+            shared.events.publish(
+                "ownership.changed",
+                Some(project_id),
+                json!({"state": status.state.as_str(), "epoch": epoch}),
+            );
             Ok(status)
         }
         Err(AcquireError::Held { holder }) => {
@@ -239,6 +244,11 @@ pub async fn release(
         .registry(move |r| r.record_release(&pid, &owner, epoch, keep_desired))
         .await?;
     info!("ownership_released", {"projectId": project_id, "epoch": epoch, "keepDesired": keep_desired});
+    shared.events.publish(
+        "ownership.changed",
+        Some(project_id),
+        json!({"state": status.state.as_str(), "epoch": epoch}),
+    );
     Ok(status)
 }
 

@@ -480,3 +480,115 @@ async fn registration_identity_rules_over_ipc() {
     drop(c);
     daemon.stop(&root).await;
 }
+
+async fn next_event(s: &mut wrongindex_ipc::EventStream) -> Value {
+    tokio::time::timeout(Duration::from_secs(10), s.next())
+        .await
+        .expect("event within 10 s")
+        .unwrap()
+        .expect("stream open")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn event_stream_orders_replays_and_resynchronizes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("home");
+    let checkout = tmp.path().join("checkout");
+    std::fs::create_dir_all(&checkout).unwrap();
+    let db = fixture_index("basic-ts", &tmp.path().join("index"));
+
+    let daemon = Daemon::start(&root).await;
+    let mut c = client(&root).await;
+    let snap = c
+        .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
+        .await
+        .unwrap();
+    let instance = snap["instanceId"].as_str().unwrap().to_string();
+    let start_seq = snap["seq"].as_u64().unwrap();
+    assert_eq!(snap["projects"], json!([]));
+
+    let (ack, mut live) = client(&root)
+        .await
+        .subscribe(Some(start_seq), Some(&instance), None)
+        .await
+        .unwrap();
+    assert_eq!(ack["gap"], false);
+    assert_eq!(ack["instanceId"], json!(instance));
+
+    let reg: RegisterProjectResult = c
+        .call(
+            method::PROJECT_REGISTER,
+            None,
+            &json!({"checkoutRoot": checkout, "indexDir": db.parent().unwrap()}),
+        )
+        .await
+        .unwrap();
+    let pid = reg.project.project_id.clone();
+    let job: JobAdmission = c
+        .call(method::INDEX_CHECK, Some(&pid), &json!({}))
+        .await
+        .unwrap();
+
+    // Registration, then the job lifecycle, strictly in sequence order.
+    let mut seen = Vec::new();
+    let mut last_seq = start_seq;
+    while seen.last().map(String::as_str) != Some("job.finished") {
+        let ev = next_event(&mut live).await;
+        let seq = ev["seq"].as_u64().unwrap();
+        assert_eq!(seq, last_seq + 1, "gapless, ordered sequence: {ev}");
+        last_seq = seq;
+        assert_eq!(ev["instanceId"], json!(instance));
+        assert_eq!(ev["projectId"], json!(pid));
+        if ev["kind"] == "job.finished" {
+            assert_eq!(ev["data"]["jobId"], json!(job.job.job_id));
+            assert_eq!(ev["data"]["state"], "succeeded");
+        }
+        seen.push(ev["kind"].as_str().unwrap().to_string());
+    }
+    assert_eq!(
+        seen,
+        [
+            "project.registered",
+            "job.queued",
+            "job.started",
+            "job.finished"
+        ]
+    );
+
+    // A late subscriber replays retained history from its last position.
+    let (ack, mut replay) = client(&root)
+        .await
+        .subscribe(Some(start_seq + 1), Some(&instance), Some(&pid))
+        .await
+        .unwrap();
+    assert_eq!(ack["replayed"], 3);
+    assert_eq!(next_event(&mut replay).await["kind"], "job.queued");
+
+    // Another instance's position is meaningless: the client must resync.
+    let (ack, _) = client(&root)
+        .await
+        .subscribe(Some(1), Some("d_other"), None)
+        .await
+        .unwrap();
+    assert_eq!(ack["gap"], true);
+
+    // The snapshot reflects the state the events described.
+    let snap = c
+        .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
+        .await
+        .unwrap();
+    assert_eq!(snap["seq"].as_u64().unwrap(), last_seq);
+    assert_eq!(snap["projects"][0]["project"]["projectId"], json!(pid));
+    assert_eq!(snap["projects"][0]["lastJob"]["state"], "succeeded");
+
+    // Shutdown announces draining, then closes the stream.
+    drop(c);
+    drop(replay);
+    let stopping = tokio::spawn(async move { daemon.stop(&root).await });
+    let mut kinds = Vec::new();
+    while let Ok(Ok(Some(ev))) = tokio::time::timeout(Duration::from_secs(20), live.next()).await {
+        kinds.push(ev["kind"].as_str().unwrap_or_default().to_string());
+    }
+    assert_eq!(kinds, ["daemon.draining"]);
+    stopping.await.unwrap();
+}

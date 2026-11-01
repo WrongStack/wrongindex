@@ -66,6 +66,15 @@ enum Command {
         #[arg(long, default_value = "{}")]
         args: String,
     },
+    /// Follow the service event stream (Ctrl+C to stop).
+    Events {
+        /// Only events for this project (daemon-wide events are kept).
+        #[arg(long)]
+        project: Option<String>,
+        /// Print a snapshot of all projects first.
+        #[arg(long)]
+        snapshot: bool,
+    },
     /// Read-only installation and service diagnosis.
     Doctor,
     /// Read-only offline inspection of an index.db (no service required).
@@ -276,6 +285,51 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        Command::Events { project, snapshot } => {
+            let mut since = None;
+            if snapshot {
+                let mut c = connect(&root).await?;
+                let v = c
+                    .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
+                    .await?;
+                since = v["seq"].as_u64().map(|s| (s, v["instanceId"].clone()));
+                if json {
+                    println!("{v}");
+                } else {
+                    for p in v["projects"].as_array().into_iter().flatten() {
+                        println!(
+                            "{}  {}  generation {}  ownership {}",
+                            p["project"]["projectId"].as_str().unwrap_or("?"),
+                            p["freshness"].as_str().unwrap_or("?"),
+                            p["generation"],
+                            p["ownership"].as_str().unwrap_or("?"),
+                        );
+                    }
+                }
+            }
+            let (_, mut stream) = connect(&root)
+                .await?
+                .subscribe(
+                    since.as_ref().map(|s| s.0),
+                    since.as_ref().and_then(|s| s.1.as_str()),
+                    project.as_deref(),
+                )
+                .await?;
+            while let Some(ev) = stream.next().await? {
+                if json {
+                    println!("{ev}");
+                } else {
+                    println!(
+                        "#{:<6} {:<20} {:<36} {}",
+                        ev["seq"],
+                        ev["kind"].as_str().unwrap_or("?"),
+                        ev["projectId"].as_str().unwrap_or("-"),
+                        ev["data"]
+                    );
+                }
+            }
+            Ok(exit_code::SUCCESS)
+        }
         Command::Search { id, query, limit } => {
             let mut c = connect(&root).await?;
             let v = c

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use serde_json::json;
 use tokio::sync::watch;
-use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, OwnerFence};
+use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, JobState, OwnerFence};
 
 use crate::server::Shared;
 use crate::{info, warn};
@@ -48,7 +48,11 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
                 shared.registry(move |r| r.mark_running(&id)).await
             };
             match claimed {
-                Ok(true) => {}
+                Ok(true) => {
+                    let mut running = job.clone();
+                    running.state = JobState::Running;
+                    crate::events::job_event(&shared, "job.started", &running);
+                }
                 Ok(false) => continue,
                 Err(e) => {
                     warn!("worker_claim_failed", {"jobId": job_id, "error": e.to_string()});
@@ -59,10 +63,13 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             let ok = outcome.is_ok();
             let id = job_id.clone();
             match shared.registry(move |r| r.complete_job(&id, outcome)).await {
-                Ok(done) => info!("job_completed", {
-                    "jobId": done.job_id, "projectId": done.project_id,
-                    "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
-                }),
+                Ok(done) => {
+                    info!("job_completed", {
+                        "jobId": done.job_id, "projectId": done.project_id,
+                        "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
+                    });
+                    crate::events::job_event(&shared, "job.finished", &done);
+                }
                 Err(e) => {
                     warn!("job_completion_not_recorded", {"jobId": job_id, "error": e.to_string()})
                 }
@@ -140,6 +147,14 @@ async fn execute(
                             fenced.map(|()| p)
                         })
                         .await?;
+                    shared.events.publish(
+                        "index.published",
+                        Some(project_id),
+                        json!({
+                            "generation": publication.generation,
+                            "graphStamp": publication.graph_stamp,
+                        }),
+                    );
                     let mut out = result;
                     out["generation"] = json!(publication.generation);
                     Ok(out)

@@ -6,6 +6,7 @@
 
 mod dirty;
 mod engine;
+mod events;
 mod log;
 mod ownership;
 mod server;

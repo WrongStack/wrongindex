@@ -64,6 +64,7 @@ pub struct Shared {
     sqlite_version: String,
     pub engine: crate::engine::Engine,
     pub watch: crate::watch::Supervisor,
+    pub events: crate::events::EventBus,
 }
 
 impl Shared {
@@ -85,6 +86,15 @@ impl Shared {
         .map_err(|e| ErrorBody::new(ErrorCode::Internal, format!("registry task failed: {e}")))?
     }
 
+    /// Enter draining exactly once: announce it on the event stream before
+    /// subscribers are told to stop, so they see why the stream closes.
+    pub fn begin_drain(&self) {
+        if !self.draining.swap(true, Ordering::SeqCst) {
+            self.events.publish("daemon.draining", None, json!({}));
+        }
+        let _ = self.shutdown.send(true);
+    }
+
     fn hello(&self, selected_profile: Option<String>) -> Hello {
         Hello {
             daemon_instance_id: self.instance_id.clone(),
@@ -98,7 +108,12 @@ impl Shared {
                     .profile_fingerprint
                     .clone(),
             ),
-            capabilities: vec!["register".into(), "check".into(), "jobs".into()],
+            capabilities: vec![
+                "register".into(),
+                "check".into(),
+                "jobs".into(),
+                "events".into(),
+            ],
             limits: Limits {
                 max_frame_bytes: MAX_FRAME_BYTES,
                 max_page_size: MAX_PAGE_SIZE,
@@ -170,6 +185,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         sqlite_version: wrongindex_storage::sqlite_runtime().version,
         engine: crate::engine::Engine::new(cfg.engine.clone()),
         watch: watch_supervisor,
+        events: crate::events::EventBus::new(instance_id.clone()),
     });
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
@@ -228,8 +244,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
 
     // 5. Drain: refuse new mutating work, let the worker finish its current
     //    job within the budget, then retract only our own discovery metadata.
-    shared.draining.store(true, Ordering::SeqCst);
-    let _ = shared.shutdown.send(true);
+    shared.begin_drain();
     if tokio::time::timeout(cfg.drain, worker).await.is_err() {
         warn!("drain_budget_exceeded", {"seconds": cfg.drain.as_secs()});
     }
@@ -405,6 +420,12 @@ where
             _ => return,
         };
         let is_shutdown = request.method == method::DAEMON_SHUTDOWN;
+        if request.method == method::EVENTS_SUBSCRIBE {
+            // The connection becomes a one-way event stream until the client
+            // closes it or the daemon shuts down.
+            stream_events(&shared, conn, request, shutdown_rx).await;
+            return;
+        }
         let response = dispatch(&shared, &client, request).await;
         let accepted = response.error.is_none();
         if write_frame(&mut conn, &response, MAX_FRAME_BYTES)
@@ -415,11 +436,166 @@ where
         }
         if is_shutdown && accepted {
             info!("shutdown_requested", {"client": client});
-            shared.draining.store(true, Ordering::SeqCst);
-            let _ = shared.shutdown.send(true);
+            shared.begin_drain();
             return;
         }
     }
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SubscribeParams {
+    #[serde(default)]
+    since_seq: Option<u64>,
+    #[serde(default)]
+    since_instance_id: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
+}
+
+/// Serve `events.subscribe`: acknowledge with the stream position, replay
+/// retained events after `sinceSeq`, then forward live events. A subscriber
+/// that falls behind the bounded buffer receives a `stream.gap` event and must
+/// resynchronize with `events.snapshot`; memory never grows per subscriber.
+async fn stream_events<C>(
+    shared: &Arc<Shared>,
+    mut conn: C,
+    request: Request,
+    mut shutdown_rx: watch::Receiver<bool>,
+) where
+    C: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let id = request.request_id.clone();
+    if request.protocol != PROTOCOL_MAJOR {
+        let _ = write_frame(
+            &mut conn,
+            &Response::err(
+                id,
+                ErrorBody::new(
+                    ErrorCode::ProtocolUnsupported,
+                    format!("envelope protocol {}", request.protocol),
+                ),
+            ),
+            MAX_FRAME_BYTES,
+        )
+        .await;
+        return;
+    }
+    let p: SubscribeParams = match parse(request.params) {
+        Ok(p) => p,
+        Err(e) => {
+            let _ = write_frame(&mut conn, &Response::err(id, e), MAX_FRAME_BYTES).await;
+            return;
+        }
+    };
+    let filter = p.project_id.or(request.project_id);
+    let sub = shared
+        .events
+        .subscribe(p.since_seq, p.since_instance_id.as_deref());
+    let ack = Response::ok(
+        id,
+        json!({
+            "instanceId": shared.instance_id,
+            "currentSeq": sub.current_seq,
+            "gap": sub.gap,
+            "replayed": sub.replay.len(),
+        }),
+    );
+    if write_frame(&mut conn, &ack, MAX_FRAME_BYTES).await.is_err() {
+        return;
+    }
+    let wanted = |e: &crate::events::Event| {
+        filter.is_none() || e.project_id.is_none() || e.project_id == filter
+    };
+    for ev in sub.replay.iter().filter(|e| wanted(e)) {
+        if write_frame(&mut conn, ev, MAX_FRAME_BYTES).await.is_err() {
+            return;
+        }
+    }
+    let mut rx = sub.rx;
+    loop {
+        tokio::select! {
+            ev = rx.recv() => match ev {
+                Ok(ev) => {
+                    if wanted(&ev)
+                        && write_frame(&mut conn, &ev, MAX_FRAME_BYTES).await.is_err()
+                    {
+                        return;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+                    let gap = json!({
+                        "kind": "stream.gap",
+                        "instanceId": shared.instance_id,
+                        "data": {"missed": missed},
+                    });
+                    if write_frame(&mut conn, &gap, MAX_FRAME_BYTES).await.is_err() {
+                        return;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+            },
+            // Any inbound frame or EOF ends the stream; subscribers only read.
+            _ = read_header(&mut conn, MAX_FRAME_BYTES) => return,
+            _ = shutdown_rx.changed() => {
+                // Flush what was published before shutdown (the drain notice).
+                while let Ok(ev) = rx.try_recv() {
+                    if !wanted(&ev)
+                        || write_frame(&mut conn, &ev, MAX_FRAME_BYTES).await.is_ok()
+                    {
+                        continue;
+                    }
+                    return;
+                }
+                return;
+            }
+        }
+    }
+}
+
+/// Observable status of one project (registry + watcher state).
+async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStatus, ErrorBody> {
+    let p2 = pid.clone();
+    let (project, last_job, ownership, publication) = shared
+        .registry(move |r| {
+            Ok((
+                r.get_project(&p2)?,
+                r.latest_job(&p2)?,
+                r.ownership_status(&p2)?,
+                r.publication_state(&p2)?,
+            ))
+        })
+        .await?;
+    let ws = shared.watch.status(&pid);
+    let freshness = crate::watch::Supervisor::freshness(
+        &ws,
+        ws.last_error
+            .as_deref()
+            .or(publication.last_error.as_deref()),
+    );
+    Ok(ProjectStatus {
+        project,
+        freshness,
+        ownership: ownership.state,
+        activity: match last_job.as_ref() {
+            Some(j) if j.state == JobState::Running => {
+                if j.kind == JobKind::Check {
+                    "checking".into()
+                } else {
+                    "indexing".into()
+                }
+            }
+            _ => "dormant".into(),
+        },
+        watch_health: ws.watch_health.clone(),
+        last_job,
+        pending_paths: ws.pending_paths,
+        reconcile_reason: ws.reconcile_reason.clone(),
+        sessions: ws.sessions,
+        generation: publication.generation,
+        last_indexed_ms: publication.last_index_ms,
+        last_error: ws.last_error.clone().or(publication.last_error.clone()),
+    })
 }
 
 fn parse<T: DeserializeOwned>(params: Value) -> Result<T, ErrorBody> {
@@ -519,6 +695,11 @@ async fn dispatch_inner(
             let p: RegisterProjectParams = parse(req.params)?;
             let (project, created) = shared.registry(move |r| r.register_project(&p)).await?;
             info!("project_registered", {"projectId": project.project_id, "created": created, "client": client});
+            if created {
+                shared
+                    .events
+                    .publish("project.registered", Some(&project.project_id), json!({}));
+            }
             to_value(RegisterProjectResult { project, created })
         }
         method::PROJECT_LIST => {
@@ -527,46 +708,32 @@ async fn dispatch_inner(
         }
         method::PROJECT_GET => {
             let pid = require_project(&req)?;
-            let p2 = pid.clone();
-            let (project, last_job, ownership, publication) = shared
-                .registry(move |r| {
-                    Ok((
-                        r.get_project(&p2)?,
-                        r.latest_job(&p2)?,
-                        r.ownership_status(&p2)?,
-                        r.publication_state(&p2)?,
-                    ))
-                })
-                .await?;
-            let ws = shared.watch.status(&pid);
-            let freshness = crate::watch::Supervisor::freshness(
-                &ws,
-                ws.last_error
-                    .as_deref()
-                    .or(publication.last_error.as_deref()),
-            );
-            // M1 has no watcher or writer: report only what is observable.
-            to_value(ProjectStatus {
-                project,
-                freshness,
-                ownership: ownership.state,
-                activity: if last_job
-                    .as_ref()
-                    .is_some_and(|j| j.state == JobState::Running)
-                {
-                    "checking".into()
-                } else {
-                    "dormant".into()
-                },
-                watch_health: ws.watch_health.clone(),
-                last_job,
-                pending_paths: ws.pending_paths,
-                reconcile_reason: ws.reconcile_reason.clone(),
-                sessions: ws.sessions,
-                generation: publication.generation,
-                last_indexed_ms: publication.last_index_ms,
-                last_error: ws.last_error.clone().or(publication.last_error.clone()),
-            })
+            to_value(project_status(shared, pid).await?)
+        }
+        method::EVENTS_SNAPSHOT => {
+            // Read the position first: anything published while the snapshot
+            // is assembled is replayed by a subscribe from this sequence.
+            let seq = shared.events.current_seq();
+            let ids: Vec<String> = shared
+                .registry(|r| r.list_projects())
+                .await?
+                .into_iter()
+                .map(|p| p.project_id)
+                .collect();
+            let mut projects = Vec::with_capacity(ids.len());
+            for pid in ids {
+                match project_status(shared, pid).await {
+                    Ok(s) => projects.push(s),
+                    // Detached concurrently: its event follows the snapshot.
+                    Err(e) if e.code == ErrorCode::ProjectNotFound => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(json!({
+                "instanceId": shared.instance_id,
+                "seq": seq,
+                "projects": projects,
+            }))
         }
         method::PROJECT_DETACH => {
             let pid = require_project(&req)?;
@@ -576,6 +743,9 @@ async fn dispatch_inner(
             }
             let project = shared.registry(move |r| r.detach_project(&pid)).await?;
             info!("project_detached", {"projectId": project.project_id, "client": client});
+            shared
+                .events
+                .publish("project.detached", Some(&project.project_id), json!({}));
             Ok(json!({
                 "project": project,
                 "preserved": { "checkoutRoot": project.checkout_root, "indexDir": project.index_dir },
@@ -653,6 +823,9 @@ async fn dispatch_inner(
                 })
                 .await?;
             shared.wake_worker.notify_one();
+            if !admission.deduplicated {
+                crate::events::job_event(shared, "job.queued", &admission.job);
+            }
             to_value(JobAdmission {
                 job: admission.job,
                 deduplicated: admission.deduplicated,
@@ -729,6 +902,14 @@ async fn dispatch_inner(
                 .registry(move |r| r.configure_project(&pid, p.watch_policy))
                 .await?;
             info!("project_configured", {"projectId": project.project_id, "watchPolicy": project.watch_policy.as_str(), "revision": project.configuration_revision});
+            shared.events.publish(
+                "project.configured",
+                Some(&project.project_id),
+                json!({
+                    "watchPolicy": project.watch_policy.as_str(),
+                    "configurationRevision": project.configuration_revision,
+                }),
+            );
             to_value(project)
         }
         method::SESSION_ACQUIRE => {

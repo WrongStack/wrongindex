@@ -10,6 +10,6 @@ pub mod frame;
 #[cfg(windows)]
 pub mod win;
 
-pub use client::{CallError, Client};
+pub use client::{CallError, Client, EventStream};
 pub use endpoint::{DataRoot, Discovery};
 pub use frame::{FrameError, read_frame, write_frame};

@@ -126,6 +126,34 @@ impl Client {
         }
     }
 
+    /// Turn this connection into an event stream (`events.subscribe`).
+    /// Returns the acknowledgement (`instanceId`, `currentSeq`, `gap`) and the
+    /// stream; the connection can no longer make calls.
+    pub async fn subscribe(
+        mut self,
+        since_seq: Option<u64>,
+        since_instance_id: Option<&str>,
+        project_id: Option<&str>,
+    ) -> Result<(Value, EventStream), CallError> {
+        let ack = self
+            .call_raw(
+                wrongindex_contracts::method::EVENTS_SUBSCRIBE,
+                project_id,
+                serde_json::json!({
+                    "sinceSeq": since_seq,
+                    "sinceInstanceId": since_instance_id,
+                }),
+                None,
+            )
+            .await?;
+        Ok((
+            ack,
+            EventStream {
+                stream: self.stream,
+            },
+        ))
+    }
+
     pub async fn call<P: Serialize, R: DeserializeOwned>(
         &mut self,
         method: &str,
@@ -136,6 +164,20 @@ impl Client {
             serde_json::to_value(params).map_err(|e| CallError::Protocol(e.to_string()))?;
         let v = self.call_raw(method, project_id, params, None).await?;
         serde_json::from_value(v).map_err(|e| CallError::Protocol(e.to_string()))
+    }
+}
+
+/// Server-pushed events after `events.subscribe`. Each item is one event
+/// object (`seq`, `instanceId`, `kind`, `projectId?`, `data`); a `stream.gap`
+/// event means history was lost and the caller must take a snapshot.
+pub struct EventStream {
+    stream: Stream,
+}
+
+impl EventStream {
+    /// Next event, or `None` when the daemon closed the stream.
+    pub async fn next(&mut self) -> Result<Option<Value>, CallError> {
+        Ok(read_frame(&mut self.stream, MAX_FRAME_BYTES).await?)
     }
 }
 
