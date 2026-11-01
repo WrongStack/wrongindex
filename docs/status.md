@@ -166,6 +166,12 @@ Hosted CI on the first push (run 41293608373, `windows-latest`): PASS.
 
 CI on the security fix (run 41294030531) FAILED, exposing a real environment case: the GitHub runner is an elevated administrator, whose token stamps new objects with owner `BUILTIN\Administrators` (S-1-5-32-544) rather than the user SID. The owner check now accepts the user SID or the token's default owner (`TokenOwner`); for a non-elevated user that is still only the user SID, so an Administrators-owned directory remains refused. Unit tests cover foreign owner, extra allow ACE, uninterpreted ACE, and the valid case.
 
+## Security review follow-up - native parser stack exhaustion (2026-11-01)
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| A hostile source file could overflow the stack of the oxc parser or the symbol walk and abort the service (oxc has no recursion limit) | First fix (bracket pre-scan + 256 MiB parse thread) was bypassable: unary chains, ternaries and arrows nest without brackets (`!` x 2,000,000 in one `.ts` file aborted a 256 MiB thread). The daemon now runs every native index run in a child process of its own binary (`wrongindexd --native-rebuild <root> <index-dir>`, one JSON reply on stdout, 30 min deadline, `kill_on_drop`). A crash ends only the child; the project is treated as unsupported (`auto` falls back to the compatibility worker, otherwise the job fails with NOT_IMPLEMENTED naming the crash). The pre-scan stays as a cheap early refusal and is documented as a heuristic. | `wrongindexd/tests/native_backend.rs` hostile-file case: job fails, message names the crash, daemon still healthy and other projects intact; `cargo test -p wrongindexd` 5/5; workspace 158 passed. Library callers of `wrongindex-engine` (tests) still parse in-process. |
+
 ## Next tasks
 
 1. WI-005 remainder (non-blocking for M1/M2 work).
