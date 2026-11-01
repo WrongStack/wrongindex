@@ -8,7 +8,7 @@
 //!
 //! - any other language, or a YAML file that could carry infra references
 //!   (`infra-parser.ts`: compose, GitHub workflows, OpenAPI, Kubernetes);
-//! - a Git checkout root (Git discovery order, `git_blob` trust pass);
+//! - Git-listed symbolic links that resolve outside the checkout;
 //! - files over 5 MiB, incomplete discovery, or no indexable files;
 //! - an index directory that already holds an `index.db`.
 
@@ -83,6 +83,8 @@ const ANALYZE_ORDER: &[&str] = &[
 
 #[derive(Debug, thiserror::Error)]
 pub enum NativeError {
+    #[error("project files changed during indexing")]
+    SourceChanged,
     #[error("not supported by the native engine yet: {0}")]
     Unsupported(String),
     #[error("io: {0}")]
@@ -163,8 +165,14 @@ fn now_ms() -> i64 {
         .map_or(0, |d| d.as_millis() as i64)
 }
 
+/// Git trust evidence from discovery (Git checkout roots only).
+struct GitTrust {
+    clean_blobs: std::collections::BTreeMap<String, String>,
+    snapshot_key: Option<String>,
+}
+
 /// Read and parse every discovered file; refuse anything unsupported.
-fn collect(project_root: &Path) -> Result<Vec<FileRow>, NativeError> {
+fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
     let d = wrongindex_discovery::discover(project_root, &[]);
     if !d.complete {
         return Err(NativeError::Unsupported(format!(
@@ -172,11 +180,18 @@ fn collect(project_root: &Path) -> Result<Vec<FileRow>, NativeError> {
             d.errors.join("; ")
         )));
     }
-    if d.source != wrongindex_discovery::Source::Walk {
-        return Err(NativeError::Unsupported(
-            "Git checkout roots (git_blob trust pass)".into(),
-        ));
+    if !d.outside_root.is_empty() {
+        // WrongStack follows these links; WrongIndex never reads outside the
+        // checkout, so the result could not be identical.
+        return Err(NativeError::Unsupported(format!(
+            "Git-listed links that resolve outside the checkout ({})",
+            d.outside_root.join(", ")
+        )));
     }
+    let git = (d.source == wrongindex_discovery::Source::Git).then(|| GitTrust {
+        clean_blobs: d.clean_blobs.clone(),
+        snapshot_key: d.snapshot_key.clone(),
+    });
     if d.files.is_empty() {
         return Err(NativeError::Unsupported(
             "a project with no indexable files".into(),
@@ -228,7 +243,7 @@ fn collect(project_root: &Path) -> Result<Vec<FileRow>, NativeError> {
             symbols: parsed.symbols,
         });
     }
-    Ok(rows)
+    Ok((rows, git))
 }
 
 /// Statements of `schema.sql`: tables first, then the FTS table, then indexes.
@@ -267,6 +282,9 @@ fn set_meta(tx: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
 }
 
 /// Index `project_root` into a new `index_dir/index.db`.
+///
+/// Like `runIndexerWithStore`, a run whose Git snapshot moved while files
+/// were read is discarded and retried once.
 pub fn index_fresh(project_root: &Path, index_dir: &Path) -> Result<Report, NativeError> {
     let db_path: PathBuf = index_dir.join("index.db");
     if db_path.exists() {
@@ -274,9 +292,36 @@ pub fn index_fresh(project_root: &Path, index_dir: &Path) -> Result<Report, Nati
             "an existing index (only fresh indexes are written natively)".into(),
         ));
     }
-    let files = collect(project_root)?;
+    match index_once(project_root, index_dir, &db_path) {
+        Err(NativeError::SourceChanged) => {
+            remove_fresh_db(&db_path);
+            index_once(project_root, index_dir, &db_path).inspect_err(|e| {
+                if matches!(e, NativeError::SourceChanged) {
+                    remove_fresh_db(&db_path);
+                }
+            })
+        }
+        other => other,
+    }
+}
+
+/// Remove a database this run created and never committed.
+fn remove_fresh_db(db: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let mut p = db.as_os_str().to_owned();
+        p.push(suffix);
+        let _ = std::fs::remove_file(PathBuf::from(p));
+    }
+}
+
+fn index_once(
+    project_root: &Path,
+    index_dir: &Path,
+    db_path: &Path,
+) -> Result<Report, NativeError> {
+    let (files, git) = collect(project_root)?;
     std::fs::create_dir_all(index_dir)?;
-    let mut conn = Connection::open(&db_path)?;
+    let mut conn = Connection::open(db_path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "busy_timeout", 15000)?;
@@ -396,6 +441,32 @@ pub fn index_fresh(project_root: &Path, index_dir: &Path) -> Result<Report, Nati
     ))?;
     set_meta(&tx, "rank_version", "1")?;
     set_meta(&tx, "rank_stale_files", "0")?;
+    // Git trust pass: every file Git reports clean gets `blob:contentHash`;
+    // a new stamp is only written if the checkout did not move meanwhile.
+    if let Some(git) = &git {
+        let stamps: Vec<(String, &str)> = files
+            .iter()
+            .filter_map(|f| {
+                git.clean_blobs
+                    .get(&f.path)
+                    .map(|b| (format!("{b}:{}", f.content_hash), f.path.as_str()))
+            })
+            .collect();
+        if !stamps.is_empty() {
+            let now = wrongindex_discovery::discover(project_root, &[]);
+            if now.snapshot_key != git.snapshot_key
+                || now.files != files.iter().map(|f| f.path.clone()).collect::<Vec<_>>()
+            {
+                return Err(NativeError::SourceChanged);
+            }
+        }
+        for (stamp, file) in stamps {
+            tx.execute(
+                "UPDATE files SET git_blob = ?1 WHERE file = ?2",
+                [stamp.as_str(), file],
+            )?;
+        }
+    }
     write_stat1(&tx)?;
     let changed = files.len();
     let graph_stamp = format!("{}:{changed}", now_ms());
