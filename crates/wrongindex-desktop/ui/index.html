@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WrongIndex</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>WrongIndex</div>
+    <div id="conn" class="conn" role="status" aria-live="polite">Connecting…</div>
+    <div class="spacer"></div>
+    <div id="service-meta" class="meta"></div>
+    <button id="btn-start" class="btn" hidden>Start Index Service</button>
+    <button id="btn-stop" class="btn subtle" hidden>Stop Index Service…</button>
+  </header>
+  <div class="layout">
+    <nav class="sidebar" aria-label="Sections">
+      <button class="nav" data-view="overview" aria-current="page">Overview</button>
+      <button class="nav" data-view="projects">Projects</button>
+      <button class="nav" data-view="activity">Activity</button>
+      <button class="nav" data-view="diagnostics">Diagnostics</button>
+    </nav>
+    <main id="main" tabindex="-1"></main>
+  </div>
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <dialog id="confirm">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body"></p>
+      <div class="row end">
+        <button value="cancel" class="btn subtle">Cancel</button>
+        <button value="ok" id="confirm-ok" class="btn danger">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

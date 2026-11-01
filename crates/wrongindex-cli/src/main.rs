@@ -518,40 +518,9 @@ fn report_started(instance: &str, already: bool, json: bool) {
 }
 
 fn spawn_daemon(root: &DataRoot) -> Result<std::process::Child, Failure> {
-    let exe = std::env::current_exe()
-        .map_err(|e| fail(exit_code::INTERNAL, e.to_string()))?
-        .with_file_name(if cfg!(windows) {
-            "wrongindexd.exe"
-        } else {
-            "wrongindexd"
-        });
-    if !exe.exists() {
-        return Err(fail(
-            exit_code::SERVICE_UNAVAILABLE,
-            format!("daemon binary not found at {}", exe.display()),
-        ));
-    }
-    let mut cmd = std::process::Command::new(&exe);
-    cmd.arg("--data-root")
-        .arg(root.path())
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
-        // The daemon must outlive this CLI and its console (INV-12). Break
-        // away from the caller's job object when allowed; otherwise fall back.
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB);
-        if let Ok(child) = cmd.spawn() {
-            return Ok(child);
-        }
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-    }
-    cmd.spawn().map_err(|e| {
+    let exe = wrongindex_ipc::launch::sibling_daemon_exe()
+        .map_err(|e| fail(exit_code::INTERNAL, e.to_string()))?;
+    wrongindex_ipc::launch::spawn_detached(&exe, root).map_err(|e| {
         fail(
             exit_code::SERVICE_UNAVAILABLE,
             format!("cannot start {}: {e}", exe.display()),

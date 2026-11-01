@@ -7,6 +7,7 @@
 pub mod client;
 pub mod endpoint;
 pub mod frame;
+pub mod launch;
 #[cfg(windows)]
 pub mod win;
 

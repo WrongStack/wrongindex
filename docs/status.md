@@ -84,13 +84,25 @@ Security review follow-up (run guard): a write run holds a per-project run guard
 
 Engine acceptance test (`crates/wrongindexd/tests/engine.rs`, ignored by default; needs `WRONGINDEX_TEST_ENGINE` + bun): ownership required for writes and reads; claim of a missing index; full run 4 files / 14 symbols, generation 1; written index inspects `compatible`; search finds `greet`; unchanged full run keeps generation 1; targeted edit -> generation 2 and the new `farewell` symbol is searchable; `../../outside.ts` rejected; a client-supplied `indexDir` is ignored; health shows `legacy-bun-worker`, `native: false`; writes refused after release. 5/5 local runs PASS. Hosted CI: NOT RUN (no engine in CI).
 
+## M4 - desktop (started)
+
+| ID | State | Evidence / gap |
+|---|---|---|
+| WI-400 | Done | `crates/wrongindex-desktop` (Tauri 2.12.5, static HTML/CSS/JS, no bundler). The WebView only calls ten narrow app commands; each maps to a fixed daemon method in `src/bridge.rs` through the shared Rust IPC client. The token stays in the Rust process; capability `core:default` only (no fs/shell plugins); strict CSP; all UI text set via `textContent`. Unknown actions/policies are rejected before IPC (unit tests). "Open folder" uses the daemon-recorded checkout, never a WebView path. |
+| WI-401 | Done | Overview cards and project table (policy, freshness with text+icon, ownership, activity, watch, generation, pending, last indexed, error). A disconnected service shows "Service not running" with the reason and no cached values (unit test + screenshot). |
+| WI-402 | Partial | Add project: paste a path -> read-only preview (resolved checkout, WrongStack index location, linked worktree, inspector verdict for an existing index) -> policy (default manual) -> register. Verified that preview creates nothing under `~/.wrongstack`. Native folder picker and ownership-conflict guidance: NOT DONE. |
+| WI-403 | Partial | Project detail: state grid, claim/release, check, reconcile, policy apply (success shown only after the daemon acknowledges), open folder, remove (confirmed; source and index preserved), jobs with cancel for queued jobs, ownership history. Phase progress, files & errors view, retry failed files: NOT DONE (daemon does not expose them yet). |
+| WI-404 | Partial | Events are forwarded from a Rust-side subscription; first connect, a new daemon instance, or a gap triggers a full re-read (`wi://resync`); activity is a bounded (200) projection. Verified live: CLI-triggered job and policy change appeared in Activity. |
+| WI-406 | Done (manual evidence) | Tray menu: Open WrongIndex, Stop Index Service... (confirmed in-window), Quit Desktop. Window close hides to tray. Manual smoke on Windows 11: window closed -> desktop and daemon still running; daemon started from the GUI keeps running after the desktop process is killed; stopped service -> disconnected view; restart from GUI -> live again. |
+| WI-405, WI-407, WI-408 | Not started | Settings/diagnostics export, accessibility/DPI review, packaged smoke. The desktop does not hold session leases yet, so `session`-policy projects are not watched just because the GUI is open. |
+
 ## Verification run (2026-11-01, Windows 11, local)
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 87 tests + 4 engine-backed tests ignored without an engine (contracts 4, storage 25, registry 14, discovery 13, ipc 14, daemon unit 8, daemon integration 8); with `WRONGINDEX_TEST_ENGINE` all 4 engine-backed tests PASS 3/3 locally; storage includes oracle-hash parity over all fixture files and resolver KATs |
+| `cargo test --workspace` | PASS — 92 tests + 4 engine-backed tests ignored without an engine (contracts 4, storage 25, registry 14, discovery 13, ipc 14, daemon unit 8, daemon integration 8, desktop bridge 5); with `WRONGINDEX_TEST_ENGINE` all 4 engine-backed tests PASS 3/3 locally; storage includes oracle-hash parity over all fixture files and resolver KATs |
 | `bun scripts/oracle/resolver-diff.ts` | PASS — 15/15 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |

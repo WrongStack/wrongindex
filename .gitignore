@@ -4,3 +4,6 @@ node_modules/
 *.db-shm
 /.project/
 .wrongindex-test-*/
+
+.dfmt/
+/crates/wrongindex-desktop/gen/
