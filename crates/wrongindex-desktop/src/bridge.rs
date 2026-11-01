@@ -248,6 +248,94 @@ impl Bridge {
             .await?)
     }
 
+    /// Read-only symbol search in a project's published index (the search
+    /// inspector); served by the daemon like any WrongStack client's query.
+    pub async fn search(&self, project_id: &str, query: &str) -> Result<Value, UiError> {
+        let query = query.trim();
+        if query.is_empty() || query.chars().count() > 200 {
+            return Err(UiError::new(
+                "INVALID_REQUEST",
+                "enter a search term (at most 200 characters)",
+            ));
+        }
+        Ok(self
+            .client()
+            .await?
+            .call_raw(
+                method::INDEX_QUERY,
+                Some(project_id),
+                json!({"op": "search", "args": {"query": query, "limit": 50}}),
+                None,
+            )
+            .await?)
+    }
+
+    /// `wrongindex diagnostics export` (the CLI installed next to this
+    /// executable), so the desktop and the CLI share one redaction and
+    /// bounding implementation. `output: None` is a preview (`--dry-run`).
+    pub async fn diagnostics(
+        &self,
+        redact_paths: bool,
+        output: Option<&Path>,
+    ) -> Result<Value, UiError> {
+        let exe = std::env::current_exe()
+            .map_err(|e| UiError::new("INTERNAL", e.to_string()))?
+            .with_file_name(if cfg!(windows) {
+                "wrongindex.exe"
+            } else {
+                "wrongindex"
+            });
+        if !exe.is_file() {
+            return Err(UiError::new(
+                "INTERNAL",
+                format!(
+                    "the WrongIndex CLI was not found next to the desktop ({})",
+                    exe.display()
+                ),
+            ));
+        }
+        let mut cmd = tokio::process::Command::new(&exe);
+        cmd.arg("--json")
+            .arg("--data-root")
+            .arg(self.root.path())
+            .args(["diagnostics", "export"]);
+        if redact_paths {
+            cmd.arg("--redact-paths");
+        }
+        match output {
+            // The save dialog already confirmed any overwrite.
+            Some(p) => {
+                cmd.arg("--output").arg(p).arg("--force");
+            }
+            None => {
+                cmd.arg("--dry-run");
+            }
+        }
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        #[cfg(windows)]
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        let out = tokio::time::timeout(Duration::from_secs(120), cmd.output())
+            .await
+            .map_err(|_| UiError::new("DEADLINE_EXCEEDED", "diagnostics export took too long"))?
+            .map_err(|e| UiError::new("INTERNAL", e.to_string()))?;
+        if !out.status.success() {
+            let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            return Err(UiError::new(
+                "INTERNAL",
+                if msg.is_empty() {
+                    format!("diagnostics export failed ({})", out.status)
+                } else {
+                    msg
+                },
+            ));
+        }
+        serde_json::from_slice(&out.stdout)
+            .map_err(|e| UiError::new("PROTOCOL", format!("diagnostics output: {e}")))
+    }
+
     /// The checkout folder of a registered project, as recorded by the
     /// daemon (never a path supplied by the WebView).
     pub async fn checkout_root(&self, project_id: &str) -> Result<String, UiError> {
@@ -355,6 +443,25 @@ mod tests {
         assert_eq!(e, UiError::new("OWNER_CONFLICT", "held by x"));
         let e: UiError = CallError::Unavailable("no discovery".into()).into();
         assert_eq!(e.code, "SERVICE_UNAVAILABLE");
+    }
+
+    #[tokio::test]
+    async fn search_terms_are_validated_before_the_service_is_called() {
+        let tmp = std::env::temp_dir().join(format!("wi-desktop-s-{}", std::process::id()));
+        let b = Bridge::new(DataRoot::resolve(Some(&tmp)).unwrap());
+        assert_eq!(
+            b.search("p", "   ").await.unwrap_err().code,
+            "INVALID_REQUEST"
+        );
+        assert_eq!(
+            b.search("p", &"x".repeat(201)).await.unwrap_err().code,
+            "INVALID_REQUEST"
+        );
+        // A valid term reaches the (absent) service.
+        assert_eq!(
+            b.search("p", "Runner").await.unwrap_err().code,
+            "SERVICE_UNAVAILABLE"
+        );
     }
 
     #[test]

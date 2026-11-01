@@ -23,5 +23,8 @@ serde_json.workspace = true
 tauri.workspace = true
 tokio.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
 [lints]
 workspace = true

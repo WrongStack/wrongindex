@@ -4960,6 +4960,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "windows",
  "wrongindex-contracts",
  "wrongindex-ipc",
  "wrongindex-storage",

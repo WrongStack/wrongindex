@@ -12,6 +12,10 @@ const state = {
   detail: null,
   activity: [],
   preview: null,
+  // Search inspector: per-project query and last result.
+  search: { projectId: null, query: '', result: null, busy: false },
+  // Diagnostics export.
+  diag: { redact: true, preview: null, busy: false },
 };
 const ACTIVITY_CAP = 200;
 
@@ -248,20 +252,24 @@ function projectsView() {
   if (state.selected && state.detail) return detailView();
   const input = el('input', { type: 'text', id: 'add-path', placeholder: 'C:\\path\\to\\checkout', 'aria-label': 'Project folder' });
   if (state.preview?.path) input.value = state.preview.path;
-  const previewBtn = el('button', { class: 'btn subtle', onclick: async () => {
-    const path = input.value.trim();
+  const check = async (path) => {
     try {
       const r = await call('preview_project', { path });
       state.preview = { path, ...r };
     } catch { state.preview = { path }; }
-    render();
-  } }, 'Check folder');
+    render(true);
+  };
+  const browseBtn = el('button', { class: 'btn', onclick: async () => {
+    const r = await call('pick_folder');
+    if (r.path) await check(r.path);
+  } }, 'Browse…');
+  const previewBtn = el('button', { class: 'btn subtle', onclick: () => check(input.value.trim()) }, 'Check folder');
   const ps = projects();
   return el('section', {},
     el('h1', {}, 'Projects'),
     el('h2', {}, 'Add project'),
-    el('div', { class: 'row' }, input, previewBtn),
-    el('p', { class: 'note' }, 'Checking is read-only: it resolves the WrongStack index location and inspects any existing index without changing it.'),
+    el('div', { class: 'row' }, browseBtn, input, previewBtn),
+    el('p', { class: 'note' }, 'Choose a folder or paste its path. Checking is read-only: it resolves the WrongStack index location and inspects any existing index without changing it.'),
     state.preview?.resolved ? previewPanel() : null,
     el('h2', {}, 'Registered'),
     ps.length ? projectTable(ps) : el('div', { class: 'empty' }, 'No projects are registered yet.'));
@@ -346,6 +354,7 @@ function detailView() {
         toast(`Policy applied by the service: ${policy.value}.`);
         await refresh();
       } }, 'Apply')),
+    searchPanel(p),
     el('h2', {}, 'Jobs'),
     jobsTable(d.jobs ?? []),
     journal.length ? el('h2', {}, 'Ownership history') : null,
@@ -354,6 +363,53 @@ function detailView() {
       el('tbody', {}, journal.map((j) => el('tr', {},
         el('td', {}, when(j.atMs)), el('td', {}, String(j.epoch ?? '')),
         el('td', {}, j.phase ?? ''), el('td', { class: 'mono' }, j.oldOwner ?? '—'), el('td', { class: 'mono' }, j.newOwner ?? '—'))))) : null);
+}
+
+function searchPanel(p) {
+  const sr = state.search.projectId === p.projectId ? state.search : { query: '', result: null };
+  const input = el('input', {
+    type: 'text', 'aria-label': 'Search symbols', placeholder: 'Symbol name or text',
+    oninput: (e) => { state.search.query = e.target.value; state.search.projectId = p.projectId; },
+    onkeydown: (e) => { if (e.key === 'Enter') run(); },
+  });
+  input.value = sr.query ?? '';
+  async function run() {
+    const query = input.value.trim();
+    if (!query) return;
+    state.search = { projectId: p.projectId, query, result: null, busy: true };
+    render(true);
+    try {
+      state.search.result = await call('search', { projectId: p.projectId, query });
+    } catch { /* toast already shown */ }
+    state.search.busy = false;
+    render(true);
+  }
+  const rel = (file) => {
+    const root = p.checkoutRoot.replace(/[\\/]+$/, '');
+    return file.toLowerCase().startsWith(root.toLowerCase()) ? file.slice(root.length + 1) : file;
+  };
+  const r = sr.result;
+  let body = null;
+  if (sr.busy) body = el('p', { class: 'note' }, 'Searching…');
+  else if (r) {
+    const rows = r.result?.results ?? [];
+    body = rows.length
+      ? el('table', {},
+        el('thead', {}, el('tr', {}, ...['Symbol', 'Kind', 'Location', 'Signature'].map((h) => el('th', { scope: 'col' }, h)))),
+        el('tbody', {}, rows.map((x) => el('tr', {},
+          el('td', {}, x.name),
+          el('td', {}, x.kind),
+          el('td', { class: 'mono' }, `${rel(x.file)}:${x.line}`),
+          el('td', { class: 'mono' }, x.signature)))))
+      : el('div', { class: 'empty' }, 'No matches.');
+  }
+  return el('div', {},
+    el('h2', {}, 'Search inspector'),
+    el('div', { class: 'row' }, input, el('button', { class: 'btn subtle', onclick: run }, 'Search')),
+    el('p', { class: 'note' }, r
+      ? `${r.result?.total ?? (r.result?.results ?? []).length} match(es) in generation ${r.generation} · served by the ${r.backend} reader. Read-only.`
+      : 'Searches the published index read-only, the way WrongStack clients do.'),
+    body);
 }
 
 function jobsTable(jobs) {
@@ -421,7 +477,38 @@ function diagnosticsView() {
       el('div', { class: 'k' }, 'Event position'), el('div', {}, `seq ${o.snapshot.seq}`)),
     el('h2', {}, 'Backends'),
     el('ul', {}, h.backendInventory.map((b) => el('li', { class: 'mono' }, b))),
-    el('p', { class: 'note' }, 'This view never shows the service credential. Diagnostics export is not available yet.'));
+    el('p', { class: 'note' }, 'This view never shows the service credential.'),
+    diagnosticsExport());
+}
+
+function diagnosticsExport() {
+  const dg = state.diag;
+  const redact = el('input', { type: 'checkbox', id: 'redact', checked: dg.redact,
+    onchange: (e) => { dg.redact = e.target.checked; dg.preview = null; render(true); } });
+  const preview = async () => {
+    dg.busy = true; render(true);
+    try { dg.preview = await call('diagnostics_preview', { redactPaths: dg.redact }); } catch { /* toast shown */ }
+    dg.busy = false; render(true);
+  };
+  const exportIt = async () => {
+    dg.busy = true; render(true);
+    try {
+      const r = await call('export_diagnostics', { redactPaths: dg.redact });
+      if (r.saved) toast(`Diagnostics saved to ${r.saved}`);
+    } catch { /* toast shown */ }
+    dg.busy = false; render(true);
+  };
+  const cats = dg.preview?.categories ?? [];
+  return el('div', {},
+    el('h2', {}, 'Export diagnostics'),
+    el('p', { class: 'note' }, 'One bounded JSON bundle: versions, service health, project state, recent jobs, ownership history, read-only index inspection and the tail of the service log. Never included: the service credential, source code, index contents. Your home folder is always shown as ~.'),
+    el('div', { class: 'row' },
+      redact, el('label', { for: 'redact' }, 'Also replace project paths and names with short hashes'),
+      el('button', { class: 'btn subtle', disabled: dg.busy, onclick: preview }, 'Preview contents'),
+      el('button', { class: 'btn', disabled: dg.busy, onclick: exportIt }, 'Export…')),
+    cats.length ? el('table', { style: 'margin-top:8px' },
+      el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Category'), el('th', { scope: 'col' }, 'Size'))),
+      el('tbody', {}, cats.map((c) => el('tr', {}, el('td', {}, c.category), el('td', {}, `${(c.bytes / 1024).toFixed(1)} KiB`))))) : null);
 }
 
 // ─── navigation ─────────────────────────────────────────────────────────────
@@ -440,8 +527,14 @@ async function openProject(id) {
 }
 
 let lastScreen = '';
-function render() {
+/** `force`: re-render even while the user is typing in this screen. */
+function render(force = false) {
   renderHeader();
+  const active = document.activeElement;
+  const typing = active && active.closest('#main') && (active.tagName === 'INPUT' || active.tagName === 'SELECT');
+  const screenNow = `${state.view}:${state.selected ?? ''}`;
+  // A live refresh must not wipe what the user is typing or choosing.
+  if (!force && typing && screenNow === lastScreen) return;
   for (const b of document.querySelectorAll('.nav')) {
     if (b.dataset.view === state.view) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');

@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bridge;
+mod dialogs;
 
 use std::time::Duration;
 
@@ -80,6 +81,67 @@ async fn open_folder(bridge: State<'_, Bridge>, project_id: String) -> Res {
         .spawn()
         .map_err(|e| UiError::new("INTERNAL", e.to_string()))?;
     Ok(json!({"opened": root}))
+}
+
+/// Native folder picker (WI-402). `null` when the user cancels.
+#[tauri::command]
+async fn pick_folder(window: tauri::WebviewWindow) -> Res {
+    let owner = owner_hwnd(&window);
+    let picked =
+        tauri::async_runtime::spawn_blocking(move || dialogs::pick(owner, dialogs::Pick::Folder))
+            .await
+            .map_err(|e| UiError::new("INTERNAL", e.to_string()))?
+            .map_err(|e| UiError::new("INTERNAL", e))?;
+    Ok(json!({"path": picked.map(|p| p.display().to_string())}))
+}
+
+#[tauri::command]
+async fn search(bridge: State<'_, Bridge>, project_id: String, query: String) -> Res {
+    bridge.search(&project_id, &query).await
+}
+
+/// Category sizes of the bundle that would be exported; nothing is written.
+#[tauri::command]
+async fn diagnostics_preview(bridge: State<'_, Bridge>, redact_paths: bool) -> Res {
+    bridge.diagnostics(redact_paths, None).await
+}
+
+/// Ask where to save, then export. `{"saved": null}` when cancelled.
+#[tauri::command]
+async fn export_diagnostics(
+    bridge: State<'_, Bridge>,
+    window: tauri::WebviewWindow,
+    redact_paths: bool,
+) -> Res {
+    let owner = owner_hwnd(&window);
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialogs::pick(
+            owner,
+            dialogs::Pick::SaveJson {
+                suggested: "wrongindex-diagnostics.json".into(),
+            },
+        )
+    })
+    .await
+    .map_err(|e| UiError::new("INTERNAL", e.to_string()))?
+    .map_err(|e| UiError::new("INTERNAL", e))?;
+    let Some(path) = picked else {
+        return Ok(json!({"saved": null}));
+    };
+    let result = bridge.diagnostics(redact_paths, Some(&path)).await?;
+    Ok(json!({"saved": path.display().to_string(), "result": result}))
+}
+
+fn owner_hwnd(window: &tauri::WebviewWindow) -> isize {
+    #[cfg(windows)]
+    {
+        window.hwnd().map(|h| h.0 as isize).unwrap_or(0)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        0
+    }
 }
 
 #[tauri::command]
@@ -169,6 +231,10 @@ fn main() {
             recent_jobs,
             cancel_job,
             open_folder,
+            pick_folder,
+            search,
+            diagnostics_preview,
+            export_diagnostics,
             start_service,
             stop_service,
         ])

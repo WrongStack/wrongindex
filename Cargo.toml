@@ -51,6 +51,13 @@ oxc_parser = "=0.133.0"
 oxc_span = "=0.133.0"
 tauri = { version = "=2.12.5", features = ["tray-icon"] }
 tauri-build = { version = "=2.7.4", features = [] }
+# Desktop native dialogs (COM IFileDialog); the version tauri already locks.
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+] }
 windows-sys = { version = "=0.61.2", features = [
   "Win32_Foundation",
   "Win32_Security",
