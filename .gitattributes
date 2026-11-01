@@ -1,0 +1,5 @@
+# Fixture sources are hashed byte-for-byte by the oracle; never rewrite line endings.
+* text=auto eol=lf
+*.db binary
+*.png binary
+*.ico binary
