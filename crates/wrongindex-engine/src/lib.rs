@@ -3,14 +3,21 @@
 //! Capabilities are ported from WrongStack one at a time and each is gated by
 //! differential evidence against the original implementation; nothing here
 //! is used for writing until its gate passes. Ported so far: the JSON and
-//! YAML symbol extractors (WI-501/502 slice) and the Rust symbol parser with
-//! its regex import refs.
+//! YAML symbol extractors (WI-501/502 slice), the TOML regex extractor, the
+//! Rust symbol parser with its regex import refs, and the post-parse pipeline
+//! of a full run (module roots and package labels, module resolution for
+//! every language family, import binding, graph ranks).
 
+pub mod binding;
 pub mod dbdump;
 pub mod js;
 pub mod native;
 pub mod parse;
+pub mod paths;
 pub mod query;
+pub mod rank;
+pub mod relations;
+pub mod resolver;
 pub mod rows;
 pub mod unicode;
 

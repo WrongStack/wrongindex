@@ -423,6 +423,8 @@ pub fn symbols(content: &U16) -> Vec<ParsedSymbol> {
                 doc_comment: js::string(&doc),
                 scope: String::new(),
                 text: js::string(js::trim(&text)),
+                is_exported: None,
+                end_line: None,
             });
         }
     }

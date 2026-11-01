@@ -1,13 +1,17 @@
-//! Native full-index writer, first slice (WI-502).
+//! Native full-index writer (WI-502).
 //!
 //! Writes a WrongStack v5 `index.db` for a project whose indexable files are
-//! all JSON or YAML, reproducing one full WrongStack run
-//! (`runIndexerWithStore`, first run into an empty index directory). Every
-//! situation this slice has not ported is refused with
-//! [`NativeError::Unsupported`] before anything is written:
+//! all JSON, YAML, TOML or Rust, reproducing one full WrongStack run
+//! (`runIndexerWithStore`, first run into an empty index directory): batch
+//! writes with module owners and refs, then `finalizeIndexRun` - name
+//! resolution, the relation pass ([`crate::relations`],
+//! [`crate::resolver`]), import binding ([`crate::binding`]), the rank pass
+//! ([`crate::rank`]) and `PRAGMA optimize`. Every situation not ported is
+//! refused with [`NativeError::Unsupported`] before anything is written:
 //!
-//! - any other language, or a YAML file that could carry infra references
-//!   (`infra-parser.ts`: compose, GitHub workflows, OpenAPI, Kubernetes);
+//! - any other language, a YAML file that could carry infra references
+//!   (`infra-parser.ts`: compose, GitHub workflows, OpenAPI, Kubernetes), or
+//!   a TOML file named like an infra artifact (`dockerfile.*`, `.env.*`);
 //! - Git-listed symbolic links that resolve outside the checkout;
 //! - files over 5 MiB, incomplete discovery, or no indexable files;
 //! - an index directory that already holds an `index.db`.
@@ -16,10 +20,9 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, params_from_iter};
-use sha2::{Digest, Sha256};
 
 use crate::js::utf16;
-use crate::parse::{Parsed, ParsedSymbol, json, yaml};
+use crate::parse::{Parsed, ParsedRef, ParsedSymbol, json, rs, toml, yaml};
 use crate::rows;
 
 pub const SCHEMA_SQL: &str =
@@ -27,6 +30,49 @@ pub const SCHEMA_SQL: &str =
 pub const MAX_INDEX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_SQL_VARIABLES: usize = 900;
 const SYMBOL_COLUMNS: usize = 14;
+const REF_COLUMNS: usize = 8;
+
+/// `SYMBOL_INDEX_SQL` then `REFS_INDEX_SQL` (`writer-schema.ts`): the
+/// secondary indexes a cleared run drops before its batches and rebuilds,
+/// in this order, at the start of finalize.
+const SECONDARY_INDEXES: &[&str] = &[
+    "idx_s_name",
+    "idx_s_kind",
+    "idx_s_lang",
+    "idx_s_file",
+    "idx_s_lang_kind",
+    "idx_s_name_id",
+    "idx_r_from",
+    "idx_r_to_id",
+    "idx_r_to_name",
+    "idx_r_call_type",
+    "idx_r_to_name_lang",
+    "idx_r_module",
+    "idx_r_to_file",
+];
+
+/// `resolveRefsWithStatement` (`writer-refs.ts`), the full form a first run
+/// executes.
+const RESOLVE_REFS_SQL: &str = "UPDATE refs
+       SET to_id = s.id
+       FROM (
+             SELECT sym.name AS name, lf.family AS family, MIN(sym.id) AS id
+               FROM symbols sym
+               JOIN lang_family lf ON lf.lang = sym.lang
+              GROUP BY sym.name, lf.family
+             UNION ALL
+             SELECT sym.name AS name, '*' AS family, MIN(sym.id) AS id
+               FROM symbols sym
+              GROUP BY sym.name
+           ) AS s,
+           lang_family AS rf
+       WHERE refs.to_id IS NULL
+         AND refs.to_name IS NOT NULL
+         AND rf.lang = refs.lang
+         AND s.name = refs.to_name
+         AND s.family = rf.family
+         AND (refs.to_file IS NULL OR refs.to_file <> '')
+         AND NOT (refs.call_type = 'import' AND refs.module IS NOT NULL AND rf.family = 'js')";
 
 /// `LANG_FAMILY` (`languages.ts`) in object order, then the wildcard row.
 pub const LANG_FAMILY: &[(&str, &str)] = &[
@@ -110,22 +156,7 @@ struct FileRow {
     mtime_ms: i64,
     content_hash: String,
     symbols: Vec<ParsedSymbol>,
-}
-
-/// `toPortablePath` then `derivePackageFromLayout(...) ?? '(root)'` — the
-/// label of every file when no module root owns it (no marker probe runs for
-/// a JSON/YAML-only project).
-pub fn package_label(file: &str) -> String {
-    let portable = file.replace('\\', "/");
-    for (marker, prefix) in [("/packages/", "@wrongstack/"), ("/apps/", "app:")] {
-        if let Some(i) = portable.find(marker) {
-            let segment = portable[i + marker.len()..].split('/').next().unwrap_or("");
-            if !segment.is_empty() {
-                return format!("{prefix}{segment}");
-            }
-        }
-    }
-    "(root)".to_string()
+    refs: Vec<ParsedRef>,
 }
 
 /// Conservative superset of `detectInfraArtifactKind` for YAML: anything
@@ -145,7 +176,7 @@ fn may_have_infra_refs(file: &str, content: &str) -> bool {
         || (content.contains("apiVersion") && content.contains("kind"))
 }
 
-fn ladder(mut remaining: usize, max: usize) -> Vec<usize> {
+pub(crate) fn ladder(mut remaining: usize, max: usize) -> Vec<usize> {
     let mut out = Vec::new();
     while remaining > 0 {
         let cap = remaining.min(max);
@@ -202,7 +233,7 @@ fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), Nati
     let mut rows = Vec::with_capacity(d.files.len());
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
-            Some(l @ ("json" | "yaml")) => l,
+            Some(l @ ("json" | "yaml" | "toml" | "rs")) => l,
             other => {
                 return Err(NativeError::Unsupported(format!(
                     "language {} ({path})",
@@ -228,11 +259,17 @@ fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), Nati
                 "YAML infra artifact references ({path})"
             )));
         }
+        if lang == "toml" && toml::is_infra_artifact(&path) {
+            return Err(NativeError::Unsupported(format!(
+                "TOML infra artifact ({path})"
+            )));
+        }
         let content = utf16(&text);
-        let parsed: Parsed = if lang == "json" {
-            json::parse(&path, &content, None)
-        } else {
-            yaml::parse(&content)
+        let parsed: Parsed = match lang {
+            "json" => json::parse(&path, &content, None),
+            "yaml" => yaml::parse(&content),
+            "toml" => toml::parse(&content),
+            _ => rs::parse(&content),
         };
         if let Some(why) = parsed.unsupported {
             return Err(NativeError::Unsupported(format!("{why} ({path})")));
@@ -243,13 +280,14 @@ fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), Nati
             mtime_ms,
             content_hash,
             symbols: parsed.symbols,
+            refs: parsed.refs,
         });
     }
     Ok((rows, git))
 }
 
 /// Statements of `schema.sql`: tables first, then the FTS table, then indexes.
-fn schema_statements() -> Vec<String> {
+pub(crate) fn schema_statements() -> Vec<String> {
     let mut stmts: Vec<String> = Vec::new();
     let mut cur = String::new();
     for line in SCHEMA_SQL.lines() {
@@ -275,12 +313,105 @@ fn schema_statements() -> Vec<String> {
     stmts
 }
 
-fn set_meta(tx: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
+pub(crate) fn get_meta(tx: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    tx.query_row("SELECT value FROM metadata WHERE key = ?", [key], |r| {
+        r.get(0)
+    })
+    .optional()
+}
+
+/// `setMetadata`: an equal value is not rewritten.
+pub(crate) fn set_meta(tx: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
+    if get_meta(tx, key)?.as_deref() == Some(value) {
+        return Ok(());
+    }
     tx.execute(
         "INSERT OR REPLACE INTO metadata(key, value) VALUES (?1, ?2)",
         [key, value],
     )?;
     Ok(())
+}
+
+/// `moduleOwnerSymbol(file, lang)`.
+fn module_owner() -> ParsedSymbol {
+    ParsedSymbol {
+        kind: "mod",
+        name: rows::MODULE_OWNER_NAME.into(),
+        line: 1,
+        col: 0,
+        signature: String::new(),
+        doc_comment: String::new(),
+        scope: String::new(),
+        text: String::new(),
+        is_exported: None,
+        end_line: None,
+    }
+}
+
+/// `needsModuleOwner(symbols, refs)`.
+fn needs_module_owner(symbols: &[ParsedSymbol], refs: &[ParsedRef]) -> bool {
+    let Some(first) = symbols.iter().map(|s| s.line).min() else {
+        return true;
+    };
+    refs.iter()
+        .any(|r| r.call_type == "import" || r.line < first)
+}
+
+/// A ref ready to insert (`fromId` assigned).
+struct RefRow<'a> {
+    from_id: i64,
+    r: &'a ParsedRef,
+}
+
+/// `assignRefsToSymbols(refs, inserted)`; `inserted` is `(id, symbol)`.
+fn assign_refs<'a>(refs: &'a [ParsedRef], inserted: &[(i64, &ParsedSymbol)]) -> Vec<RefRow<'a>> {
+    if refs.is_empty() || inserted.is_empty() {
+        return Vec::new();
+    }
+    let mut ordered: Vec<&(i64, &ParsedSymbol)> = inserted.iter().collect();
+    ordered.sort_by(|a, b| {
+        a.1.line
+            .cmp(&b.1.line)
+            .then(a.1.col.cmp(&b.1.col))
+            .then(a.0.cmp(&b.0))
+    });
+    let module_owner = ordered
+        .iter()
+        .find(|(_, s)| s.kind == "mod" && s.name == rows::MODULE_OWNER_NAME)
+        .map(|(id, _)| *id);
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for r in refs {
+        let mut owner: Option<i64> = None;
+        if r.call_type == "import" && module_owner.is_some() {
+            owner = module_owner;
+        } else {
+            for (id, s) in &ordered {
+                if s.line > r.line {
+                    break;
+                }
+                owner = Some(*id);
+            }
+        }
+        if owner.is_none() && r.call_type == "import" {
+            owner = Some(ordered[0].0);
+        }
+        let Some(owner) = owner.filter(|&o| o > 0) else {
+            continue;
+        };
+        let key = format!(
+            "{owner}:{}:{}:{}",
+            r.to_name,
+            r.call_type,
+            r.module.as_deref().unwrap_or("")
+        );
+        if !seen.insert(key) {
+            continue;
+        }
+        out.push(RefRow { from_id: owner, r });
+    }
+    out
 }
 
 /// Index `project_root` into a new `index_dir/index.db`.
@@ -437,6 +568,11 @@ fn index_once(
     set_meta(&conn, "version", "5")?;
     set_meta(&conn, "symbols_text_dropped", "1")?;
     set_meta(&conn, "next_symbol_id", "1")?;
+    // A cleared run bulk-loads without the secondary indexes
+    // (`deferSecondaryIndexes`).
+    for name in SECONDARY_INDEXES {
+        conn.execute_batch(&format!("DROP INDEX IF EXISTS {name}"))?;
+    }
 
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let mut next_id: i64 = 1;
@@ -446,7 +582,10 @@ fn index_once(
     for batch in files.chunks(batch_width()) {
         let now = now_ms();
         // Files with nothing to write are upserted first, outside a savepoint.
-        for f in batch.iter().filter(|f| f.symbols.is_empty()) {
+        for f in batch
+            .iter()
+            .filter(|f| f.symbols.is_empty() && f.refs.is_empty())
+        {
             tx.execute(
                 "INSERT INTO files(file, lang, mtime_ms, content_hash, symbol_count, last_indexed, git_blob)
                  VALUES (?1, ?2, ?3, ?4, 0, ?5, '')",
@@ -454,8 +593,20 @@ fn index_once(
             )?;
             files_empty += 1;
         }
-        let entries: Vec<&FileRow> = batch.iter().filter(|f| !f.symbols.is_empty()).collect();
-        let total: usize = entries.iter().map(|f| f.symbols.len()).sum();
+        // Each written file with its symbols, module owner first when needed.
+        let entries: Vec<(&FileRow, Vec<ParsedSymbol>)> = batch
+            .iter()
+            .filter(|f| !(f.symbols.is_empty() && f.refs.is_empty()))
+            .map(|f| {
+                let mut syms = Vec::with_capacity(f.symbols.len() + 1);
+                if needs_module_owner(&f.symbols, &f.refs) {
+                    syms.push(module_owner());
+                }
+                syms.extend(f.symbols.iter().cloned());
+                (f, syms)
+            })
+            .collect();
+        let total: usize = entries.iter().map(|(_, s)| s.len()).sum();
         if entries.is_empty() {
             continue;
         }
@@ -468,10 +619,12 @@ fn index_once(
         // (id, row) in insertion order.
         let mut sym_rows: Vec<Vec<rusqlite::types::Value>> = Vec::with_capacity(total);
         let mut fts_rows: Vec<(i64, String)> = Vec::with_capacity(total);
+        let mut ref_rows: Vec<RefRow> = Vec::new();
         let mut id = start;
-        for f in &entries {
-            let ends = rows::end_lines(&f.symbols);
-            for (s, end) in f.symbols.iter().zip(ends) {
+        for (f, syms) in &entries {
+            let ends = rows::end_lines(syms);
+            let mut inserted: Vec<(i64, &ParsedSymbol)> = Vec::with_capacity(syms.len());
+            for (s, end) in syms.iter().zip(ends) {
                 use rusqlite::types::Value as V;
                 sym_rows.push(vec![
                     V::Integer(id),
@@ -485,19 +638,22 @@ fn index_once(
                     V::Text(s.doc_comment.clone()),
                     V::Text(s.scope.clone()),
                     V::Integer(end as i64),
-                    V::Integer(rows::is_exported(&s.signature) as i64),
+                    V::Integer(rows::is_exported(s, f.lang) as i64),
                     V::Text(rows::signature_hash(s)),
                 ]);
                 fts_rows.push((
                     id,
                     rows::indexable_text(&s.name, &s.signature, &s.doc_comment),
                 ));
+                inserted.push((id, s));
                 id += 1;
             }
+            ref_rows.extend(assign_refs(&f.refs, &inserted));
         }
         insert_symbols(&tx, &sym_rows)?;
         insert_fts(&tx, &fts_rows)?;
-        for f in &entries {
+        insert_refs(&tx, &ref_rows)?;
+        for (f, syms) in &entries {
             tx.execute(
                 "INSERT INTO files(file, lang, mtime_ms, content_hash, symbol_count, last_indexed, git_blob)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, '')",
@@ -506,7 +662,7 @@ fn index_once(
                     f.lang,
                     f.mtime_ms,
                     f.content_hash,
-                    f.symbols.len() as i64,
+                    syms.len() as i64,
                     now
                 ],
             )?;
@@ -516,27 +672,31 @@ fn index_once(
         tx.execute_batch(&format!("RELEASE index_write_{savepoint}"))?;
     }
 
-    // Finalize: relation pass (no module roots for JSON/YAML-only projects).
-    for f in &files {
-        tx.execute(
-            "UPDATE files SET package = ?1 WHERE file = ?2",
-            [package_label(&f.path), f.path.clone()],
-        )?;
+    // finalizeIndexRun: secondary indexes, name resolution, relations,
+    // binding, ranks.
+    for name in SECONDARY_INDEXES {
+        tx.execute_batch(&secondary_index_sql(name))?;
     }
-    let structure = hex_sha256(b"[]");
-    set_meta(&tx, "relation_structure", &structure)?;
-    set_meta(&tx, "relation_epoch", &uuid::Uuid::new_v4().to_string())?;
-    set_meta(&tx, "module_resolution_version", "1")?;
-    set_meta(&tx, "ref_binding_version", "2")?;
+    tx.execute_batch(RESOLVE_REFS_SQL)?;
+    crate::relations::relation_pass(&tx, &project_root.to_string_lossy())?;
+    crate::binding::bind_refs_all(&tx)?;
+    set_meta(
+        &tx,
+        "ref_binding_version",
+        crate::binding::REF_BINDING_VERSION,
+    )?;
     set_meta(&tx, "ref_resolution_version", "2")?;
     set_meta(&tx, "module_owner_version", "2")?;
     set_meta(&tx, "relation_graph_version", "2")?;
-    // Rank pass: no wiring graph, `replaceRanks([], [])` in its own savepoint.
+    let (sym_ranks, file_ranks) = crate::rank::rank_rows(&tx)?;
     savepoint += 1;
-    tx.execute_batch(&format!(
-        "SAVEPOINT index_write_{savepoint}; DELETE FROM symbol_rank; DELETE FROM file_rank; RELEASE index_write_{savepoint};"
-    ))?;
-    set_meta(&tx, "rank_version", "1")?;
+    crate::rank::replace_ranks(
+        &tx,
+        &format!("index_write_{savepoint}"),
+        &sym_ranks,
+        &file_ranks,
+    )?;
+    set_meta(&tx, "rank_version", crate::rank::RANK_VERSION)?;
     set_meta(&tx, "rank_stale_files", "0")?;
     // Git trust pass: every file Git reports clean gets `blob:contentHash`;
     // a new stamp is only written if the checkout did not move meanwhile.
@@ -587,18 +747,53 @@ fn index_once(
 /// `sqlite_stat4`; it is dropped so the schema stays identical (its pages
 /// then remain on the freelist).
 fn write_stat1(tx: &Connection) -> rusqlite::Result<()> {
+    // `PRAGMA optimize` (SQLite >= 3.46) analyzes with a temporary
+    // `analysis_limit` of 2000.
+    tx.execute_batch("PRAGMA analysis_limit=2000")?;
     for t in ANALYZE_ORDER {
         tx.execute_batch(&format!("ANALYZE \"{t}\""))?;
     }
+    tx.execute_batch("PRAGMA analysis_limit=0")?;
     tx.execute_batch("DROP TABLE IF EXISTS sqlite_stat4")?;
     Ok(())
 }
 
-fn hex_sha256(b: &[u8]) -> String {
-    Sha256::digest(b)
-        .iter()
-        .map(|x| format!("{x:02x}"))
-        .collect()
+/// The `CREATE INDEX` statement of one secondary index, from `schema.sql`.
+fn secondary_index_sql(name: &str) -> String {
+    let prefix = format!("CREATE INDEX {name} ON ");
+    schema_statements()
+        .into_iter()
+        .find(|s| s.starts_with(&prefix))
+        .unwrap_or_else(|| panic!("schema.sql declares {name}"))
+}
+
+fn insert_refs(tx: &Connection, rows: &[RefRow]) -> rusqlite::Result<()> {
+    use rusqlite::types::Value as V;
+    let mut at = 0;
+    for n in ladder(rows.len(), MAX_SQL_VARIABLES / REF_COLUMNS) {
+        let sql = format!(
+            "INSERT INTO refs(from_id, to_name, to_id, call_type, line, lang, module, to_file) VALUES {}",
+            vec!["(?, ?, ?, ?, ?, ?, ?, ?)"; n].join(", ")
+        );
+        let flat: Vec<V> = rows[at..at + n]
+            .iter()
+            .flat_map(|x| {
+                [
+                    V::Integer(x.from_id),
+                    V::Text(x.r.to_name.clone()),
+                    V::Null,
+                    V::Text(x.r.call_type.into()),
+                    V::Integer(x.r.line as i64),
+                    V::Text(x.r.lang.into()),
+                    x.r.module.clone().map_or(V::Null, V::Text),
+                    V::Null,
+                ]
+            })
+            .collect();
+        tx.execute(&sql, params_from_iter(flat))?;
+        at += n;
+    }
+    Ok(())
 }
 
 fn insert_symbols(tx: &Connection, rows: &[Vec<rusqlite::types::Value>]) -> rusqlite::Result<()> {
@@ -674,11 +869,49 @@ mod tests {
 
     #[test]
     fn package_labels_follow_the_layout_fallback() {
-        assert_eq!(package_label(r"C:\w\config-only\project\a.json"), "(root)");
-        assert_eq!(
-            package_label(r"C:\r\packages\core\x.yaml"),
-            "@wrongstack/core"
-        );
-        assert_eq!(package_label("/r/apps/web/x.yaml"), "app:web");
+        let label = |f: &str| {
+            crate::relations::derive_package_from_layout(f).unwrap_or_else(|| "(root)".into())
+        };
+        assert_eq!(label(r"C:\w\config-only\project\a.json"), "(root)");
+        assert_eq!(label(r"C:\r\packages\core\x.yaml"), "@wrongstack/core");
+        assert_eq!(label("/r/apps/web/x.yaml"), "app:web");
+    }
+
+    fn sym(line: usize, col: usize) -> ParsedSymbol {
+        ParsedSymbol::simple("function", &utf16("f"), line, col, &utf16("fn f()"))
+    }
+
+    fn mk_ref(to: &str, call: &'static str, line: usize, module: Option<&str>) -> ParsedRef {
+        ParsedRef {
+            to_name: to.into(),
+            call_type: call,
+            line,
+            lang: "rs",
+            module: module.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn refs_are_owned_like_assign_refs_to_symbols() {
+        let owner = module_owner();
+        let (a, b) = (sym(3, 4), sym(3, 0));
+        let refs = vec![
+            mk_ref("x", "import", 9, Some("x")),
+            mk_ref("x", "import", 9, Some("x")),
+            mk_ref("y", "call", 3, None),
+            mk_ref("z", "call", 2, None),
+        ];
+        let inserted = vec![(5, &owner), (6, &a), (7, &b)];
+        let got: Vec<(i64, &str)> = assign_refs(&refs, &inserted)
+            .iter()
+            .map(|x| (x.from_id, x.r.to_name.as_str()))
+            .collect();
+        // An import goes to the module owner; a call to the last symbol at
+        // or before its line in (line, col, id) order; duplicates are dropped.
+        assert_eq!(got, vec![(5, "x"), (6, "y"), (5, "z")]);
+        assert!(needs_module_owner(&[], &[]));
+        assert!(needs_module_owner(std::slice::from_ref(&a), &refs[..1]));
+        assert!(!needs_module_owner(std::slice::from_ref(&a), &refs[2..3]));
+        assert!(needs_module_owner(std::slice::from_ref(&a), &refs[3..]));
     }
 }

@@ -107,6 +107,22 @@ fn compare(name: &str, root: &Path, base: &Path) -> Vec<String> {
     out
 }
 
+fn scalar(idx: &Path, sql: &str) -> String {
+    let c = rusqlite::Connection::open_with_flags(
+        idx.join("index.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    c.query_row(sql, [], |r| {
+        Ok(match r.get_ref(0)? {
+            rusqlite::types::ValueRef::Text(t) => String::from_utf8_lossy(t).into_owned(),
+            rusqlite::types::ValueRef::Integer(i) => i.to_string(),
+            other => format!("{other:?}"),
+        })
+    })
+    .unwrap()
+}
+
 fn scenario_files(root: &Path) {
     write(
         root,
@@ -156,6 +172,209 @@ fn scenario_files(root: &Path) {
         "many/deep/a/b/c.yaml",
         "deep: true\nlist:\n  - name: x\n",
     );
+}
+
+/// A Cargo workspace (virtual root manifest) with two crates, cross-crate
+/// and `crate::`/`super::`/`self::` paths, `mod` declarations, a file outside
+/// every crate, an integration test, import-only files (whose module owners
+/// put edges into the rank graph) and JSON/YAML/TOML data files.
+fn scenario_cargo_workspace(root: &Path) {
+    write(
+        root,
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"crates/alpha\", \"crates/omega\"]\nresolver = \"2\"\n\n[workspace.package]\nname = \"not-a-crate\"\n",
+    );
+    write(
+        root,
+        "crates/alpha/Cargo.toml",
+        "[package]\nname = \"alpha-core\" # dashes become underscores\nversion = \"0.1.0\"\n\n[[bench]]\nname = \"speed\"\n\n[dependencies]\nserde = \"1\"\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/lib.rs",
+        "//! Alpha core.\npub mod model;\npub mod util;\nmod hidden;\n\npub use model::User;\npub use self::util::helper as h;\n\n/// Library version.\npub const VERSION: &str = \"1\";\n\npub fn version() -> &'static str {\n    VERSION\n}\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/model/mod.rs",
+        "pub mod user;\npub mod team;\npub use self::user::User;\npub use self::team::*;\n\npub trait Named {\n    fn name(&self) -> String;\n}\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/model/user.rs",
+        "use super::super::util::helper;\nuse super::Named;\nuse crate::VERSION;\n\n#[derive(Debug, Clone)]\npub struct User {\n    pub id: u64,\n}\n\nimpl User {\n    pub fn new(id: u64) -> Self {\n        helper();\n        Self { id }\n    }\n}\n\nimpl Named for User {\n    fn name(&self) -> String {\n        format!(\"{}{}\", self.id, VERSION)\n    }\n}\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/model/team.rs",
+        "use super::user::User;\nuse std::collections::HashMap;\n\npub struct Team {\n    pub members: HashMap<u64, User>,\n}\n\npub enum Role { Lead, Member }\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/util.rs",
+        "use crate::model::User;\nuse crate::model::{Named, Team};\n\npub fn helper() {}\n\npub(crate) fn describe(u: &User) -> String {\n    u.name()\n}\n\nstatic COUNTER: u32 = 0;\ntype Alias = Team;\n",
+    );
+    write(
+        root,
+        "crates/alpha/src/hidden.rs",
+        "use crate::util::describe;\nuse crate::missing::Nothing;\n",
+    );
+    write(
+        root,
+        "crates/alpha/tests/it.rs",
+        "use alpha_core::User;\nuse alpha_core::model::Named;\n\n#[test]\nfn works() {\n    let _ = User::new(1);\n}\n",
+    );
+    write(
+        root,
+        "crates/omega/Cargo.toml",
+        "[package]\nname = 'omega'\nedition = \"2021\"\n\n[dependencies]\nalpha-core = { path = \"../alpha\" }\n",
+    );
+    write(
+        root,
+        "crates/omega/src/main.rs",
+        "mod cli;\nmod prelude;\n\nuse alpha_core::model::user::User;\nuse alpha_core::{model, util};\nuse crate::cli::run;\nuse std::io::Write as _;\n\nfn main() {\n    run();\n    let _u = User::new(2);\n}\n",
+    );
+    write(
+        root,
+        "crates/omega/src/cli.rs",
+        "pub mod args;\nuse super::*;\nuse self::args::Args;\n\npub fn run() {\n    let _ = Args::default();\n}\n",
+    );
+    write(
+        root,
+        "crates/omega/src/cli/args.rs",
+        "use super::super::prelude::*;\nuse crate::cli::run;\n\n#[derive(Default)]\npub struct Args {\n    pub verbose: bool,\n}\n",
+    );
+    write(
+        root,
+        "crates/omega/src/prelude.rs",
+        "pub use alpha_core::User;\npub use alpha_core::util::helper;\npub use crate::cli::args::Args;\npub(crate) use alpha_core::version;\n",
+    );
+    write(
+        root,
+        "crates/omega/config/settings.yaml",
+        "log:\n  level: info\nfeatures:\n  - a\n  - b\n",
+    );
+    write(
+        root,
+        "crates/omega/config/defaults.json",
+        "{\"name\": \"omega\", \"retries\": 3}",
+    );
+    write(
+        root,
+        "rustfmt.toml",
+        "edition = \"2021\"\n[format]\nmax_width = 100\n",
+    );
+    write(
+        root,
+        "scripts/gen.rs",
+        "use crate::util::helper;\nuse alpha_core::model;\nuse std::fs;\n\nfn main() {}\n",
+    );
+    write(root, ".gitignore", "target/\n");
+    write(root, "target/debug/junk.rs", "fn junk() {}\n");
+}
+
+/// One crate with enough files for several write batches.
+fn scenario_many_modules(root: &Path, n: usize) {
+    write(
+        root,
+        "Cargo.toml",
+        "[package]\nname = \"many\"\nversion = \"0.1.0\"\n",
+    );
+    let mut lib = String::from("//! Many modules.\n");
+    for i in 0..n {
+        lib.push_str(&format!("pub mod m{i:03};\n"));
+    }
+    lib.push_str("pub mod nested;\n\npub fn root() {}\n");
+    write(root, "src/lib.rs", &lib);
+    for i in 0..n {
+        let prev = (i + n - 1) % n;
+        let far = (i * 7 + 3) % n;
+        let body = if i % 10 == 0 {
+            // Import-only module: its owner keeps its edges in the rank graph.
+            format!("pub use crate::m{prev:03}::f{prev};\npub use super::m{far:03};\n")
+        } else if i % 10 == 5 {
+            String::new()
+        } else {
+            format!(
+                "use crate::m{prev:03}::f{prev};\nuse super::m{far:03}::{{S{far}, f{far}}};\nuse crate::nested::deep::Deep;\n\n/// Function {i}.\npub fn f{i}() {{\n    f{prev}();\n}}\n\npub struct S{i} {{\n    pub x: i32,\n}}\n\nimpl S{i} {{\n    pub fn new() -> Self {{ Self {{ x: {i} }} }}\n}}\n"
+            )
+        };
+        write(root, &format!("src/m{i:03}.rs"), &body);
+    }
+    write(
+        root,
+        "src/nested/mod.rs",
+        "pub mod deep;\nuse self::deep::Deep;\n",
+    );
+    write(
+        root,
+        "src/nested/deep.rs",
+        "use super::super::m001::f1;\npub struct Deep;\npub fn f1() {}\n",
+    );
+    for i in 0..12 {
+        write(
+            root,
+            &format!("data/d{i:02}.json"),
+            &format!("{{\"k{i}\": {{\"v\": {i}}}}}"),
+        );
+    }
+    write(root, "data/pipeline.yaml", "steps:\n  - build\n  - test\n");
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+fn native_matches_wrongstack_on_rust_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+
+    let s = base.join("rs-walk");
+    let root = s.join("project");
+    scenario_cargo_workspace(&root);
+    failures.extend(compare("rs-workspace-walk", &root, &s));
+    // The scenario exercises what it is meant to (checked on the native
+    // index; the WrongStack one is identical).
+    let idx = s.join("idx-native");
+    let packages = scalar(
+        &idx,
+        "SELECT group_concat(DISTINCT package) FROM (SELECT package FROM files ORDER BY package)",
+    );
+    assert_eq!(packages, "(root),crate:alpha-core,crate:omega");
+    let resolved = scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''");
+    let unresolved = scalar(&idx, "SELECT count(*) FROM refs WHERE to_file IS NULL");
+    let ranked = scalar(&idx, "SELECT count(*) FROM symbol_rank");
+    eprintln!(
+        "rs-workspace-walk: {resolved} resolved / {unresolved} unresolved imports, {ranked} ranked symbols"
+    );
+    assert!(resolved.parse::<usize>().unwrap() >= 15);
+    assert!(unresolved.parse::<usize>().unwrap() >= 3);
+    assert!(ranked.parse::<usize>().unwrap() > 0);
+
+    let s = base.join("rs-git");
+    let root = s.join("project");
+    scenario_cargo_workspace(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    write(
+        &root,
+        "crates/omega/src/cli.rs",
+        "pub mod args;\nuse self::args::Args;\npub fn run() {}\n",
+    );
+    write(&root, "crates/omega/src/extra.rs", "use crate::cli::run;\n");
+    failures.extend(compare("rs-workspace-git", &root, &s));
+
+    let s = base.join("rs-many");
+    let root = s.join("project");
+    scenario_many_modules(&root, 130);
+    failures.extend(compare("rs-many-modules", &root, &s));
+    let idx = s.join("idx-native");
+    let ranked = scalar(&idx, "SELECT count(*) FROM file_rank");
+    let resolved = scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''");
+    eprintln!("rs-many-modules: {resolved} resolved imports, {ranked} ranked files");
+    assert!(ranked.parse::<usize>().unwrap() >= 10);
+
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
@@ -224,5 +443,26 @@ fn native_matches_wrongstack_on_generated_projects() {
     write(&root, "conf/x.yaml", "a: 1\n");
     failures.extend(compare("layout", &root, &s));
 
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Real-world projects: `WRONGINDEX_DIFF_PROJECTS` lists directories
+/// (separated by `;`) that are copied and indexed both ways.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE and WRONGINDEX_DIFF_PROJECTS"]
+fn native_matches_wrongstack_on_listed_projects() {
+    let list = std::env::var("WRONGINDEX_DIFF_PROJECTS").expect("WRONGINDEX_DIFF_PROJECTS");
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    for (i, dir) in list.split(';').filter(|s| !s.is_empty()).enumerate() {
+        let s = base.join(format!("p{i}"));
+        let name = Path::new(dir)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        failures.extend(compare(&name, Path::new(dir), &s));
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

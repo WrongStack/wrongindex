@@ -102,6 +102,104 @@ fn config_only_matches_the_wrongstack_oracle() {
     );
 }
 
+fn page_counts(p: &Path) -> (i64, i64) {
+    let c = rusqlite::Connection::open_with_flags(p, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .unwrap();
+    let n: i64 = c.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+    let f: i64 = c
+        .query_row("PRAGMA freelist_count", [], |r| r.get(0))
+        .unwrap();
+    (n, f)
+}
+
+fn meta(db: &Path, key: &str) -> String {
+    let c = rusqlite::Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .unwrap();
+    c.query_row("SELECT value FROM metadata WHERE key = ?1", [key], |r| {
+        r.get(0)
+    })
+    .unwrap()
+}
+
+/// Rust crate with a TOML manifest: module owners, an import ref resolved
+/// through the crate's module root (`to_file`), `crate:` package labels.
+#[test]
+fn rs_basic_matches_the_wrongstack_oracle() {
+    use wrongindex_engine::relations::{detect_module_roots, hex_sha256, structure_json};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("project");
+    let index = base.join("index");
+    copy_dir(&repo().join("tests/fixtures/projects/rs-basic"), &root);
+
+    let report = index_fresh(&root, &index).unwrap();
+    assert_eq!(
+        (
+            report.files_indexed,
+            report.files_empty,
+            report.symbols_indexed
+        ),
+        (3, 0, 10)
+    );
+
+    let (oroot, oindex) = oracle_root("rs-basic");
+    let mut want_v = Volatile::logical();
+    want_v.rewrite = vec![
+        (oroot.clone(), "<root>".into()),
+        (oindex, "<indexDir>".into()),
+    ];
+    // A hash over the absolute module-root paths: checked separately below.
+    want_v.metadata_keys.push("relation_structure");
+    let mut got_v = Volatile::logical();
+    got_v.rewrite = vec![
+        (root.display().to_string(), "<root>".into()),
+        (index.display().to_string(), "<indexDir>".into()),
+    ];
+    got_v.metadata_keys.push("relation_structure");
+    let oracle_db = repo().join("tests/fixtures/oracle/rs-basic/index.db");
+    let want = dump(&oracle_db, &want_v).unwrap();
+    let got = dump(&index.join("index.db"), &got_v).unwrap();
+    let d = diff(&want, &got, 10);
+    assert!(
+        d.is_empty(),
+        "native index differs from the oracle:\n{}",
+        d.join("\n")
+    );
+
+    // relation_structure = sha256(JSON.stringify(roots)): the native value
+    // hashes the native root; with the oracle's root substituted it must be
+    // the oracle's value.
+    let files: Vec<String> = {
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        c.prepare("SELECT file FROM files")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    };
+    let root_s = root.display().to_string();
+    let structure = detect_module_roots(&root_s, &files);
+    let json = structure_json(&structure.roots);
+    assert_eq!(structure.roots.len(), 1, "{json}");
+    assert_eq!(
+        meta(&index.join("index.db"), "relation_structure"),
+        hex_sha256(json.as_bytes())
+    );
+    let portable = |s: &str| s.replace('\\', "/");
+    let as_oracle = json.replace(&portable(&root_s), &portable(&oroot));
+    assert_eq!(
+        meta(&oracle_db, "relation_structure"),
+        hex_sha256(as_oracle.as_bytes())
+    );
+
+    assert_eq!(
+        page_counts(&index.join("index.db")),
+        page_counts(&oracle_db)
+    );
+}
+
 #[test]
 fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     let tmp = tempfile::tempdir().unwrap();

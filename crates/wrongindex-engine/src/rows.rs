@@ -10,9 +10,24 @@ pub fn xxhash64_string(s: &str) -> String {
     wrongindex_storage::content_hash::xxhash64_hex(s.as_bytes())
 }
 
-/// `/\b(export|pub|public)\b/.test(signature)` (ASCII word boundaries), plus
-/// the Go/Python rules, which never apply to the languages written natively.
-pub fn is_exported(signature: &str) -> bool {
+/// `inferIsExportedFlag`: a parser-supplied flag wins; then the signature
+/// keywords; then the Go (top-level, capitalised) and Python (top-level, no
+/// leading underscore) conventions.
+pub fn is_exported(s: &ParsedSymbol, lang: &str) -> bool {
+    if let Some(v) = s.is_exported {
+        return v;
+    }
+    if signature_exports(&s.signature) {
+        return true;
+    }
+    if s.scope.is_empty() && lang == "go" && s.name.starts_with(|c: char| c.is_ascii_uppercase()) {
+        return true;
+    }
+    s.scope.is_empty() && lang == "py" && !s.name.starts_with('_')
+}
+
+/// `/\b(export|pub|public)\b/.test(signature)` (ASCII word boundaries).
+pub fn signature_exports(signature: &str) -> bool {
     let b = signature.as_bytes();
     let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
     for kw in ["export", "pub", "public"] {
@@ -68,6 +83,12 @@ pub fn end_lines(symbols: &[ParsedSymbol]) -> Vec<usize> {
     let mut out = vec![0; symbols.len()];
     for (k, &i) in order.iter().enumerate() {
         let s = &symbols[i];
+        if let Some(el) = s.end_line
+            && el >= s.line
+        {
+            out[i] = el;
+            continue;
+        }
         out[i] = match order.get(k + 1).map(|&n| &symbols[n]) {
             Some(next) if next.line > s.line => s.line.max(next.line - 1),
             _ => s.line,
@@ -279,10 +300,32 @@ mod tests {
 
     #[test]
     fn exported_uses_ascii_word_boundaries() {
-        assert!(is_exported("public: true"));
-        assert!(is_exported("x: pub"));
-        assert!(!is_exported("publication: 1"));
-        assert!(!is_exported("exported: 1"));
+        assert!(signature_exports("public: true"));
+        assert!(signature_exports("x: pub"));
+        assert!(!signature_exports("publication: 1"));
+        assert!(!signature_exports("exported: 1"));
+    }
+
+    #[test]
+    fn exported_honours_parser_flags_and_language_rules() {
+        let sym = |name: &str, sig: &str| {
+            ParsedSymbol::simple("function", &utf16(name), 1, 0, &utf16(sig))
+        };
+        let mut s = sym("Run", "func Run()");
+        assert!(is_exported(&s, "go"));
+        assert!(!is_exported(&s, "rs"));
+        s.scope = "T".into();
+        assert!(!is_exported(&s, "go"));
+        let mut p = sym("_h", "def _h():");
+        assert!(!is_exported(&p, "py"));
+        p.name = "h".into();
+        assert!(is_exported(&p, "py"));
+        p.is_exported = Some(false);
+        assert!(!is_exported(&p, "py"));
+        let mut q = sym("f", "pub fn f()");
+        assert!(is_exported(&q, "rs"));
+        q.is_exported = Some(false);
+        assert!(!is_exported(&q, "rs"));
     }
 
     #[test]
@@ -290,5 +333,9 @@ mod tests {
         let s = |line| ParsedSymbol::simple("property", &utf16("n"), line, 0, &utf16("n"));
         let syms = vec![s(1), s(3), s(6), s(4), s(4)];
         assert_eq!(end_lines(&syms), vec![2, 3, 6, 4, 5]);
+        let mut syms = syms;
+        syms[0].end_line = Some(9);
+        syms[1].end_line = Some(2); // before its own line: ignored
+        assert_eq!(end_lines(&syms), vec![9, 3, 6, 4, 5]);
     }
 }

@@ -5,6 +5,7 @@
 pub mod imports;
 pub mod json;
 pub mod rs;
+pub mod toml;
 pub mod yaml;
 
 use serde::Serialize;
@@ -24,6 +25,13 @@ pub struct ParsedSymbol {
     pub doc_comment: String,
     pub scope: String,
     pub text: String,
+    /// Parser-supplied export flag (`Symbol.isExported`); `None` lets the
+    /// writer infer it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_exported: Option<bool>,
+    /// Parser-supplied end line (`Symbol.endLine`); used when `>= line`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<usize>,
 }
 
 impl ParsedSymbol {
@@ -47,6 +55,8 @@ impl ParsedSymbol {
             doc_comment: String::new(),
             scope: String::new(),
             text: js::string(js::trim(&text)),
+            is_exported: None,
+            end_line: None,
         }
     }
 }
