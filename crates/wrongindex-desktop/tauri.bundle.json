@@ -2,18 +2,24 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "WrongStack",
     "copyright": "MIT License",
     "category": "DeveloperTool",
     "shortDescription": "Local codebase indexing service for WrongStack",
     "longDescription": "WrongIndex keeps WrongStack-compatible code indexes current in the background: one service per user, a desktop window, and a CLI.",
     "licenseFile": "../../LICENSE",
-    "externalBin": ["binaries/wrongindexd", "binaries/wrongindex"],
+    "externalBin": [
+      "binaries/wrongindexd",
+      "binaries/wrongindex"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerHooks": "./windows/installer-hooks.nsh"
       }
     }
   }

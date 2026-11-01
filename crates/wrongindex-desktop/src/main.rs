@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod bridge;
 mod dialogs;
 
@@ -145,6 +146,16 @@ fn owner_hwnd(window: &tauri::WebviewWindow) -> isize {
 }
 
 #[tauri::command]
+fn autostart_status() -> Res {
+    autostart::status().map_err(|e| UiError::new("INTERNAL", e))
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Res {
+    autostart::set_enabled(enabled).map_err(|e| UiError::new("INTERNAL", e))
+}
+
+#[tauri::command]
 async fn start_service(bridge: State<'_, Bridge>) -> Res {
     bridge.start_service().await
 }
@@ -219,6 +230,21 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // Sign-in start (autostart): launch the service if needed, no window.
+    if std::env::args()
+        .skip(1)
+        .any(|a| a == autostart::START_SERVICE_ARG)
+    {
+        let bridge = Bridge::new(root);
+        let code = match tauri::async_runtime::block_on(bridge.start_service()) {
+            Ok(_) => 0,
+            Err(e) => {
+                eprintln!("wrongindex-desktop: {}: {}", e.code, e.message);
+                1
+            }
+        };
+        std::process::exit(code);
+    }
     let pump_root = root.clone();
     let result = tauri::Builder::default()
         .manage(Bridge::new(root))
@@ -235,6 +261,8 @@ fn main() {
             search,
             diagnostics_preview,
             export_diagnostics,
+            autostart_status,
+            set_autostart,
             start_service,
             stop_service,
         ])

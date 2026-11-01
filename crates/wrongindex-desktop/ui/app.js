@@ -16,6 +16,8 @@ const state = {
   search: { projectId: null, query: '', result: null, busy: false },
   // Diagnostics export.
   diag: { redact: true, preview: null, busy: false },
+  // Settings: sign-in start state as last read from the system.
+  autostart: null,
 };
 const ACTIVITY_CAP = 200;
 
@@ -511,10 +513,40 @@ function diagnosticsExport() {
       el('tbody', {}, cats.map((c) => el('tr', {}, el('td', {}, c.category), el('td', {}, `${(c.bytes / 1024).toFixed(1)} KiB`))))) : null);
 }
 
+function settingsView() {
+  const a = state.autostart;
+  if (!a) {
+    invoke('autostart_status')
+      .then((r) => { state.autostart = r; render(true); })
+      .catch((e) => { state.autostart = { error: errText(e) }; render(true); });
+    return el('section', {}, el('h1', {}, 'Settings'), el('p', { class: 'note' }, 'Reading settings…'));
+  }
+  const box = el('input', {
+    type: 'checkbox', id: 'autostart', checked: !!a.enabled, disabled: !!a.error,
+    onchange: async (e) => {
+      try {
+        state.autostart = await call('set_autostart', { enabled: e.target.checked });
+        toast(state.autostart.enabled ? 'The index service will start when you sign in.' : 'The index service will no longer start at sign-in.');
+      } catch { state.autostart = null; }
+      render(true);
+    },
+  });
+  return el('section', {},
+    el('h1', {}, 'Settings'),
+    el('h2', {}, 'Startup'),
+    el('div', { class: 'row' }, box, el('label', { for: 'autostart' }, 'Start the index service when I sign in')),
+    el('p', { class: 'note' }, 'Only the background service starts; this window does not open. Closing or quitting the window never stops the service.'),
+    a.error ? el('p', { class: 'error' }, a.error) : null,
+    a.enabled && !a.matchesThisInstall
+      ? el('p', { class: 'error' }, `The sign-in entry points to another copy: ${a.command}. Turn the option off and on to use this one.`)
+      : null);
+}
+
 // ─── navigation ─────────────────────────────────────────────────────────────
 
 function go(view) {
   state.view = view;
+  if (view === 'settings') state.autostart = null;
   if (view !== 'projects') { state.selected = null; state.detail = null; }
   render();
   document.getElementById('main').focus();
@@ -539,7 +571,7 @@ function render(force = false) {
     if (b.dataset.view === state.view) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   }
-  const views = { overview: overviewView, projects: projectsView, activity: activityView, diagnostics: diagnosticsView };
+  const views = { overview: overviewView, projects: projectsView, activity: activityView, diagnostics: diagnosticsView, settings: settingsView };
   const main = document.getElementById('main');
   // Keep the scroll position across live refreshes of the same screen only.
   const screen = `${state.view}:${state.selected ?? ''}`;
