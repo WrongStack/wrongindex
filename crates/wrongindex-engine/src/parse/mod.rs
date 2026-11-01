@@ -6,6 +6,7 @@ pub mod generic;
 pub mod imports;
 pub mod infra;
 pub mod json;
+pub mod py;
 pub mod rs;
 pub mod ts;
 pub mod yaml;
@@ -94,7 +95,7 @@ pub struct ParsedRef {
 /// Languages parsed natively: [`parse_file`] reproduces `parseFileContent`
 /// for each of them.
 pub fn is_native_lang(lang: &str) -> bool {
-    matches!(lang, "json" | "yaml" | "rs")
+    matches!(lang, "json" | "yaml" | "rs" | "py")
         || generic::LANGS.contains(&lang)
         || ts::LANGS.contains(&lang)
 }
@@ -124,6 +125,13 @@ pub fn parse_file(file: &str, lang: &'static str, content: &U16) -> Parsed {
         // import fallback.
         l if ts::LANGS.contains(&l) => return ts::parse(file, l, content),
         l if generic::LANGS.contains(&l) => generic::parse(file, l, content),
+        // Python runs through an interpreter in batches: [`py::parse_all`].
+        "py" => {
+            return Parsed {
+                unsupported: Some("python files are parsed in batches (parse::py)".into()),
+                ..Parsed::default()
+            };
+        }
         other => {
             return Parsed {
                 unsupported: Some(format!("language {other}")),

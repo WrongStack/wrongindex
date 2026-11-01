@@ -997,3 +997,81 @@ fn native_matches_wrongstack_on_listed_projects() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Python package (interpreter `ast` route): relative and absolute imports,
+/// classes/methods/properties/async/type aliases, constants, a syntax error
+/// (regex import fallback), a BOM, non-ASCII identifiers and a script.
+fn scenario_python(root: &Path) {
+    write(
+        root,
+        "pyproject.toml",
+        "[project]\nname = \"shop\"\nversion = \"0.1.0\"\n",
+    );
+    write(
+        root,
+        "shop/__init__.py",
+        "from .models import Order, Item\nfrom . import util\n__all__ = [\"Order\"]\nVERSION = \"1\"\n",
+    );
+    write(
+        root,
+        "shop/models.py",
+        "\"\"\"Models.\"\"\"\nfrom dataclasses import dataclass\nfrom typing import Optional\nfrom .util import slug as make_slug, clamp\n\n\n@dataclass\nclass Item:\n    \"\"\"An item.\n\n    More.\n    \"\"\"\n    name: str\n    price: float = 0.0\n\n    @property\n    def label(self) -> str:\n        return make_slug(self.name)\n\n\nclass Order(Item, object):\n    MAX: int = 10\n    _hidden = 1\n    __private = 2\n\n    def total(self, *items, scale=1, **kw) -> Optional[float]:\n        return clamp(sum(i.price for i in items) * scale)\n\n    async def fetch(self, /, a, *, b):\n        await self.total()\n\n    @staticmethod\n    def make(x: int) -> \"Order\":\n        return Order(str(x))\n\ntype Price = float\na, (b, *c) = 1, (2, 3)\n",
+    );
+    write(
+        root,
+        "shop/util.py",
+        "import os.path\nimport re as regex\n\ndef slug(s):\n    return regex.sub(r'[^a-z]+', '-', s).strip('-').lower()\n\ndef clamp(x, lo=0, hi=100):\n    return max(lo, min(hi, x))\n\ndef ünïcode_name():\n    return os.path.join('a', 'b')\n",
+    );
+    write(
+        root,
+        "shop/broken.py",
+        "import json\nfrom .models import Order\n\ndef oops(:\n    pass\n",
+    );
+    write(
+        root,
+        "shop/bom.py",
+        "\u{feff}import shop.util\nX = shop.util.clamp(5)\n",
+    );
+    write(
+        root,
+        "scripts/run.py",
+        "#!/usr/bin/env python3\nimport sys\nfrom shop import models\nfrom shop.models import Order\n\nif __name__ == \"__main__\":\n    Order.make(int(sys.argv[1]))\n",
+    );
+    write(
+        root,
+        "tests/test_util.py",
+        "from shop.util import slug\n\ndef test_slug():\n    assert slug('A B') == 'a-b'\n",
+    );
+    write(
+        root,
+        "README.md",
+        "# Shop\n\nSee [models](shop/models.py).\n",
+    );
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine), bun and Python"]
+fn native_matches_wrongstack_on_python_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    let s = base.join("python");
+    let root = s.join("project");
+    scenario_python(&root);
+    failures.extend(compare("python", &root, &s));
+    let idx = s.join("idx-native");
+    eprintln!(
+        "python: {} refs, {} resolved to a file, {} bound to a symbol",
+        scalar(&idx, "SELECT count(*) FROM refs"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_id IS NOT NULL"),
+    );
+    let s = base.join("python-git");
+    let root = s.join("project");
+    scenario_python(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("python-git", &root, &s));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

@@ -463,3 +463,14 @@ fn pathologically_nested_sources_are_refused_without_crashing() {
     .unwrap();
     index_fresh(&ok, &base.join("idx-ok")).unwrap();
 }
+
+/// Python through the interpreter WrongStack would pick (the oracle was
+/// recorded with `python` = 3.14.8; `python3` was the Store stub).
+#[test]
+fn py_basic_matches_the_wrongstack_oracle() {
+    if wrongindex_engine::parse::py::python().is_none() {
+        eprintln!("NOT RUN: no Python interpreter");
+        return;
+    }
+    assert_eq!(assert_matches_oracle("py-basic"), (3, 0, 9));
+}

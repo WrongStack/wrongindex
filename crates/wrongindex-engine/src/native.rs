@@ -238,6 +238,8 @@ fn collect_on_this_thread(
         ));
     }
     let mut rows = Vec::with_capacity(d.files.len());
+    // Python is parsed afterwards, in interpreter batches: (row, text).
+    let mut py: Vec<(usize, String)> = Vec::new();
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
             Some(l) if parse::is_native_lang(l) => l,
@@ -261,6 +263,18 @@ fn collect_on_this_thread(
         let bytes = std::fs::read(&path)?;
         let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
         let text = String::from_utf8_lossy(&bytes);
+        if lang == "py" {
+            py.push((rows.len(), text.into_owned()));
+            rows.push(FileRow {
+                path,
+                lang,
+                mtime_ms,
+                content_hash,
+                symbols: Vec::new(),
+                refs: Vec::new(),
+            });
+            continue;
+        }
         let content = utf16(&text);
         // A parser panic (e.g. a regex construct the JS-regex engine refuses
         // to approximate) must never take the service down: the project is
@@ -287,6 +301,20 @@ fn collect_on_this_thread(
             symbols: parsed.symbols,
             refs: parsed.refs,
         });
+    }
+    if !py.is_empty() {
+        let files: Vec<parse::py::PyFile<'_>> = py
+            .iter()
+            .map(|(i, text)| parse::py::PyFile {
+                file: &rows[*i].path,
+                text,
+            })
+            .collect();
+        let parsed = parse::py::parse_all(&files).map_err(NativeError::Unsupported)?;
+        for ((i, _), p) in py.iter().zip(parsed) {
+            rows[*i].symbols = p.symbols;
+            rows[*i].refs = p.refs;
+        }
     }
     Ok((rows, git))
 }

@@ -33,6 +33,15 @@ pub const LANGS: &[&str] = &[
 type Pattern = (&'static str, &'static str, &'static str);
 
 const PATTERNS: &[(&str, &[Pattern])] = &[
+    // `py`: only reached as `py-parser.ts`'s fallback without an interpreter.
+    (
+        "py",
+        &[
+            (r"^(?:async\s+)?def\s+([A-Za-z_]\w*)", "gm", "function"),
+            (r"^class\s+([A-Za-z_]\w*)", "gm", "class"),
+            (r"^([A-Za-z_]\w*)\s*=(?!=)", "gm", "var"),
+        ],
+    ),
     (
         "scala",
         &[
