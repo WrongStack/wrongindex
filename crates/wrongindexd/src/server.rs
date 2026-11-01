@@ -111,7 +111,17 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     #[cfg(windows)]
     let (listener, first) = match wrongindex_ipc::win::PipeListener::bind(&endpoint) {
         Ok(x) => x,
-        Err(e) if e.raw_os_error() == Some(5) => return Err(StartError::AlreadyRunning(endpoint)),
+        Err(e) if e.raw_os_error() == Some(5) => {
+            // Never assume the holder is our own daemon: a name pre-created by
+            // another account must be reported, not treated as "running".
+            use wrongindex_ipc::win::{ExistingOwner, PipeListener};
+            return Err(match PipeListener::existing_owner(&endpoint).await {
+                ExistingOwner::SameUser { .. } => StartError::AlreadyRunning(endpoint),
+                ExistingOwner::Foreign { detail } => StartError::Other(anyhow::anyhow!(
+                    "endpoint {endpoint} is held by a process that is not this user's WrongIndex daemon ({detail}); refusing to start"
+                )),
+            });
+        }
         Err(e) => return Err(anyhow::Error::new(e).context("binding endpoint").into()),
     };
     #[cfg(not(windows))]

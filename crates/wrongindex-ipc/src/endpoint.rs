@@ -113,7 +113,24 @@ pub fn user_identity() -> io::Result<String> {
 
 fn create_private_dir(dir: &Path) -> io::Result<()> {
     if dir.is_dir() {
-        return Ok(());
+        // Never trust a pre-existing directory's ACL: refuse one owned by
+        // another account, re-apply the owner-only DACL to our own.
+        #[cfg(windows)]
+        return crate::win::harden_private_dir(dir);
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            let meta = std::fs::metadata(dir)?;
+            // SAFETY: getuid has no preconditions.
+            let uid = unsafe { libc_getuid() };
+            if meta.uid() != uid {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!("{} is not owned by the current user", dir.display()),
+                ));
+            }
+            return std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        }
     }
     if let Some(parent) = dir.parent()
         && !parent.as_os_str().is_empty()
@@ -138,18 +155,57 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
     }
 }
 
-/// Write `bytes` to `path` atomically (temp file in the same directory + rename).
-pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+#[cfg(not(windows))]
+unsafe extern "C" {
+    #[link_name = "getuid"]
+    fn libc_getuid() -> u32;
+}
+
+fn temp_sibling(path: &Path) -> io::Result<std::path::PathBuf> {
     let dir = path
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "path has no parent"))?;
-    let tmp = dir.join(format!(
+    Ok(dir.join(format!(
         ".{}.{}.tmp",
         path.file_name()
             .map(|n| n.to_string_lossy())
             .unwrap_or_default(),
         std::process::id()
-    ));
+    )))
+}
+
+/// Atomically write a secret: the temp file is created exclusively with an
+/// owner-only DACL (Windows) or mode 0600 (Unix) before any byte is written,
+/// then renamed over `path` (rename keeps the file's own security descriptor).
+pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let tmp = temp_sibling(path)?;
+    let _ = std::fs::remove_file(&tmp);
+    #[cfg(windows)]
+    crate::win::write_private_new(&tmp, bytes)?;
+    #[cfg(not(windows))]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    match std::fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
+/// Write `bytes` to `path` atomically (temp file in the same directory + rename).
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let tmp = temp_sibling(path)?;
     std::fs::write(&tmp, bytes)?;
     match std::fs::rename(&tmp, path) {
         Ok(()) => Ok(()),
@@ -186,7 +242,7 @@ pub struct Discovery {
 impl Discovery {
     pub fn publish(root: &DataRoot, info: &EndpointInfo, token: &str) -> io::Result<()> {
         // Token first: a reader that sees the new endpoint must find its credential.
-        write_atomic(&root.token_file(), token.as_bytes())?;
+        write_private_atomic(&root.token_file(), token.as_bytes())?;
         write_atomic(
             &root.endpoint_file(),
             serde_json::to_vec_pretty(info)
@@ -253,6 +309,15 @@ mod tests {
         let token = generate_token().unwrap();
         assert_eq!(token.len(), 64);
         Discovery::publish(&root, &info("one"), &token).unwrap();
+        #[cfg(windows)]
+        {
+            assert!(crate::win::is_owner_only(&root.token_file()).unwrap());
+            assert!(crate::win::is_owner_only(&root.runtime_dir()).unwrap());
+        }
+        // Republishing replaces the token without weakening its ACL.
+        Discovery::publish(&root, &info("one"), &token).unwrap();
+        #[cfg(windows)]
+        assert!(crate::win::is_owner_only(&root.token_file()).unwrap());
         let d = Discovery::load(&root).unwrap();
         assert_eq!(d.token, token);
         assert!(!Discovery::retract(&root, "other").unwrap());
@@ -260,6 +325,20 @@ mod tests {
         assert!(Discovery::retract(&root, "one").unwrap());
         assert!(!root.endpoint_file().exists());
         assert!(!root.token_file().exists());
+    }
+
+    #[test]
+    fn pre_existing_root_is_hardened() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(home.join("runtime")).unwrap();
+        let root = DataRoot::resolve(Some(&home)).unwrap();
+        root.ensure_private_dirs().unwrap();
+        #[cfg(windows)]
+        {
+            assert!(crate::win::is_owner_only(&home).unwrap());
+            assert!(crate::win::is_owner_only(&home.join("runtime")).unwrap());
+        }
     }
 
     #[test]

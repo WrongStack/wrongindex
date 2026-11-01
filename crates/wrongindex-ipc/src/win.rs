@@ -1,8 +1,20 @@
 //! Windows named-pipe transport and owner-private security descriptors.
+//!
+//! Trust model (architecture §10): same-user local access. Two things are
+//! enforced here beyond the pipe DACL:
+//!
+//! * A client verifies that the process serving the pipe runs as the current
+//!   user before it sends any credential, so a pipe name pre-created by another
+//!   local account (squatting) never receives the token.
+//! * Private directories and the token file carry an explicit protected DACL
+//!   (current user + LocalSystem). A pre-existing directory owned by another
+//!   account is refused rather than trusted.
 
 use std::ffi::c_void;
-use std::io;
+use std::fs::File;
+use std::io::{self, Write};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::ptr::null_mut;
 use std::time::{Duration, Instant};
@@ -11,17 +23,26 @@ use tokio::net::windows::named_pipe::{
     ClientOptions, NamedPipeClient, NamedPipeServer, ServerOptions,
 };
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_PIPE_BUSY, HANDLE, LocalFree,
+    CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE,
+    INVALID_HANDLE_VALUE, LocalFree,
 };
 use windows_sys::Win32::Security::Authorization::{
-    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+    GetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT, SetNamedSecurityInfoW,
 };
 use windows_sys::Win32::Security::{
-    GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
-    TokenUser,
+    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce,
+    GetSecurityDescriptorControl, GetSecurityDescriptorDacl, GetTokenInformation,
+    OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+    SE_DACL_PROTECTED, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER, TokenUser,
 };
-use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
-use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows_sys::Win32::Storage::FileSystem::{
+    CREATE_NEW, CreateDirectoryW, CreateFileW, FILE_ATTRIBUTE_NORMAL,
+};
+use windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId;
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -34,43 +55,106 @@ fn wide_path(p: &Path) -> Vec<u16> {
         .collect()
 }
 
+/// Convert a SID to its string form.
+///
+/// # Safety
+/// `sid` must point at a valid SID.
+unsafe fn sid_to_string(sid: PSID) -> io::Result<String> {
+    let mut sid_str: *mut u16 = null_mut();
+    // SAFETY: caller guarantees a valid SID; output freed below.
+    unsafe {
+        if ConvertSidToStringSidW(sid, &mut sid_str) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut n = 0usize;
+        while *sid_str.add(n) != 0 {
+            n += 1;
+        }
+        let s = String::from_utf16_lossy(std::slice::from_raw_parts(sid_str, n));
+        LocalFree(sid_str.cast());
+        Ok(s)
+    }
+}
+
+/// String SID of the user an access token belongs to.
+///
+/// # Safety
+/// `token` must be a valid token handle opened with `TOKEN_QUERY`.
+unsafe fn token_user_sid(token: HANDLE) -> io::Result<String> {
+    // SAFETY: standard two-call size query; buffer is u64-aligned for TOKEN_USER.
+    unsafe {
+        let mut len = 0u32;
+        GetTokenInformation(token, TokenUser, null_mut(), 0, &mut len);
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
+            return Err(err);
+        }
+        let mut buf = vec![0u64; (len as usize).div_ceil(8)];
+        if GetTokenInformation(token, TokenUser, buf.as_mut_ptr().cast(), len, &mut len) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let user = &*(buf.as_ptr() as *const TOKEN_USER);
+        sid_to_string(user.User.Sid)
+    }
+}
+
 /// String SID of the user that owns this process token.
 pub fn current_user_sid() -> io::Result<String> {
-    // SAFETY: standard token query sequence; every handle/buffer is checked
-    // and released on all paths.
+    // SAFETY: token handle checked and closed on all paths.
     unsafe {
         let mut token: HANDLE = null_mut();
         if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
             return Err(io::Error::last_os_error());
         }
-        let result = (|| {
-            let mut len = 0u32;
-            GetTokenInformation(token, TokenUser, null_mut(), 0, &mut len);
-            let err = io::Error::last_os_error();
-            if err.raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
-                return Err(err);
-            }
-            // u64 backing keeps the TOKEN_USER pointer suitably aligned.
-            let mut buf = vec![0u64; (len as usize).div_ceil(8)];
-            if GetTokenInformation(token, TokenUser, buf.as_mut_ptr().cast(), len, &mut len) == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            let user = &*(buf.as_ptr() as *const TOKEN_USER);
-            let mut sid_str: *mut u16 = null_mut();
-            if ConvertSidToStringSidW(user.User.Sid, &mut sid_str) == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            let mut n = 0usize;
-            while *sid_str.add(n) != 0 {
-                n += 1;
-            }
-            let s = String::from_utf16_lossy(std::slice::from_raw_parts(sid_str, n));
-            LocalFree(sid_str.cast());
-            Ok(s)
-        })();
+        let r = token_user_sid(token);
         CloseHandle(token);
-        result
+        r
     }
+}
+
+/// String SID of the user running process `pid`.
+pub fn process_user_sid(pid: u32) -> io::Result<String> {
+    // SAFETY: handles checked and closed on all paths.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        let mut token: HANDLE = null_mut();
+        let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token);
+        CloseHandle(process);
+        if opened == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let r = token_user_sid(token);
+        CloseHandle(token);
+        r
+    }
+}
+
+/// Process ID and user SID of the process serving the pipe behind `handle`.
+pub fn pipe_server_identity(client: &NamedPipeClient) -> io::Result<(u32, String)> {
+    let mut pid = 0u32;
+    // SAFETY: the handle belongs to a live client end of a named pipe.
+    if unsafe { GetNamedPipeServerProcessId(client.as_raw_handle() as HANDLE, &mut pid) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((pid, process_user_sid(pid)?))
+}
+
+/// Refuse a pipe whose server does not run as the current user.
+pub fn verify_same_user_server(client: &NamedPipeClient) -> io::Result<()> {
+    let (pid, server_sid) = pipe_server_identity(client)?;
+    let me = current_user_sid()?;
+    if server_sid != me {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "pipe server (pid {pid}) runs as {server_sid}, not the current user {me}; refusing to send credentials"
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// A self-relative security descriptor allocated by
@@ -114,6 +198,21 @@ impl OwnerOnlySecurity {
             bInheritHandle: 0,
         }
     }
+
+    fn dacl(&self) -> io::Result<*mut ACL> {
+        let mut present = 0i32;
+        let mut defaulted = 0i32;
+        let mut dacl: *mut ACL = null_mut();
+        // SAFETY: descriptor is valid for the lifetime of self.
+        if unsafe {
+            GetSecurityDescriptorDacl(self.descriptor, &mut present, &mut dacl, &mut defaulted)
+        } == 0
+            || present == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(dacl)
+    }
 }
 
 impl Drop for OwnerOnlySecurity {
@@ -136,10 +235,181 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Owner SID string and DACL facts for a file or directory.
+pub struct PathSecurity {
+    pub owner_sid: String,
+    pub dacl_protected: bool,
+    /// SIDs granted access by allow ACEs. `None` entries are ACE types this
+    /// module does not interpret (treated as not owner-only).
+    pub allowed_sids: Vec<Option<String>>,
+}
+
+/// LocalSystem.
+const SYSTEM_SID: &str = "S-1-5-18";
+const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
+const ACCESS_DENIED_ACE_TYPE: u8 = 1;
+
+pub fn path_security(path: &Path) -> io::Result<PathSecurity> {
+    let wpath = wide_path(path);
+    let mut owner: PSID = null_mut();
+    let mut dacl: *mut ACL = null_mut();
+    let mut sd: PSECURITY_DESCRIPTOR = null_mut();
+    // SAFETY: outputs point into `sd`, which is freed below.
+    let rc = unsafe {
+        GetNamedSecurityInfoW(
+            wpath.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &mut owner,
+            null_mut(),
+            &mut dacl,
+            null_mut(),
+            &mut sd,
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::from_raw_os_error(rc as i32));
+    }
+    // SAFETY: owner/dacl/sd valid until LocalFree(sd).
+    let result = unsafe {
+        let owner_sid = sid_to_string(owner);
+        let mut control = 0u16;
+        let mut revision = 0u32;
+        GetSecurityDescriptorControl(sd, &mut control, &mut revision);
+        let mut allowed_sids = Vec::new();
+        if dacl.is_null() {
+            // A NULL DACL grants everyone full access.
+            allowed_sids.push(None);
+        } else {
+            for i in 0..(*dacl).AceCount as u32 {
+                let mut ace: *mut c_void = null_mut();
+                if GetAce(dacl, i, &mut ace) == 0 {
+                    allowed_sids.push(None);
+                    continue;
+                }
+                let header = &*(ace as *const ACE_HEADER);
+                match header.AceType {
+                    ACCESS_ALLOWED_ACE_TYPE => {
+                        let allowed = ace as *const ACCESS_ALLOWED_ACE;
+                        let sid = std::ptr::addr_of!((*allowed).SidStart) as PSID;
+                        allowed_sids.push(sid_to_string(sid).ok());
+                    }
+                    ACCESS_DENIED_ACE_TYPE => {}
+                    _ => allowed_sids.push(None),
+                }
+            }
+        }
+        owner_sid.map(|owner_sid| PathSecurity {
+            owner_sid,
+            dacl_protected: control & SE_DACL_PROTECTED != 0,
+            allowed_sids,
+        })
+    };
+    // SAFETY: allocated by GetNamedSecurityInfoW.
+    unsafe {
+        LocalFree(sd);
+    }
+    result
+}
+
+impl PathSecurity {
+    /// Owned by `me`, DACL protected from inheritance, and every allow ACE
+    /// names `me` or LocalSystem.
+    pub fn is_owner_only(&self, me: &str) -> bool {
+        self.owner_sid == me
+            && self.dacl_protected
+            && self
+                .allowed_sids
+                .iter()
+                .all(|sid| matches!(sid.as_deref(), Some(s) if s == me || s == SYSTEM_SID))
+    }
+}
+
+/// Whether `path` is owned by the current user and only the current user and
+/// LocalSystem are granted access.
+pub fn is_owner_only(path: &Path) -> io::Result<bool> {
+    Ok(path_security(path)?.is_owner_only(&current_user_sid()?))
+}
+
+/// Make an existing directory private. Refuses a directory owned by another
+/// account instead of trusting or silently re-owning it.
+pub fn harden_private_dir(dir: &Path) -> io::Result<()> {
+    let me = current_user_sid()?;
+    let s = path_security(dir)?;
+    if s.owner_sid != me {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{} is owned by {}, not the current user {me}; refusing to use it as a private WrongIndex directory",
+                dir.display(),
+                s.owner_sid
+            ),
+        ));
+    }
+    if s.is_owner_only(&me) {
+        return Ok(());
+    }
+    let sec = OwnerOnlySecurity::new(true)?;
+    let dacl = sec.dacl()?;
+    let mut wpath = wide_path(dir);
+    // SAFETY: valid path and DACL; owner/group untouched.
+    let rc = unsafe {
+        SetNamedSecurityInfoW(
+            wpath.as_mut_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            null_mut(),
+            null_mut(),
+            dacl,
+            null_mut(),
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::from_raw_os_error(rc as i32));
+    }
+    Ok(())
+}
+
+/// Create `path` (which must not exist) with an explicit owner-only DACL and
+/// write `bytes`. The content is never readable through an inherited ACL.
+pub fn write_private_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let sec = OwnerOnlySecurity::new(false)?;
+    let attrs = sec.attributes();
+    let wpath = wide_path(path);
+    // SAFETY: valid path/attributes; handle ownership moves into File.
+    let handle = unsafe {
+        CreateFileW(
+            wpath.as_ptr(),
+            GENERIC_WRITE,
+            0,
+            &attrs,
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL,
+            null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: freshly created, exclusively owned handle.
+    let mut file = unsafe { File::from_raw_handle(handle) };
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
 /// Creates pipe instances that only the current user / LocalSystem can open.
 pub struct PipeListener {
     name: String,
     security: OwnerOnlySecurity,
+}
+
+/// Who holds a pipe name we could not bind.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExistingOwner {
+    /// A server running as the current user.
+    SameUser { pid: u32 },
+    /// A server running as another account, or one we cannot open at all.
+    Foreign { detail: String },
 }
 
 impl PipeListener {
@@ -153,6 +423,27 @@ impl PipeListener {
         };
         let first = listener.create(true)?;
         Ok((listener, first))
+    }
+
+    /// Identify the holder of a name whose bind failed. Never assumes the
+    /// holder is our own daemon.
+    pub async fn existing_owner(name: &str) -> ExistingOwner {
+        match connect_unverified(name, Duration::from_secs(2)).await {
+            Ok(client) => match pipe_server_identity(&client) {
+                Ok((pid, sid)) if current_user_sid().ok().as_deref() == Some(sid.as_str()) => {
+                    ExistingOwner::SameUser { pid }
+                }
+                Ok((pid, sid)) => ExistingOwner::Foreign {
+                    detail: format!("pid {pid} running as {sid}"),
+                },
+                Err(e) => ExistingOwner::Foreign {
+                    detail: format!("cannot identify server: {e}"),
+                },
+            },
+            Err(e) => ExistingOwner::Foreign {
+                detail: format!("cannot open existing pipe: {e}"),
+            },
+        }
     }
 
     /// Create the next instance to accept a further client.
@@ -175,8 +466,7 @@ impl PipeListener {
     }
 }
 
-/// Connect to a pipe, retrying while all instances are busy.
-pub async fn connect(name: &str, deadline: Duration) -> io::Result<NamedPipeClient> {
+async fn connect_unverified(name: &str, deadline: Duration) -> io::Result<NamedPipeClient> {
     let start = Instant::now();
     loop {
         match ClientOptions::new().open(name) {
@@ -195,6 +485,14 @@ pub async fn connect(name: &str, deadline: Duration) -> io::Result<NamedPipeClie
     }
 }
 
+/// Connect to a pipe (retrying while all instances are busy) and verify that
+/// its server runs as the current user before returning the stream.
+pub async fn connect(name: &str, deadline: Duration) -> io::Result<NamedPipeClient> {
+    let client = connect_unverified(name, deadline).await?;
+    verify_same_user_server(&client)?;
+    Ok(client)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,16 +501,60 @@ mod tests {
     fn sid_looks_like_a_sid() {
         let sid = current_user_sid().unwrap();
         assert!(sid.starts_with("S-1-"), "{sid}");
+        assert_eq!(process_user_sid(std::process::id()).unwrap(), sid);
     }
 
     #[tokio::test]
-    async fn second_bind_of_same_name_fails() {
+    async fn second_bind_fails_and_holder_is_identified_as_same_user() {
         let name = format!(r"\\.\pipe\wrongindex-test-{}", std::process::id());
-        let (_l, _first) = PipeListener::bind(&name).unwrap();
+        let (_l, first) = PipeListener::bind(&name).unwrap();
         let err = PipeListener::bind(&name)
             .err()
             .expect("second bind must fail");
         // ERROR_ACCESS_DENIED for FILE_FLAG_FIRST_PIPE_INSTANCE on an existing name.
         assert_eq!(err.raw_os_error(), Some(5), "{err}");
+        let accept = tokio::spawn(async move {
+            first.connect().await.unwrap();
+            first
+        });
+        assert_eq!(
+            PipeListener::existing_owner(&name).await,
+            ExistingOwner::SameUser {
+                pid: std::process::id()
+            }
+        );
+        drop(accept.await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn verified_connect_accepts_own_server() {
+        let name = format!(r"\\.\pipe\wrongindex-test-v-{}", std::process::id());
+        let (_l, first) = PipeListener::bind(&name).unwrap();
+        let accept = tokio::spawn(async move {
+            first.connect().await.unwrap();
+            first
+        });
+        let client = connect(&name, Duration::from_secs(2)).await.unwrap();
+        let (pid, _) = pipe_server_identity(&client).unwrap();
+        assert_eq!(pid, std::process::id());
+        drop(accept.await.unwrap());
+    }
+
+    #[test]
+    fn existing_dir_is_hardened_and_private_file_is_owner_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("pre-existing");
+        std::fs::create_dir(&dir).unwrap();
+        // Control: a std-created directory inherits a broader ACL.
+        assert!(!is_owner_only(&dir).unwrap());
+        harden_private_dir(&dir).unwrap();
+        assert!(is_owner_only(&dir).unwrap());
+
+        let file = dir.join("token");
+        write_private_new(&file, b"secret").unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"secret");
+        assert!(is_owner_only(&file).unwrap());
+        // CREATE_NEW: never overwrite an existing file in place.
+        assert!(write_private_new(&file, b"x").is_err());
     }
 }

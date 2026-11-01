@@ -673,6 +673,26 @@ async fn doctor(root: &DataRoot, json: bool) -> Outcome {
         Ok(name) => add("endpoint_name", "pass", name),
         Err(e) => add("endpoint_name", "fail", e.to_string()),
     }
+    #[cfg(windows)]
+    for (name, path) in [
+        ("runtime_dir_acl", root.runtime_dir()),
+        ("token_file_acl", root.token_file()),
+    ] {
+        if path.exists() {
+            match wrongindex_ipc::win::is_owner_only(&path) {
+                Ok(true) => add(name, "pass", format!("owner-only: {}", path.display())),
+                Ok(false) => add(
+                    name,
+                    "fail",
+                    format!(
+                        "{} grants access beyond the current user and SYSTEM",
+                        path.display()
+                    ),
+                ),
+                Err(e) => add(name, "fail", format!("{}: {e}", path.display())),
+            }
+        }
+    }
     match Discovery::load(root) {
         Ok(d) => add(
             "discovery",

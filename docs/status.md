@@ -49,11 +49,23 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 43 tests (contracts 4, storage 15, registry 11, ipc 9, daemon integration 4) |
+| `cargo test --workspace` | PASS — 46 tests (contracts 4, storage 15, registry 11, ipc 12, daemon integration 4) |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
 | Manual CLI smoke against a temp data root | start/idempotent start/add/conflict/check/rebuild-refused/status/doctor/stop/inspect behaved as specified |
-| Hosted CI, packaging, benchmarks, desktop | NOT RUN |
+| Hosted CI (`windows-latest`) | PASS on initial push |
+| Packaging, benchmarks, desktop | NOT RUN |
+
+## Security review follow-up (2026-11-01)
+
+An automated review of the first push flagged two issues; both are fixed:
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| Pipe-name squatting: a deterministic pipe name pre-created by another local account would receive the client's token | Client calls `GetNamedPipeServerProcessId` and requires the server process token's user SID to equal the current user before sending any credential. A daemon whose bind fails identifies the holder and refuses to start (instead of reporting "already running") when it is not the same user. | `win::tests::verified_connect_accepts_own_server`, `second_bind_fails_and_holder_is_identified_as_same_user`. Cross-account squatting: NOT RUN (needs a second Windows account). |
+| Pre-existing directories were trusted; the token file inherited its parent's ACL | Existing private directories owned by another account are refused; our own get a protected owner + SYSTEM DACL re-applied. The token is written to an exclusively created temp file with an explicit owner-only descriptor before any byte is written, then renamed. `doctor` reports `runtime_dir_acl` / `token_file_acl`. | `existing_dir_is_hardened_and_private_file_is_owner_only` (with a control asserting a std-created directory is *not* owner-only), `pre_existing_root_is_hardened`, `discovery_round_trip_and_owner_only_retract`. |
+
+Hosted CI on the first push (run 41293608373, `windows-latest`): PASS.
 
 ## Next tasks
 
