@@ -1,0 +1,44 @@
+{
+  "generator": "scripts/oracle/bundle-tree-sitter.ts",
+  "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+  "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+  "bun": "1.4.4",
+  "webTreeSitter": "0.27.1",
+  "typescript": "6.0.2",
+  "grammars": {
+    "c": "c",
+    "cpp": "cpp",
+    "java": "java",
+    "csharp": "c_sharp",
+    "php": "php",
+    "ruby": "ruby",
+    "swift": "swift",
+    "kotlin": "kotlin",
+    "shell": "bash",
+    "elixir": "elixir"
+  },
+  "sources": {
+    "ts-parser.ts": "c7cc9a334980b4370e98a06af6d6a92915e6d997c43c9a090ead7eb21e967286",
+    "tree-sitter-parser.ts": "ff8c16791428e4d642d9a764fa01ae28a7d09cf8e6e5ca1dfd7944e4eba5a8f8",
+    "tree-sitter/visitor.ts": "c70d825a1c2aaf193ea880547f4ce8955d7c302617ff46636ba33fdbdb931f35",
+    "tree-sitter/queries.ts": "12e15dd11f7791ba6df6e76c742ac1c8fec526a72fd279a33420dfab50fb85e6",
+    "tree-sitter/query-extractors.ts": "6249f55edca0ce242cb7849ca5117509e2b6c184eda41f3843b748f41448f771",
+    "tree-sitter/util.ts": "286903a41c6ca6e69739342634cebe2e4e7e32ee3f7c2db8f7bbd54a8668f8e5"
+  },
+  "licences": "TypeScript (@typescript/typescript6) Apache-2.0; web-tree-sitter MIT; tree-sitter grammars MIT (tree-sitter-wasm); WrongStack visitor/queries MIT",
+  "files": {
+    "ts_batch.mjs": "34ae02628804eb1de02a7854cfc8890f3c67a7e0202dacca6423a2134e9e85d8",
+    "ts_parse.mjs": "5069f9c7980810bb7338edc78d6d7c7d45c0099c4ad687e1534227e17ab23778",
+    "tree-sitter-runtime.wasm": "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc",
+    "c/tree-sitter-c.wasm": "7b80a64003e8ef8cde197329ee0167e9270f67663f2e6c6ef7d67b5425998aac",
+    "cpp/tree-sitter-cpp.wasm": "285a0d1da90e6cdea639ddf1b925ebca567d24b68d13c418ea92f5a6b7c099dd",
+    "java/tree-sitter-java.wasm": "e430a1a344388d6d3bc9f87144dec0d204fca37fafe5f4ab23c51060972a2ac5",
+    "c_sharp/tree-sitter-c_sharp.wasm": "608208861b5cacee3805c486109e05cdfcf508988c303199cbba4628b8ed4151",
+    "php/tree-sitter-php.wasm": "d2e6951899eb5df9e04bfbf67292a708ca61d595387bc064fc837829de2da453",
+    "ruby/tree-sitter-ruby.wasm": "db6b357418d4154402e48b497dfa9128d592cf9c559bff1ea1e3fcfe3a3b8d56",
+    "swift/tree-sitter-swift.wasm": "3553bb4258b20fe3514c12a6e68d990036b9446e528283ec6ab79ede8854e791",
+    "kotlin/tree-sitter-kotlin.wasm": "82f658c6d6e07f0c2a421ab7e1308763fffa16627c7d10e9dd9f6f9a4f9ff25a",
+    "bash/tree-sitter-bash.wasm": "5daf3f2ac1cea01a64cfd6878ef7d247310925a4c62238eb4b8c1feb5dce355a",
+    "elixir/tree-sitter-elixir.wasm": "1059cf0fe8666f0a0ce3d496a2e5451d736d0401186be7a20fc96fda321feb6e"
+  }
+}

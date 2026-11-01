@@ -3,9 +3,8 @@
 //! extractor (`generic-parser.ts`) can have: Dockerfile, Makefile/justfile,
 //! CMakeLists.txt, dotenv, Terraform, SQL, GraphQL, Protobuf and Markdown
 //! links, plus the YAML kinds `yaml-parser.ts` adds refs from (Docker
-//! Compose, GitHub workflows, OpenAPI, Kubernetes). `shell` is reachable from
-//! neither route (its files are `shell`, not ported) and is reported as not
-//! ported.
+//! Compose, GitHub workflows, OpenAPI, Kubernetes) and shell `source` lines
+//! (reached when the tree-sitter grammar yields no symbols for a script).
 //!
 //! Every regex is the TypeScript source text run by [`crate::jsre`].
 
@@ -808,7 +807,18 @@ pub fn parse(file: &str, content: &U16, lang: &'static str) -> Infra {
             }
         }
         Kind::Shell => {
-            out.unsupported = Some(format!("infra artifact {kind:?} not ported"));
+            for (i, line) in lines.iter().enumerate() {
+                let raw = js::trim(line);
+                if raw.is_empty() || starts_with(raw, "#") {
+                    continue;
+                }
+                let source = regex!(r#"^(?:source|\.)\s+['"]?([^\s'";|&]+)['"]?"#, "");
+                if let Some(t) = source.exec(raw).and_then(|m| m.text(raw, 1))
+                    && !t.is_empty()
+                {
+                    refs.push(mk_ref(lang, t, i + 1, "import", true));
+                }
+            }
         }
     }
     out

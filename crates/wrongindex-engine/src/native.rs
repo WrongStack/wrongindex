@@ -18,7 +18,8 @@
 //!   TypeScript recovers from, or script-level `await` it parses
 //!   differently - see [`crate::parse::ts`]);
 //! - Git-listed symbolic links that resolve outside the checkout;
-//! - files over 5 MiB, incomplete discovery, or no indexable files;
+//! - incomplete discovery, or no indexable files (files over 5 MiB are
+//!   skipped, as WrongStack skips them);
 //! - an index directory that already holds an `index.db`.
 
 use std::path::{Path, PathBuf};
@@ -160,6 +161,9 @@ struct FileRow {
     lang: &'static str,
     mtime_ms: i64,
     content_hash: String,
+    /// A per-file read failure (`readBatchFiles` error, e.g. over 5 MiB):
+    /// no rows, but the file still takes its place in the write batches.
+    failed: bool,
     symbols: Vec<ParsedSymbol>,
     refs: Vec<ParsedRef>,
 }
@@ -241,6 +245,9 @@ fn collect_on_this_thread(
     // Python and Go are parsed afterwards, in toolchain batches: (row, text).
     let mut py: Vec<(usize, String)> = Vec::new();
     let mut go: Vec<(usize, String)> = Vec::new();
+    let mut tree: Vec<(usize, String)> = Vec::new();
+    // TS/JS files the oxc port refuses: WrongStack's own TypeScript parser.
+    let mut tsc: Vec<(usize, String)> = Vec::new();
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
             Some(l) if parse::is_native_lang(l) => l,
@@ -252,10 +259,19 @@ fn collect_on_this_thread(
             }
         };
         let meta = std::fs::metadata(&path)?;
+        // `readBatchFiles`: an oversized file is a per-file error; it gets no
+        // rows and the run goes on.
         if meta.len() > MAX_INDEX_FILE_BYTES {
-            return Err(NativeError::Unsupported(format!(
-                "file over 5 MiB ({path})"
-            )));
+            rows.push(FileRow {
+                path,
+                lang,
+                mtime_ms: 0,
+                content_hash: String::new(),
+                failed: true,
+                symbols: Vec::new(),
+                refs: Vec::new(),
+            });
+            continue;
         }
         let mtime_ms = meta
             .modified()?
@@ -264,14 +280,19 @@ fn collect_on_this_thread(
         let bytes = std::fs::read(&path)?;
         let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
         let text = String::from_utf8_lossy(&bytes);
-        if lang == "py" || lang == "go" {
-            let batch = if lang == "py" { &mut py } else { &mut go };
+        if lang == "py" || lang == "go" || parse::treesitter::LANGS.contains(&lang) {
+            let batch = match lang {
+                "py" => &mut py,
+                "go" => &mut go,
+                _ => &mut tree,
+            };
             batch.push((rows.len(), text.into_owned()));
             rows.push(FileRow {
                 path,
                 lang,
                 mtime_ms,
                 content_hash,
+                failed: false,
                 symbols: Vec::new(),
                 refs: Vec::new(),
             });
@@ -293,13 +314,27 @@ fn collect_on_this_thread(
             NativeError::Unsupported(format!("{lang} parser failed on {path}: {why}"))
         })?;
         if let Some(why) = parsed.unsupported {
-            return Err(NativeError::Unsupported(format!("{why} ({path})")));
+            if !parse::ts::LANGS.contains(&lang) {
+                return Err(NativeError::Unsupported(format!("{why} ({path})")));
+            }
+            tsc.push((rows.len(), text.into_owned()));
+            rows.push(FileRow {
+                path,
+                lang,
+                mtime_ms,
+                content_hash,
+                failed: false,
+                symbols: Vec::new(),
+                refs: Vec::new(),
+            });
+            continue;
         }
         rows.push(FileRow {
             path,
             lang,
             mtime_ms,
             content_hash,
+            failed: false,
             symbols: parsed.symbols,
             refs: parsed.refs,
         });
@@ -308,6 +343,8 @@ fn collect_on_this_thread(
     for (batch, run) in [
         (&py, parse::py::parse_all as Batch),
         (&go, parse::go::parse_all as Batch),
+        (&tree, parse::treesitter::parse_all as Batch),
+        (&tsc, parse::treesitter::parse_typescript_fallback as Batch),
     ] {
         if batch.is_empty() {
             continue;
@@ -317,6 +354,7 @@ fn collect_on_this_thread(
             .map(|(i, text)| parse::py::SourceFile {
                 file: &rows[*i].path,
                 text,
+                lang: rows[*i].lang,
             })
             .collect();
         let parsed = run(&files).map_err(NativeError::Unsupported)?;
@@ -505,6 +543,7 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
         let (files, _) = collect(project_root)?;
         let mut current: Vec<(String, String)> = files
             .iter()
+            .filter(|f| !f.failed)
             .map(|f| (f.path.clone(), f.content_hash.clone()))
             .collect();
         current.sort();
@@ -626,7 +665,7 @@ fn index_once(
         // Files with nothing to write are upserted first, outside a savepoint.
         for f in batch
             .iter()
-            .filter(|f| f.symbols.is_empty() && f.refs.is_empty())
+            .filter(|f| !f.failed && f.symbols.is_empty() && f.refs.is_empty())
         {
             tx.execute(
                 "INSERT INTO files(file, lang, mtime_ms, content_hash, symbol_count, last_indexed, git_blob)
@@ -638,7 +677,7 @@ fn index_once(
         // Each written file with its symbols, module owner first when needed.
         let entries: Vec<(&FileRow, Vec<ParsedSymbol>)> = batch
             .iter()
-            .filter(|f| !(f.symbols.is_empty() && f.refs.is_empty()))
+            .filter(|f| !(f.failed || f.symbols.is_empty() && f.refs.is_empty()))
             .map(|f| {
                 let mut syms = Vec::with_capacity(f.symbols.len() + 1);
                 if needs_module_owner(&f.symbols, &f.refs) {
@@ -745,6 +784,7 @@ fn index_once(
     if let Some(git) = &git {
         let stamps: Vec<(String, &str)> = files
             .iter()
+            .filter(|f| !f.failed)
             .filter_map(|f| {
                 git.clean_blobs
                     .get(&f.path)
@@ -767,7 +807,8 @@ fn index_once(
         }
     }
     write_stat1(&tx)?;
-    let changed = files.len();
+    let written = files.iter().filter(|f| !f.failed).count();
+    let changed = written;
     let graph_stamp = format!("{}:{changed}", now_ms());
     set_meta(&tx, "graph_stamp", &graph_stamp)?;
     set_meta(&tx, "last_indexed", &now_ms().to_string())?;
@@ -775,7 +816,7 @@ fn index_once(
     conn.close().map_err(|(_, e)| e)?;
 
     Ok(Report {
-        files_indexed: files.len() - files_empty,
+        files_indexed: written - files_empty,
         files_empty,
         symbols_indexed: (next_id - 1) as usize,
         graph_stamp,

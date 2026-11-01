@@ -30,6 +30,8 @@ pub struct SourceFile<'a> {
     pub file: &'a str,
     /// The file text as the indexer decoded it (lossy UTF-8).
     pub text: &'a str,
+    /// The file's language (the tree-sitter program needs it).
+    pub lang: &'static str,
 }
 
 /// `resolvePythonBinary()`: `python3`, `python`, `py` on Windows (`python3`,
@@ -137,8 +139,9 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
     for chunk in chunks(files) {
         let mut cmd = Command::new(py);
         cmd.arg("-I").arg(&script);
-        let results = run_chunk(cmd, &script, chunk, "py")?
+        let stdout = run_chunk(cmd, &script, chunk)?
             .ok_or_else(|| "python parser failed on a chunk".to_string())?;
+        let results = decode_batch(&stdout, "py")?;
         for f in chunk {
             let content = utf16(f.text);
             // `collectBatch` keeps the last entry without an error.
@@ -218,11 +221,10 @@ pub(super) fn run_chunk(
     mut cmd: Command,
     script: &Path,
     chunk: &[SourceFile<'_>],
-    lang: &'static str,
-) -> Result<Option<Vec<FileResult>>, String> {
+) -> Result<Option<String>, String> {
     let payload: Vec<Value> = chunk
         .iter()
-        .map(|f| serde_json::json!({"file": f.file, "content": f.text}))
+        .map(|f| serde_json::json!({"file": f.file, "content": f.text, "lang": f.lang}))
         .collect();
     let payload = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
     let program = cmd.get_program().to_string_lossy().into_owned();
@@ -265,11 +267,11 @@ pub(super) fn run_chunk(
     if !status.success() || text.trim().is_empty() {
         return Ok(None);
     }
-    decode_batch(text.trim(), lang).map(Some)
+    Ok(Some(text.trim().to_string()))
 }
 
 /// `parseParserBatchOutput` + `collectBatch` + `toIndexSymbols`.
-fn decode_batch(stdout: &str, lang: &'static str) -> Result<Vec<FileResult>, String> {
+pub(super) fn decode_batch(stdout: &str, lang: &'static str) -> Result<Vec<FileResult>, String> {
     let v: Value =
         serde_json::from_str(stdout).map_err(|e| format!("python parser output: {e}"))?;
     let Some(results) = v.get("results").and_then(Value::as_array) else {
@@ -409,6 +411,7 @@ mod tests {
             .map(|_| SourceFile {
                 file: "a.py",
                 text: "",
+                lang: "py",
             })
             .collect();
         assert_eq!(
@@ -419,16 +422,19 @@ mod tests {
             SourceFile {
                 file: "a.py",
                 text: &big,
+                lang: "py",
             },
             SourceFile {
                 file: "b.py",
                 text: &big,
+                lang: "py",
             },
         ];
         assert_eq!(chunks(&two).len(), 2);
         let one = [SourceFile {
             file: "a.py",
             text: &big,
+            lang: "py",
         }];
         assert_eq!(chunks(&one).len(), 1);
     }

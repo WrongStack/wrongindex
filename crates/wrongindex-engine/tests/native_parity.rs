@@ -308,14 +308,14 @@ fn encodings_match_the_wrongstack_oracle() {
 fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
-    let go_root = base.join("ts-mix");
-    copy_dir(
-        &repo().join("tests/fixtures/projects/treesitter-mix"),
-        &go_root,
-    );
-    let index = base.join("idx-ts-mix");
-    let err = index_fresh(&go_root, &index).unwrap_err();
-    assert!(err.to_string().contains("language "), "{err}");
+    // Every language WrongStack detects is native now; a project with no
+    // indexable files is still refused, and nothing is created.
+    let empty_root = base.join("empty");
+    std::fs::create_dir_all(&empty_root).unwrap();
+    std::fs::write(empty_root.join("notes.bin"), b"\x00\x01").unwrap();
+    let index = base.join("idx-empty");
+    let err = index_fresh(&empty_root, &index).unwrap_err();
+    assert!(err.to_string().contains("no indexable files"), "{err}");
     assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
     assert!(
         !index.exists(),
@@ -443,14 +443,17 @@ fn pathologically_nested_sources_are_refused_without_crashing() {
     );
     std::fs::write(root.join("deep.ts"), deep).unwrap();
     let index = base.join("idx");
+    // The oxc port refuses it before recursing; the file then goes to
+    // WrongStack's own TypeScript parser (Bun/Node.js child), which either
+    // indexes it or fails as a child - never this process.
     match index_fresh(&root, &index) {
-        Err(NativeError::Unsupported(why)) => assert!(why.contains("nesting"), "{why}"),
-        other => panic!("expected a refusal, got {other:?}"),
+        Ok(_) => {}
+        Err(NativeError::Unsupported(_)) => assert!(
+            !index.exists(),
+            "nothing may be written for a refused project"
+        ),
+        other => panic!("expected an index or a refusal, got {other:?}"),
     }
-    assert!(
-        !index.exists(),
-        "nothing may be written for a refused project"
-    );
 
     // Ordinary nesting is unaffected.
     let ok = base.join("ok");
@@ -486,4 +489,15 @@ fn go_basic_matches_the_wrongstack_oracle() {
         return;
     }
     assert_eq!(assert_matches_oracle("go-basic"), (2, 0, 6));
+}
+
+/// C, Java, Ruby, shell, SQL and a Dockerfile through WrongStack's own
+/// tree-sitter route (bundled visitor, queries, runtime and grammars).
+#[test]
+fn treesitter_mix_matches_the_wrongstack_oracle() {
+    if wrongindex_engine::parse::treesitter::runtime().is_none() {
+        eprintln!("NOT RUN: neither Bun nor Node.js on PATH");
+        return;
+    }
+    assert_eq!(assert_matches_oracle("treesitter-mix"), (6, 0, 17));
 }

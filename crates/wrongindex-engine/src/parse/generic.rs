@@ -33,6 +33,136 @@ pub const LANGS: &[&str] = &[
 type Pattern = (&'static str, &'static str, &'static str);
 
 const PATTERNS: &[(&str, &[Pattern])] = &[
+    // The tree-sitter languages: only reached as `parseSymbols`' fallback
+    // when the grammar yields no symbols.
+    (
+        "c",
+        &[
+            (
+                r"\b(?:class|struct|enum|interface|union)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+            (
+                r"\b(?:(?:public|private|protected|static|final|async|override|virtual|inline|export)\s+)?(?!(?:return|new|throw|else|case|delete|goto|await|yield|sizeof|typeof)\b)[\w:<>[\]*&]+\s+([A-Za-z_]\w*)\s*\([^;{]*\)\s*(?:const)?\s*[{;]",
+                "g",
+                "function",
+            ),
+            (r"\b(?:namespace)\s+([A-Za-z_]\w*)", "g", "namespace"),
+        ],
+    ),
+    (
+        "cpp",
+        &[
+            (
+                r"\b(?:class|struct|enum|interface|union)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+            (
+                r"\b(?:(?:public|private|protected|static|final|async|override|virtual|inline|export)\s+)?(?!(?:return|new|throw|else|case|delete|goto|await|yield|sizeof|typeof)\b)[\w:<>[\]*&]+\s+([A-Za-z_]\w*)\s*\([^;{]*\)\s*(?:const)?\s*[{;]",
+                "g",
+                "function",
+            ),
+            (r"\b(?:namespace)\s+([A-Za-z_]\w*)", "g", "namespace"),
+        ],
+    ),
+    (
+        "java",
+        &[
+            (
+                r"\b(?:class|interface|enum|record)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+            (
+                r"\b(?:(?:public|private|protected|static|final|abstract|synchronized|native|default)\s+)*(?!(?:return|new|throw|else|case|delete|goto|await|yield|sizeof|typeof)\b)[\w.$,<>[\]]+\s+([A-Za-z_]\w*)\s*\(",
+                "g",
+                "method",
+            ),
+        ],
+    ),
+    (
+        "csharp",
+        &[
+            (
+                r"\b(?:class|interface|struct|enum|record)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+            (r"\bnamespace\s+([A-Za-z_.\w]+)", "g", "namespace"),
+            (
+                r"\b(?:(?:public|private|protected|internal|static|async|override|virtual)\s+)*(?!(?:return|new|throw|else|case|delete|goto|await|yield|sizeof|typeof)\b)[\w.$,<>[\]]+\s+([A-Za-z_]\w*)\s*\(",
+                "g",
+                "method",
+            ),
+        ],
+    ),
+    (
+        "php",
+        &[
+            (r"\bfunction\s+([A-Za-z_]\w*)", "g", "function"),
+            (r"\bclass\s+([A-Za-z_]\w*)", "g", "class"),
+            (r"\binterface\s+([A-Za-z_]\w*)", "g", "interface"),
+            (r"\bnamespace\s+([A-Za-z_\\]+)", "g", "namespace"),
+        ],
+    ),
+    (
+        "ruby",
+        &[
+            (
+                r"^[ \t]*def\s+(?:self\.)?([A-Za-z_]\w*[!?]?)",
+                "gm",
+                "function",
+            ),
+            (r"^[ \t]*class\s+([A-Za-z_]\w*)", "gm", "class"),
+            (r"^[ \t]*module\s+([A-Za-z_]\w*)", "gm", "namespace"),
+        ],
+    ),
+    (
+        "swift",
+        &[
+            (r"\b(?:func)\s+([A-Za-z_]\w*)", "g", "function"),
+            (
+                r"\b(?:class|struct|enum|protocol|actor)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+        ],
+    ),
+    (
+        "kotlin",
+        &[
+            (r"\b(?:fun)\s+([A-Za-z_]\w*)", "g", "function"),
+            (
+                r"\b(?:class|interface|object|enum\s+class|data\s+class)\s+([A-Za-z_]\w*)",
+                "g",
+                "class",
+            ),
+        ],
+    ),
+    (
+        "shell",
+        &[
+            (
+                r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\)\s*\{",
+                "gm",
+                "function",
+            ),
+            (r"^([A-Za-z_][\w]*)\s*\(\)\s*\{", "gm", "function"),
+        ],
+    ),
+    (
+        "elixir",
+        &[
+            (
+                r"\bdef(?:p|macro|macrop)?\s+([A-Za-z_]\w*[!?]?)",
+                "g",
+                "function",
+            ),
+            (r"\bdefmodule\s+([A-Z][\w.]*)", "g", "namespace"),
+        ],
+    ),
     // `py`: only reached as `py-parser.ts`'s fallback without an interpreter.
     (
         "py",

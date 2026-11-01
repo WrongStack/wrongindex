@@ -1151,3 +1151,142 @@ fn native_matches_wrongstack_on_go_projects() {
     failures.extend(compare("go-git", &root, &s));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// The ten tree-sitter languages (WrongStack's own visitor, queries, runtime
+/// and grammars), files the grammar yields no symbols for (regex fallback,
+/// shell `source` infra refs), TS/JS the oxc port refuses (WrongStack's
+/// TypeScript parser), and a file over 5 MiB (skipped, batch slot kept).
+fn scenario_polyglot(root: &Path) {
+    write(
+        root,
+        "src/util.h",
+        "#ifndef UTIL_H\n#define UTIL_H\nint add(int a, int b);\nstruct point { int x, y; };\n#endif\n",
+    );
+    write(
+        root,
+        "src/util.c",
+        "#include \"util.h\"\n#include <stdio.h>\n\nstatic int helper(int x) { return x * 2; }\nint add(int a, int b) { return helper(a) + b; }\ntypedef struct node { struct node *next; } node_t;\nenum color { RED, GREEN };\n",
+    );
+    write(
+        root,
+        "src/engine.cpp",
+        "#include \"util.h\"\nnamespace eng {\nclass Engine : public Base {\npublic:\n  Engine();\n  void run() { add(1, 2); }\n};\ntemplate <typename T> T id(T x) { return x; }\n}\n",
+    );
+    write(
+        root,
+        "java/com/x/App.java",
+        "package com.x;\n\nimport java.util.List;\nimport com.x.model.User;\n\n/** App. */\npublic class App extends Base implements Runnable {\n  private int n;\n  public void run() { helper(); new User(); }\n  interface Inner {}\n  enum E { A }\n  record R(int a) {}\n}\n",
+    );
+    write(
+        root,
+        "java/com/x/model/User.java",
+        "package com.x.model;\npublic class User { public User() {} }\n",
+    );
+    write(
+        root,
+        "cs/Program.cs",
+        "using System;\nusing App.Models;\nnamespace App {\n  /// <summary>Main.</summary>\n  public class Program : Base, IRun {\n    public static void Main(string[] args) { Console.WriteLine(Helper.Go()); }\n    public int Count { get; set; }\n  }\n  public interface IRun { void Run(); }\n  public struct S {}\n  public enum E { A }\n}\n",
+    );
+    write(
+        root,
+        "php/src/User.php",
+        "<?php\nnamespace App\\Models;\n\nuse App\\Contracts\\HasName;\nrequire_once 'helpers.php';\n\ninterface Named {}\ntrait Greets { public function hi() {} }\nclass User extends Model implements Named {\n    use Greets;\n    const MAX = 3;\n    public function name(): string { return strtoupper($this->n); }\n}\nfunction helper() { return new User(); }\n",
+    );
+    write(
+        root,
+        "php/src/helpers.php",
+        "<?php\nfunction format_name($n) { return trim($n); }\n",
+    );
+    write(
+        root,
+        "ruby/lib/shop.rb",
+        "require 'json'\nrequire_relative 'shop/item'\n\nmodule Shop\n  class Cart < Base\n    include Enumerable\n    MAX = 10\n    def add(item) = items << item\n    def self.build; new; end\n    def total?\n      items.sum(&:price)\n    end\n  end\nend\n",
+    );
+    write(
+        root,
+        "ruby/lib/shop/item.rb",
+        "module Shop\n  class Item\n    attr_reader :price\n  end\nend\n",
+    );
+    write(
+        root,
+        "swift/Sources/App.swift",
+        "import Foundation\n\nprotocol Shape { func area() -> Double }\nstruct Circle: Shape {\n  let r: Double\n  func area() -> Double { return 3.14 * r * r }\n}\nclass View: NSObject {\n  var name = \"v\"\n  func draw() { print(Circle(r: 1).area()) }\n}\nenum Kind { case a, b }\nextension View {}\nactor Counter {}\n",
+    );
+    write(
+        root,
+        "kotlin/src/Main.kt",
+        "package app\n\nimport app.model.User\n\ninterface Repo { fun all(): List<User> }\ndata class Item(val id: Int)\nobject Registry { val items = mutableListOf<Item>() }\nclass Service(private val repo: Repo) : Base(), Repo by repo {\n  fun run() { println(repo.all()) }\n}\nfun main() { Service(TODO()).run() }\nenum class Color { RED }\n",
+    );
+    write(
+        root,
+        "scripts/build.sh",
+        "#!/usr/bin/env bash\nset -e\nsource ./scripts/env.sh\n. ./scripts/lib.sh\n\nbuild() {\n  echo building\n}\nfunction deploy {\n  build\n}\ndeploy\n",
+    );
+    write(root, "scripts/env.sh", "export A=1\n");
+    write(
+        root,
+        "scripts/lib.sh",
+        "# only comments\nsource ./scripts/env.sh\n",
+    );
+    write(
+        root,
+        "elixir/lib/shop.ex",
+        "defmodule Shop.Cart do\n  alias Shop.Item\n  import Enum\n  @moduledoc \"Cart.\"\n  defstruct items: []\n  def add(cart, item), do: %{cart | items: [item | cart.items]}\n  defp total(cart), do: sum(map(cart.items, & &1.price))\n  defmacro m(x), do: x\nend\n",
+    );
+    write(
+        root,
+        "elixir/test/shop_test.exs",
+        "defmodule ShopTest do\n  use ExUnit.Case\n  test \"x\" do\n    assert 1 == 1\n  end\nend\n",
+    );
+    // TS/JS the oxc port refuses: syntax errors TypeScript recovers from and a
+    // script-level `await` TypeScript reads as an identifier.
+    write(
+        root,
+        "web/broken.ts",
+        "export class A {\n  m(: void {}\n}\nexport function ok() { return 1 }\n",
+    );
+    write(
+        root,
+        "web/script.js",
+        "var await;\nawait (x);\nfunction f() { g(); }\n",
+    );
+    write(
+        root,
+        "web/fine.ts",
+        "import { ok } from './broken';\nexport const v = ok();\n",
+    );
+    // Over 5 MiB: a per-file read error in WrongStack, never indexed.
+    write(root, "data/huge.sql", &"-- x\n".repeat(1_100_000));
+    write(root, "README.md", "# Polyglot\n");
+}
+
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine), bun or node"]
+fn native_matches_wrongstack_on_polyglot_projects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    let s = base.join("polyglot");
+    let root = s.join("project");
+    scenario_polyglot(&root);
+    failures.extend(compare("polyglot", &root, &s));
+    let idx = s.join("idx-native");
+    eprintln!(
+        "polyglot: langs {}; {} refs, {} resolved to a file, {} bound to a symbol",
+        scalar(
+            &idx,
+            "SELECT group_concat(lang) FROM (SELECT DISTINCT lang FROM files ORDER BY lang)"
+        ),
+        scalar(&idx, "SELECT count(*) FROM refs"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_file <> ''"),
+        scalar(&idx, "SELECT count(*) FROM refs WHERE to_id IS NOT NULL"),
+    );
+    let s = base.join("polyglot-git");
+    let root = s.join("project");
+    scenario_polyglot(&root);
+    git(&root, &["init", "-q"]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    failures.extend(compare("polyglot-git", &root, &s));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

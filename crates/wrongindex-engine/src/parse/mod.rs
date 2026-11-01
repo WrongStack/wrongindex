@@ -9,6 +9,7 @@ pub mod infra;
 pub mod json;
 pub mod py;
 pub mod rs;
+pub mod treesitter;
 pub mod ts;
 pub mod yaml;
 
@@ -99,6 +100,7 @@ pub fn is_native_lang(lang: &str) -> bool {
     matches!(lang, "json" | "yaml" | "rs" | "py" | "go")
         || generic::LANGS.contains(&lang)
         || ts::LANGS.contains(&lang)
+        || treesitter::LANGS.contains(&lang)
 }
 
 /// `parseFileContent(file, content, lang)` (`parser-dispatch.ts`): the
@@ -128,7 +130,7 @@ pub fn parse_file(file: &str, lang: &'static str, content: &U16) -> Parsed {
         l if generic::LANGS.contains(&l) => generic::parse(file, l, content),
         // Python and Go run through their toolchains in batches:
         // [`py::parse_all`], [`go::parse_all`].
-        "py" | "go" => {
+        l if l == "py" || l == "go" || treesitter::LANGS.contains(&l) => {
             return Parsed {
                 unsupported: Some(format!("{lang} files are parsed in toolchain batches")),
                 ..Parsed::default()

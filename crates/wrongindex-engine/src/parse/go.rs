@@ -12,7 +12,7 @@
 use std::process::Command;
 use std::sync::OnceLock;
 
-use super::py::{SourceFile, chunks, private_script, resolve_command, run_chunk};
+use super::py::{SourceFile, chunks, decode_batch, private_script, resolve_command, run_chunk};
 use super::{Parsed, ParsedSymbol, with_relations};
 use crate::js::{self, U16, utf16};
 use crate::jsre::Regex;
@@ -51,8 +51,9 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             .arg(&script)
             .env("GOTOOLCHAIN", "local")
             .env("GOWORK", "off");
-        let results = run_chunk(cmd, &script, chunk, "go")?
+        let stdout = run_chunk(cmd, &script, chunk)?
             .ok_or_else(|| "go run failed on a chunk".to_string())?;
+        let results = decode_batch(&stdout, "go")?;
         for f in chunk {
             let ok = results
                 .iter()

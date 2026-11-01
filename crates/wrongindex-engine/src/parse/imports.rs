@@ -43,6 +43,79 @@ type ImportPattern = (&'static str, &'static str, bool);
 
 const GENERIC_IMPORTS: &[(&str, &[ImportPattern])] = &[
     (
+        "java",
+        &[(
+            r"^[ \t]*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;?\s*$",
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "kotlin",
+        &[(
+            r"^[ \t]*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;?\s*$",
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "csharp",
+        &[
+            (
+                r"^[ \t]*global\s+using\s+(?:static\s+)?([\w.]+)\s*;",
+                "gm",
+                true,
+            ),
+            (
+                r"^[ \t]*using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;",
+                "gm",
+                true,
+            ),
+        ],
+    ),
+    ("c", &[(r#"^[ \t]*#\s*include\s+"([^"]+)""#, "gm", false)]),
+    ("cpp", &[(r#"^[ \t]*#\s*include\s+"([^"]+)""#, "gm", false)]),
+    (
+        "ruby",
+        &[(
+            r#"^[ \t]*(?:require|require_relative|load)\s*\(?\s*['"]([^'"]+)['"]"#,
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "php",
+        &[
+            (
+                r"^[ \t]*use\s+(?:function\s+|const\s+)?([\w\\]+)",
+                "gm",
+                false,
+            ),
+            (
+                r#"^[ \t]*(?:require|require_once|include|include_once)\s*\(?\s*['"]([^'"]+)['"]"#,
+                "gm",
+                false,
+            ),
+        ],
+    ),
+    (
+        "swift",
+        &[(
+            r"^[ \t]*import\s+(?:struct\s+|class\s+|func\s+)?([\w.]+)\s*$",
+            "gm",
+            false,
+        )],
+    ),
+    (
+        "elixir",
+        &[(
+            r"^[ \t]*(?:alias|import|require|use)\s+([A-Z][\w.]*)",
+            "gm",
+            true,
+        )],
+    ),
+    ("shell", &[(r"^[ \t]*(?:source|\.)\s+(\S+)", "gm", false)]),
+    (
         "go",
         &[
             (r#"^[ \t]*import\s+(?:[\w.]+\s+)?"([^"]+)""#, "gm", false),
