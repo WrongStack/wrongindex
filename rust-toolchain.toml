@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned to the toolchain validated during bootstrap (WI-101). Upgrading is a
+# deliberate change: re-run the full gate after bumping.
+channel = "1.93.0"
+components = ["rustfmt", "clippy"]

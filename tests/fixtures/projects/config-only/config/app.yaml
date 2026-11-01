@@ -1,0 +1,7 @@
+server:
+  port: 8080
+  hosts:
+    - a.example
+    - b.example
+features:
+  search: true

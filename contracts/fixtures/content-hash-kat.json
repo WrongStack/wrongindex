@@ -1,0 +1,123 @@
+{
+  "schema": "wrongindex.content-hash-kat/1",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "contractFilesDirty": [
+      "packages/core/src/utils/context-evidence.ts",
+      "packages/core/src/utils/glob-expand.ts",
+      "packages/core/src/utils/index.ts",
+      "packages/core/src/utils/ip-guard.ts",
+      "packages/core/src/utils/next-steps.ts"
+    ],
+    "coreUtilsDistSha256": "e37f7ca2e98a6c430d29e8eb9b8a06cf4734fc0c3c3bafba08470dfe64952fbd",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "provisional": true,
+    "provisionalReason": "Oracle imports @wrongstack/core from its built dist and the working tree; a clean archived+built baseline is WI-006 follow-up."
+  },
+  "note": "fileHash = xxhash64String(Buffer.from(bytes).toString(\"utf8\")) as used by indexer-batch-read; rawHash = xxhash64Hex(bytes).",
+  "cases": [
+    {
+      "name": "empty",
+      "bytesHex": "",
+      "rawHash": "ef46db3751d8e999",
+      "fileHash": "ef46db3751d8e999"
+    },
+    {
+      "name": "ascii-1",
+      "bytesHex": "61",
+      "rawHash": "d24ec4f1a98c6e5b",
+      "fileHash": "d24ec4f1a98c6e5b"
+    },
+    {
+      "name": "ascii-31",
+      "bytesHex": "6162636465666768696a6b6c6d6e6f707172737475767778797a3031323334",
+      "rawHash": "16058c7b947da137",
+      "fileHash": "16058c7b947da137"
+    },
+    {
+      "name": "ascii-32",
+      "bytesHex": "6162636465666768696a6b6c6d6e6f707172737475767778797a303132333435",
+      "rawHash": "bf2cd639b4143b80",
+      "fileHash": "bf2cd639b4143b80"
+    },
+    {
+      "name": "ascii-33",
+      "bytesHex": "6162636465666768696a6b6c6d6e6f707172737475767778797a30313233343536",
+      "rawHash": "4f89e4082bcbf673",
+      "fileHash": "4f89e4082bcbf673"
+    },
+    {
+      "name": "ascii-100",
+      "bytesHex": "78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
+      "rawHash": "92f0de5a88a3c094",
+      "fileHash": "92f0de5a88a3c094"
+    },
+    {
+      "name": "lf",
+      "bytesHex": "6c696e65310a6c696e65320a",
+      "rawHash": "af0286c3edca1e60",
+      "fileHash": "af0286c3edca1e60"
+    },
+    {
+      "name": "crlf",
+      "bytesHex": "6c696e65310d0a6c696e65320d0a",
+      "rawHash": "cf9bf41244166c21",
+      "fileHash": "cf9bf41244166c21"
+    },
+    {
+      "name": "utf8-bom",
+      "bytesHex": "efbbbf636f6e73742061203d20313b0a",
+      "rawHash": "ac51b857fe4997a3",
+      "fileHash": "ac51b857fe4997a3"
+    },
+    {
+      "name": "non-ascii",
+      "bytesHex": "636f6e737420c3a761c49f72c4b1203d2022c4b07374616e62756c223b0a",
+      "rawHash": "ba4e00c634394bdd",
+      "fileHash": "ba4e00c634394bdd"
+    },
+    {
+      "name": "astral",
+      "bytesHex": "2f2f20f09f988020f09d9498f09d94abf09d94a6f09d94a0f09d94acf09d94a1f09d94a20a6578706f727420636f6e73742065203d2022f09f9a80223b0a",
+      "rawHash": "89e44ae3ee6d00c4",
+      "fileHash": "89e44ae3ee6d00c4"
+    },
+    {
+      "name": "invalid-lone-continuation",
+      "bytesHex": "618062",
+      "rawHash": "ade2fbff64862788",
+      "fileHash": "e8db167d4502e4c3"
+    },
+    {
+      "name": "invalid-truncated-3byte",
+      "bytesHex": "61e28262",
+      "rawHash": "8f3db7215254c361",
+      "fileHash": "e8db167d4502e4c3"
+    },
+    {
+      "name": "invalid-overlong",
+      "bytesHex": "c0af41",
+      "rawHash": "a4a5b7d30d4175b2",
+      "fileHash": "f763b3d7b6b21a29"
+    },
+    {
+      "name": "invalid-surrogate",
+      "bytesHex": "eda08041",
+      "rawHash": "b974594d37fe8a93",
+      "fileHash": "a365f84fd191c415"
+    },
+    {
+      "name": "invalid-trailing",
+      "bytesHex": "41f09f98",
+      "rawHash": "f3a793830499642b",
+      "fileHash": "a725bba3f96dae36"
+    },
+    {
+      "name": "nul-bytes",
+      "bytesHex": "00010041",
+      "rawHash": "97cf26f30959220f",
+      "fileHash": "97cf26f30959220f"
+    }
+  ]
+}

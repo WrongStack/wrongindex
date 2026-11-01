@@ -1,0 +1,10 @@
+{
+  "name": "wrongindex-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "baseline:export": "bun scripts/baseline/export.ts",
+    "oracle:build": "bun scripts/oracle/build-fixtures.ts",
+    "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked"
+  }
+}

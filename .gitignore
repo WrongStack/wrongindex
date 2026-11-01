@@ -1,0 +1,6 @@
+/target/
+node_modules/
+*.db-wal
+*.db-shm
+/.project/
+.wrongindex-test-*/

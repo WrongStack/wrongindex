@@ -1,0 +1,454 @@
+{
+  "fixture": "basic-ts",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "contractFilesDirty": [
+      "packages/core/src/utils/context-evidence.ts",
+      "packages/core/src/utils/glob-expand.ts",
+      "packages/core/src/utils/index.ts",
+      "packages/core/src/utils/ip-guard.ts",
+      "packages/core/src/utils/next-steps.ts"
+    ],
+    "coreUtilsDistSha256": "e37f7ca2e98a6c430d29e8eb9b8a06cf4734fc0c3c3bafba08470dfe64952fbd",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "provisional": true,
+    "provisionalReason": "Oracle imports @wrongstack/core from its built dist and the working tree; a clean archived+built baseline is WI-006 follow-up."
+  },
+  "result": {
+    "filesIndexed": 4,
+    "symbolsIndexed": 14,
+    "errors": []
+  },
+  "metadata": {
+    "fts_churn_since_maintain": "14",
+    "graph_stamp": "<volatile>",
+    "last_indexed": "<volatile>",
+    "module_owner_version": "2",
+    "module_resolution_version": "1",
+    "next_symbol_id": "15",
+    "rank_stale_files": "0",
+    "rank_version": "1",
+    "ref_binding_version": "2",
+    "ref_resolution_version": "2",
+    "relation_epoch": "<volatile>",
+    "relation_graph_version": "2",
+    "relation_structure": "3ea3352ce8186a672a2c9fbca4e58f76973a1d1f8d8acc1f91af48d89e05eafe",
+    "symbols_text_dropped": "1",
+    "version": "5"
+  },
+  "files": [
+    {
+      "file": "<root>/package.json",
+      "lang": "json",
+      "mtime_ms": "<volatile>",
+      "content_hash": "68efbebcfd070a9e",
+      "symbol_count": 4,
+      "last_indexed": "<volatile>",
+      "package": "basic-ts",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/greet.ts",
+      "lang": "ts",
+      "mtime_ms": "<volatile>",
+      "content_hash": "5a2b9b3b68317a9e",
+      "symbol_count": 3,
+      "last_indexed": "<volatile>",
+      "package": "basic-ts",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/runner.ts",
+      "lang": "ts",
+      "mtime_ms": "<volatile>",
+      "content_hash": "1d894e16adf8fb6c",
+      "symbol_count": 5,
+      "last_indexed": "<volatile>",
+      "package": "basic-ts",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/view.tsx",
+      "lang": "tsx",
+      "mtime_ms": "<volatile>",
+      "content_hash": "2965add05422d132",
+      "symbol_count": 2,
+      "last_indexed": "<volatile>",
+      "package": "basic-ts",
+      "git_blob": ""
+    }
+  ],
+  "symbols": [
+    {
+      "lang": "json",
+      "kind": "object",
+      "name": "package.json",
+      "file": "<root>/package.json",
+      "line": 1,
+      "col": 0,
+      "signature": "\"package.json\" = { ... }",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "695465e818d044ac",
+      "key": "<root>/package.json#object:package.json@1:0"
+    },
+    {
+      "lang": "json",
+      "kind": "property",
+      "name": "name",
+      "file": "<root>/package.json",
+      "line": 1,
+      "col": 2,
+      "signature": "\"name\": ...",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "0fc32a98b812872e",
+      "key": "<root>/package.json#property:name@1:2"
+    },
+    {
+      "lang": "json",
+      "kind": "property",
+      "name": "version",
+      "file": "<root>/package.json",
+      "line": 1,
+      "col": 22,
+      "signature": "\"version\": ...",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "5d9946ae2209cf90",
+      "key": "<root>/package.json#property:version@1:22"
+    },
+    {
+      "lang": "json",
+      "kind": "property",
+      "name": "type",
+      "file": "<root>/package.json",
+      "line": 1,
+      "col": 42,
+      "signature": "\"type\": ...",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "ab44b76825f747e9",
+      "key": "<root>/package.json#property:type@1:42"
+    },
+    {
+      "lang": "ts",
+      "kind": "function",
+      "name": "greet",
+      "file": "<root>/src/greet.ts",
+      "line": 2,
+      "col": 16,
+      "signature": "export function greet(name: string): string",
+      "doc_comment": "Greets a person by name.",
+      "scope": "",
+      "end_line": 4,
+      "is_exported": 1,
+      "signature_hash": "815f6e6dafe7b4a2",
+      "key": "<root>/src/greet.ts#function:greet@2:16"
+    },
+    {
+      "lang": "ts",
+      "kind": "function",
+      "name": "helper",
+      "file": "<root>/src/greet.ts",
+      "line": 6,
+      "col": 9,
+      "signature": "function helper(n: string): string",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 8,
+      "is_exported": 0,
+      "signature_hash": "78c6af48dae1cc3c",
+      "key": "<root>/src/greet.ts#function:helper@6:9"
+    },
+    {
+      "lang": "ts",
+      "kind": "const",
+      "name": "çağrı",
+      "file": "<root>/src/greet.ts",
+      "line": 10,
+      "col": 13,
+      "signature": "çağrı = (x: number) => x * 2",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 10,
+      "is_exported": 1,
+      "signature_hash": "828741c345697be7",
+      "key": "<root>/src/greet.ts#const:çağrı@10:13"
+    },
+    {
+      "lang": "ts",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/src/runner.ts",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 2,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/src/runner.ts#mod:<module>@1:0"
+    },
+    {
+      "lang": "ts",
+      "kind": "class",
+      "name": "Runner",
+      "file": "<root>/src/runner.ts",
+      "line": 3,
+      "col": 13,
+      "signature": "export class Runner {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 10,
+      "is_exported": 1,
+      "signature_hash": "71488cfeb85a43da",
+      "key": "<root>/src/runner.ts#class:Runner@3:13"
+    },
+    {
+      "lang": "ts",
+      "kind": "method",
+      "name": "run",
+      "file": "<root>/src/runner.ts",
+      "line": 4,
+      "col": 2,
+      "signature": "run(): string",
+      "doc_comment": "",
+      "scope": "Runner",
+      "end_line": 6,
+      "is_exported": 0,
+      "signature_hash": "ddda609724e67850",
+      "key": "<root>/src/runner.ts#method:Runner.run@4:2"
+    },
+    {
+      "lang": "ts",
+      "kind": "method",
+      "name": "create",
+      "file": "<root>/src/runner.ts",
+      "line": 7,
+      "col": 9,
+      "signature": "static create(): Runner",
+      "doc_comment": "",
+      "scope": "Runner",
+      "end_line": 9,
+      "is_exported": 0,
+      "signature_hash": "2949a94b53761c9a",
+      "key": "<root>/src/runner.ts#method:Runner.create@7:9"
+    },
+    {
+      "lang": "ts",
+      "kind": "function",
+      "name": "main",
+      "file": "<root>/src/runner.ts",
+      "line": 12,
+      "col": 24,
+      "signature": "export default function main(): void",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 14,
+      "is_exported": 1,
+      "signature_hash": "194ff34cc20856c1",
+      "key": "<root>/src/runner.ts#function:main@12:24"
+    },
+    {
+      "lang": "tsx",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/src/view.tsx",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 2,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/src/view.tsx#mod:<module>@1:0"
+    },
+    {
+      "lang": "tsx",
+      "kind": "function",
+      "name": "View",
+      "file": "<root>/src/view.tsx",
+      "line": 3,
+      "col": 16,
+      "signature": "export function View(props: { label: string })",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 6,
+      "is_exported": 1,
+      "signature_hash": "871fe6af8d82a485",
+      "key": "<root>/src/view.tsx#function:View@3:16"
+    }
+  ],
+  "refs": [
+    {
+      "from": "<root>/src/greet.ts#function:greet@2:16",
+      "to_name": "helper",
+      "to": "<root>/src/greet.ts#function:helper@6:9",
+      "call_type": "call",
+      "line": 3,
+      "lang": "ts",
+      "module": null,
+      "to_file": "<root>/src/greet.ts"
+    },
+    {
+      "from": "<root>/src/runner.ts#mod:<module>@1:0",
+      "to_name": "greet",
+      "to": "<root>/src/greet.ts#function:greet@2:16",
+      "call_type": "import",
+      "line": 1,
+      "lang": "ts",
+      "module": "./greet",
+      "to_file": "<root>/src/greet.ts"
+    },
+    {
+      "from": "<root>/src/runner.ts#method:Runner.run@4:2",
+      "to_name": "hello",
+      "to": null,
+      "call_type": "call",
+      "line": 5,
+      "lang": "ts",
+      "module": null,
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/runner.ts#method:Runner.create@7:9",
+      "to_name": "Runner",
+      "to": "<root>/src/runner.ts#class:Runner@3:13",
+      "call_type": "type_ref",
+      "line": 7,
+      "lang": "ts",
+      "module": null,
+      "to_file": "<root>/src/runner.ts"
+    },
+    {
+      "from": "<root>/src/runner.ts#method:Runner.create@7:9",
+      "to_name": "Runner",
+      "to": "<root>/src/runner.ts#class:Runner@3:13",
+      "call_type": "call",
+      "line": 8,
+      "lang": "ts",
+      "module": null,
+      "to_file": "<root>/src/runner.ts"
+    },
+    {
+      "from": "<root>/src/runner.ts#function:main@12:24",
+      "to_name": "Runner",
+      "to": "<root>/src/runner.ts#class:Runner@3:13",
+      "call_type": "call",
+      "line": 13,
+      "lang": "ts",
+      "module": null,
+      "to_file": "<root>/src/runner.ts"
+    },
+    {
+      "from": "<root>/src/view.tsx#mod:<module>@1:0",
+      "to_name": "Runner",
+      "to": "<root>/src/runner.ts#class:Runner@3:13",
+      "call_type": "import",
+      "line": 1,
+      "lang": "tsx",
+      "module": "./runner",
+      "to_file": "<root>/src/runner.ts"
+    },
+    {
+      "from": "<root>/src/view.tsx#function:View@3:16",
+      "to_name": "Runner",
+      "to": "<root>/src/runner.ts#class:Runner@3:13",
+      "call_type": "call",
+      "line": 4,
+      "lang": "tsx",
+      "module": null,
+      "to_file": "<root>/src/runner.ts"
+    },
+    {
+      "from": "<root>/src/view.tsx#function:View@3:16",
+      "to_name": "props",
+      "to": null,
+      "call_type": "call",
+      "line": 5,
+      "lang": "tsx",
+      "module": null,
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/view.tsx#function:View@3:16",
+      "to_name": "r",
+      "to": null,
+      "call_type": "call",
+      "line": 5,
+      "lang": "tsx",
+      "module": null,
+      "to_file": null
+    }
+  ],
+  "file_rank": [
+    {
+      "file": "<root>/src/greet.ts",
+      "rank": 0.5878986402555934,
+      "in_deg": 1,
+      "out_deg": 1
+    },
+    {
+      "file": "<root>/src/runner.ts",
+      "rank": 1,
+      "in_deg": 4,
+      "out_deg": 3
+    },
+    {
+      "file": "<root>/src/view.tsx",
+      "rank": 0.1757972805111868,
+      "in_deg": 0,
+      "out_deg": 1
+    }
+  ],
+  "symbol_rank": [
+    {
+      "symbol": "<root>/src/greet.ts#function:greet@2:16",
+      "rank": 0.5382745807625618,
+      "in_deg": 0,
+      "out_deg": 1
+    },
+    {
+      "symbol": "<root>/src/greet.ts#function:helper@6:9",
+      "rank": 0.5382745807625618,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/runner.ts#class:Runner@3:13",
+      "rank": 1,
+      "in_deg": 4,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/runner.ts#method:Runner.create@7:9",
+      "rank": 0.5092648389298033,
+      "in_deg": 0,
+      "out_deg": 2
+    },
+    {
+      "symbol": "<root>/src/runner.ts#function:main@12:24",
+      "rank": 0.32191674206022197,
+      "in_deg": 0,
+      "out_deg": 1
+    },
+    {
+      "symbol": "<root>/src/view.tsx#function:View@3:16",
+      "rank": 0.32191674206022197,
+      "in_deg": 0,
+      "out_deg": 1
+    }
+  ]
+}

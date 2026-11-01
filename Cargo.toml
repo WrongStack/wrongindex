@@ -1,0 +1,57 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/wrongindex-contracts",
+  "crates/wrongindex-storage",
+  "crates/wrongindex-registry",
+  "crates/wrongindex-ipc",
+  "crates/wrongindexd",
+  "crates/wrongindex-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+license = "MIT"
+repository = "https://github.com/wrongstack/wrongindex"
+
+[workspace.dependencies]
+wrongindex-contracts = { path = "crates/wrongindex-contracts" }
+wrongindex-storage = { path = "crates/wrongindex-storage" }
+wrongindex-registry = { path = "crates/wrongindex-registry" }
+wrongindex-ipc = { path = "crates/wrongindex-ipc" }
+
+anyhow = "=1.0.104"
+clap = { version = "=4.6.7", features = ["derive"] }
+getrandom = "0.3"
+hex = "=0.4.3"
+rusqlite = { version = "=0.41.1", features = ["bundled"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = "=0.11.1"
+tempfile = "=3.27.0"
+thiserror = "=2.0.21"
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal"] }
+uuid = { version = "=1.29.0", features = ["v4"] }
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+  "Win32_System_Memory",
+  "Win32_Storage_FileSystem",
+] }
+xxhash-rust = { version = "=0.8.19", features = ["xxh64"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

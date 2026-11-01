@@ -1,0 +1,646 @@
+{
+  "schema": "wrongindex.profile/1",
+  "id": "wrongstack-index-v5-baseline",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "contractFilesDirty": [
+      "packages/core/src/utils/context-evidence.ts",
+      "packages/core/src/utils/glob-expand.ts",
+      "packages/core/src/utils/index.ts",
+      "packages/core/src/utils/ip-guard.ts",
+      "packages/core/src/utils/next-steps.ts"
+    ],
+    "coreUtilsDistSha256": "e37f7ca2e98a6c430d29e8eb9b8a06cf4734fc0c3c3bafba08470dfe64952fbd",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "provisional": true,
+    "provisionalReason": "Oracle imports @wrongstack/core from its built dist and the working tree; a clean archived+built baseline is WI-006 follow-up."
+  },
+  "schemaVersion": 5,
+  "ddlSha256": "d98114d3a1f55f022ae1755dce7fa068d4ce883b5f2c4eec4544f459263c1b36",
+  "sqliteRequirements": {
+    "fts5": true,
+    "ftsTokenizer": "trigram"
+  },
+  "tables": {
+    "concept_edges": [
+      {
+        "name": "from_id",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "to_id",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 2
+      },
+      {
+        "name": "relation",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 3
+      }
+    ],
+    "file_concepts": [
+      {
+        "name": "file",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "content_hash",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "signature_hash",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "summary",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "crux_start",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "crux_end",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "state",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "'pending'",
+        "pk": 0
+      },
+      {
+        "name": "model",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      }
+    ],
+    "file_rank": [
+      {
+        "name": "file",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "rank",
+        "type": "REAL",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "in_deg",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      },
+      {
+        "name": "out_deg",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      }
+    ],
+    "file_vectors": [
+      {
+        "name": "file",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "vector",
+        "type": "BLOB",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "source_hash",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "provider",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      }
+    ],
+    "files": [
+      {
+        "name": "file",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "lang",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "mtime_ms",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "content_hash",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "symbol_count",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      },
+      {
+        "name": "last_indexed",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "package",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "git_blob",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      }
+    ],
+    "lang_family": [
+      {
+        "name": "lang",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "family",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      }
+    ],
+    "metadata": [
+      {
+        "name": "key",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "value",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      }
+    ],
+    "refs": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "from_id",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "to_name",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "to_id",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "call_type",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "line",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "lang",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "module",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "to_file",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 0
+      }
+    ],
+    "subsystems": [
+      {
+        "name": "id",
+        "type": "TEXT",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "summary",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "member_files",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "'[]'",
+        "pk": 0
+      },
+      {
+        "name": "model",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      }
+    ],
+    "symbol_rank": [
+      {
+        "name": "symbol_id",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "rank",
+        "type": "REAL",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "in_deg",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      },
+      {
+        "name": "out_deg",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      }
+    ],
+    "symbols": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "lang",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "kind",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "name",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "file",
+        "type": "TEXT",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "line",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "col",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      },
+      {
+        "name": "signature",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "doc_comment",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "scope",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      },
+      {
+        "name": "end_line",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      },
+      {
+        "name": "is_exported",
+        "type": "INTEGER",
+        "notnull": true,
+        "default": "0",
+        "pk": 0
+      },
+      {
+        "name": "signature_hash",
+        "type": "TEXT",
+        "notnull": true,
+        "default": "''",
+        "pk": 0
+      }
+    ]
+  },
+  "optionalTables": {
+    "symbol_vectors": [
+      {
+        "name": "symbol_id",
+        "type": "INTEGER",
+        "notnull": false,
+        "default": null,
+        "pk": 1
+      },
+      {
+        "name": "vector",
+        "type": "BLOB",
+        "notnull": true,
+        "default": null,
+        "pk": 0
+      }
+    ]
+  },
+  "virtualTables": [
+    {
+      "name": "symbols_fts",
+      "sql": "CREATE VIRTUAL TABLE symbols_fts USING fts5(text, tokenize = 'trigram')"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_ce_from",
+      "table": "concept_edges",
+      "sql": "CREATE INDEX idx_ce_from ON concept_edges(from_id)"
+    },
+    {
+      "name": "idx_f_package",
+      "table": "files",
+      "sql": "CREATE INDEX idx_f_package ON files(package)"
+    },
+    {
+      "name": "idx_fc_state",
+      "table": "file_concepts",
+      "sql": "CREATE INDEX idx_fc_state ON file_concepts(state)"
+    },
+    {
+      "name": "idx_fr_rank",
+      "table": "file_rank",
+      "sql": "CREATE INDEX idx_fr_rank ON file_rank(rank DESC)"
+    },
+    {
+      "name": "idx_r_call_type",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_call_type ON refs(call_type)"
+    },
+    {
+      "name": "idx_r_from",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_from ON refs(from_id)"
+    },
+    {
+      "name": "idx_r_module",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_module ON refs(module)"
+    },
+    {
+      "name": "idx_r_to_file",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_to_file ON refs(to_file)"
+    },
+    {
+      "name": "idx_r_to_id",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_to_id ON refs(to_id)"
+    },
+    {
+      "name": "idx_r_to_name",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_to_name ON refs(to_name)"
+    },
+    {
+      "name": "idx_r_to_name_lang",
+      "table": "refs",
+      "sql": "CREATE INDEX idx_r_to_name_lang ON refs(to_name, lang)"
+    },
+    {
+      "name": "idx_s_file",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_file ON symbols(file)"
+    },
+    {
+      "name": "idx_s_kind",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_kind ON symbols(kind)"
+    },
+    {
+      "name": "idx_s_lang",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_lang ON symbols(lang)"
+    },
+    {
+      "name": "idx_s_lang_kind",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_lang_kind ON symbols(lang, kind)"
+    },
+    {
+      "name": "idx_s_name",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_name ON symbols(name)"
+    },
+    {
+      "name": "idx_s_name_id",
+      "table": "symbols",
+      "sql": "CREATE INDEX idx_s_name_id ON symbols(name, id)"
+    },
+    {
+      "name": "idx_sr_rank",
+      "table": "symbol_rank",
+      "sql": "CREATE INDEX idx_sr_rank ON symbol_rank(rank DESC)"
+    }
+  ],
+  "metadataKeys": [
+    "file_vector_provider",
+    "fts_churn_since_maintain",
+    "graph_stamp",
+    "last_indexed",
+    "module_owner_version",
+    "module_resolution_version",
+    "next_symbol_id",
+    "rank_stale_files",
+    "rank_version",
+    "ref_binding_version",
+    "ref_resolution_version",
+    "relation_epoch",
+    "relation_graph_version",
+    "relation_structure",
+    "symbols_text_dropped",
+    "version"
+  ],
+  "pragmas": {
+    "journal_mode": "wal",
+    "synchronous": "NORMAL",
+    "busy_timeout_ms": 15000,
+    "temp_store": "MEMORY",
+    "foreign_keys": true,
+    "journal_size_limit": 67108864,
+    "wal_autocheckpoint": 1000
+  },
+  "contentHash": {
+    "algorithm": "xxhash64",
+    "seed": 0,
+    "format": "lowercase-hex-16",
+    "input": "utf8-encode(utf8-decode-lossy(file bytes)); BOM retained"
+  }
+}

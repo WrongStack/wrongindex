@@ -1,0 +1,15 @@
+//! WrongStack index storage contract.
+//!
+//! M1 scope: compatible content hashing and a strictly read-only
+//! schema/profile inspector. Nothing in this crate writes to an `index.db` yet;
+//! write primitives arrive with WI-108 behind ownership and profile admission.
+
+pub mod content_hash;
+pub mod inspect;
+pub mod profile;
+pub mod runtime;
+
+pub use content_hash::{file_content_hash, xxhash64_hex};
+pub use inspect::{Finding, Inspection, Severity, Verdict, inspect_index};
+pub use profile::{Profile, baseline_profile};
+pub use runtime::{SqliteRuntime, sqlite_runtime};

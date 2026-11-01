@@ -1,0 +1,552 @@
+//! Wire contracts shared by the WrongIndex daemon, CLI, desktop bridge, and
+//! the TypeScript client adapter.
+//!
+//! Framing: every frame is a 32-bit unsigned little-endian byte length followed
+//! by that many bytes of UTF-8 JSON. The first frame a client sends on a
+//! connection is an [`AuthRequest`]; nothing else is accepted before it.
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+pub const PROTOCOL_MAJOR: u32 = 1;
+pub const PROTOCOL_MINOR: u32 = 0;
+
+/// Initial maximum request/response frame size (8 MiB).
+pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
+
+/// Storage + semantic profile this build can inspect. Resolves to
+/// `contracts/profiles/wrongstack-index-v5-baseline/manifest.json`.
+pub const BASELINE_PROFILE_ID: &str = "wrongstack-index-v5-baseline";
+
+/// Exit codes shared by the CLI (see desktop-and-operations §4).
+pub mod exit_code {
+    pub const SUCCESS: i32 = 0;
+    pub const INVALID_INPUT: i32 = 2;
+    pub const SERVICE_UNAVAILABLE: i32 = 3;
+    pub const INCOMPATIBLE_PROFILE: i32 = 4;
+    pub const JOB_FAILED: i32 = 5;
+    pub const TIMEOUT: i32 = 6;
+    pub const INTERNAL: i32 = 70;
+}
+
+/// Stable typed error codes. Serialized as SCREAMING_SNAKE_CASE strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ErrorCode {
+    Unauthenticated,
+    Forbidden,
+    ProtocolUnsupported,
+    ProfileUnsupported,
+    IndexIdentityConflict,
+    OwnerConflict,
+    ProjectUnavailable,
+    ProjectNotFound,
+    JobNotFound,
+    InvalidRequest,
+    MethodNotFound,
+    NotImplemented,
+    QueueSaturated,
+    IndexDegraded,
+    DatabaseBusy,
+    DatabaseCorrupt,
+    ReadOnly,
+    DiskFull,
+    ShuttingDown,
+    Canceled,
+    DeadlineExceeded,
+    Internal,
+}
+
+impl ErrorCode {
+    /// Whether a client may retry the same request unchanged.
+    pub fn retryable(self) -> bool {
+        matches!(
+            self,
+            ErrorCode::QueueSaturated
+                | ErrorCode::DatabaseBusy
+                | ErrorCode::DeadlineExceeded
+                | ErrorCode::ShuttingDown
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorBody {
+    pub code: ErrorCode,
+    pub message: String,
+    pub retryable: bool,
+}
+
+impl ErrorBody {
+    pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            retryable: code.retryable(),
+        }
+    }
+}
+
+impl std::fmt::Display for ErrorBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let code = serde_json::to_value(self.code)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_else(|| format!("{:?}", self.code));
+        write!(f, "{code}: {}", self.message)
+    }
+}
+
+impl std::error::Error for ErrorBody {}
+
+// ─── Handshake ──────────────────────────────────────────────────────────────
+
+/// First frame on every connection. The token is read from the owner-private
+/// runtime directory; it never appears in arguments, logs, or responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthRequest {
+    pub protocol_major: u32,
+    pub protocol_minor: u32,
+    pub token: String,
+    pub client_name: String,
+    pub client_version: String,
+    #[serde(default)]
+    pub supported_profile_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Limits {
+    pub max_frame_bytes: usize,
+    pub max_page_size: usize,
+    pub max_inflight: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hello {
+    pub daemon_instance_id: String,
+    pub daemon_version: String,
+    pub protocol_major: u32,
+    pub protocol_minor: u32,
+    pub supported_profile_ids: Vec<String>,
+    pub selected_profile_id: Option<String>,
+    pub capabilities: Vec<String>,
+    pub limits: Limits,
+}
+
+/// Response to [`AuthRequest`]: either a hello or a typed refusal, after which
+/// the daemon closes the connection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum AuthResponse {
+    Ok { hello: Hello },
+    Error { error: ErrorBody },
+}
+
+// ─── Request / response envelope ────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Request {
+    pub protocol: u32,
+    pub request_id: String,
+    pub method: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(default)]
+    pub params: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Response {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorBody>,
+}
+
+impl Response {
+    pub fn ok(request_id: impl Into<String>, result: Value) -> Self {
+        Self {
+            request_id: request_id.into(),
+            result: Some(result),
+            error: None,
+        }
+    }
+
+    pub fn err(request_id: impl Into<String>, error: ErrorBody) -> Self {
+        Self {
+            request_id: request_id.into(),
+            result: None,
+            error: Some(error),
+        }
+    }
+}
+
+/// Method names. Kept as constants so the TS adapter can be generated from one list.
+pub mod method {
+    pub const DAEMON_HELLO: &str = "daemon.hello";
+    pub const DAEMON_HEALTH: &str = "daemon.health";
+    pub const DAEMON_SHUTDOWN: &str = "daemon.shutdown";
+    pub const PROJECT_REGISTER: &str = "project.register";
+    pub const PROJECT_LIST: &str = "project.list";
+    pub const PROJECT_GET: &str = "project.get";
+    pub const PROJECT_DETACH: &str = "project.detach";
+    pub const INDEX_REQUEST: &str = "index.request";
+    pub const INDEX_CHECK: &str = "index.check";
+    pub const JOB_GET: &str = "job.get";
+    pub const JOB_LIST: &str = "job.list";
+
+    pub const ALL: &[&str] = &[
+        DAEMON_HELLO,
+        DAEMON_HEALTH,
+        DAEMON_SHUTDOWN,
+        PROJECT_REGISTER,
+        PROJECT_LIST,
+        PROJECT_GET,
+        PROJECT_DETACH,
+        INDEX_REQUEST,
+        INDEX_CHECK,
+        JOB_GET,
+        JOB_LIST,
+    ];
+}
+
+// ─── Domain DTOs ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchPolicy {
+    Session,
+    Pinned,
+    Manual,
+    Disabled,
+}
+
+impl WatchPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WatchPolicy::Session => "session",
+            WatchPolicy::Pinned => "pinned",
+            WatchPolicy::Manual => "manual",
+            WatchPolicy::Disabled => "disabled",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "session" => WatchPolicy::Session,
+            "pinned" => WatchPolicy::Pinned,
+            "manual" => WatchPolicy::Manual,
+            "disabled" => WatchPolicy::Disabled,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Backend {
+    Legacy,
+    Native,
+    Unsupported,
+}
+
+impl Backend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Backend::Legacy => "legacy",
+            Backend::Native => "native",
+            Backend::Unsupported => "unsupported",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "legacy" => Backend::Legacy,
+            "native" => Backend::Native,
+            "unsupported" => Backend::Unsupported,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Freshness {
+    Unknown,
+    Current,
+    Pending,
+    Degraded,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ownership {
+    Unowned,
+    Negotiating,
+    Owned,
+    Conflict,
+    Releasing,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterProjectParams {
+    pub checkout_root: String,
+    pub index_dir: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(default = "default_watch_policy")]
+    pub watch_policy: WatchPolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository_identity: Option<String>,
+}
+
+fn default_watch_policy() -> WatchPolicy {
+    WatchPolicy::Manual
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRecord {
+    pub project_id: String,
+    pub display_name: String,
+    pub checkout_root: String,
+    pub canonical_checkout_key: String,
+    pub index_dir: String,
+    pub canonical_index_key: String,
+    pub repository_identity: Option<String>,
+    pub compatibility_profile: String,
+    pub watch_policy: WatchPolicy,
+    pub backend: Backend,
+    pub configuration_revision: i64,
+    pub registered_at_ms: i64,
+}
+
+/// Separate state dimensions (architecture §4). M1 only populates the subset it
+/// can observe truthfully; everything else stays `unknown`/`unowned`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStatus {
+    pub project: ProjectRecord,
+    pub freshness: Freshness,
+    pub ownership: Ownership,
+    pub activity: String,
+    pub watch_health: String,
+    pub last_job: Option<JobRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterProjectResult {
+    pub project: ProjectRecord,
+    /// `false` when an identical registration already existed (idempotent).
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobKind {
+    /// Read-only profile/schema inspection of the project's index.
+    Check,
+    Incremental,
+    Full,
+    Reconcile,
+}
+
+impl JobKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JobKind::Check => "check",
+            JobKind::Incremental => "incremental",
+            JobKind::Full => "full",
+            JobKind::Reconcile => "reconcile",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "check" => JobKind::Check,
+            "incremental" => JobKind::Incremental,
+            "full" => JobKind::Full,
+            "reconcile" => JobKind::Reconcile,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobState {
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Canceled,
+}
+
+impl JobState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JobState::Queued => "queued",
+            JobState::Running => "running",
+            JobState::Succeeded => "succeeded",
+            JobState::Failed => "failed",
+            JobState::Canceled => "canceled",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "queued" => JobState::Queued,
+            "running" => JobState::Running,
+            "succeeded" => JobState::Succeeded,
+            "failed" => JobState::Failed,
+            "canceled" => JobState::Canceled,
+            _ => return None,
+        })
+    }
+
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            JobState::Succeeded | JobState::Failed | JobState::Canceled
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobRecord {
+    pub job_id: String,
+    pub project_id: String,
+    pub kind: JobKind,
+    pub state: JobState,
+    pub attempt: i64,
+    pub admitted_at_ms: i64,
+    pub started_at_ms: Option<i64>,
+    pub completed_at_ms: Option<i64>,
+    pub result: Option<Value>,
+    pub error: Option<ErrorBody>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexRequestParams {
+    pub kind: JobKind,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
+/// Durable admission acknowledgement. Completion is observed via `job.get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobAdmission {
+    pub job: JobRecord,
+    /// `true` when an idempotency key matched an earlier admission.
+    pub deduplicated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Health {
+    pub daemon_instance_id: String,
+    pub daemon_version: String,
+    pub pid: u32,
+    pub started_at_ms: i64,
+    pub uptime_ms: i64,
+    pub draining: bool,
+    pub project_count: usize,
+    pub queued_jobs: usize,
+    pub running_jobs: usize,
+    pub sqlite_version: String,
+    pub backend_inventory: Vec<String>,
+}
+
+/// Discovery metadata written atomically to `<data-root>/runtime/endpoint.json`.
+/// Contains no secret; the token lives in `runtime/token`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EndpointInfo {
+    pub endpoint: String,
+    pub daemon_instance_id: String,
+    pub daemon_version: String,
+    pub pid: u32,
+    pub protocol_major: u32,
+    pub protocol_minor: u32,
+    pub started_at_ms: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_codes_serialize_screaming_snake() {
+        let s = serde_json::to_string(&ErrorCode::IndexIdentityConflict).unwrap();
+        assert_eq!(s, "\"INDEX_IDENTITY_CONFLICT\"");
+        let back: ErrorCode = serde_json::from_str("\"QUEUE_SATURATED\"").unwrap();
+        assert_eq!(back, ErrorCode::QueueSaturated);
+        assert!(back.retryable());
+        assert!(!ErrorCode::Unauthenticated.retryable());
+    }
+
+    #[test]
+    fn request_envelope_matches_plan_example() {
+        let raw = r#"{"protocol":1,"requestId":"r1","method":"index.request","projectId":"p1",
+            "params":{"kind":"incremental","paths":["src/main.ts"]},"idempotencyKey":"k"}"#;
+        let req: Request = serde_json::from_str(raw).unwrap();
+        assert_eq!(req.method, method::INDEX_REQUEST);
+        let params: IndexRequestParams = serde_json::from_value(req.params).unwrap();
+        assert_eq!(params.kind, JobKind::Incremental);
+        assert_eq!(params.paths, vec!["src/main.ts"]);
+    }
+
+    #[test]
+    fn auth_response_is_tagged() {
+        let r = AuthResponse::Error {
+            error: ErrorBody::new(ErrorCode::Unauthenticated, "bad token"),
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["status"], "error");
+        assert_eq!(v["error"]["code"], "UNAUTHENTICATED");
+    }
+
+    #[test]
+    fn enum_string_round_trips() {
+        for p in [
+            WatchPolicy::Session,
+            WatchPolicy::Pinned,
+            WatchPolicy::Manual,
+            WatchPolicy::Disabled,
+        ] {
+            assert_eq!(WatchPolicy::parse(p.as_str()), Some(p));
+        }
+        for k in [
+            JobKind::Check,
+            JobKind::Incremental,
+            JobKind::Full,
+            JobKind::Reconcile,
+        ] {
+            assert_eq!(JobKind::parse(k.as_str()), Some(k));
+        }
+        for s in [
+            JobState::Queued,
+            JobState::Running,
+            JobState::Succeeded,
+            JobState::Failed,
+            JobState::Canceled,
+        ] {
+            assert_eq!(JobState::parse(s.as_str()), Some(s));
+        }
+    }
+}
