@@ -5,8 +5,12 @@
 //! is used for writing until its gate passes. Ported so far: the JSON and
 //! YAML symbol extractors (WI-501/502 slice).
 
+pub mod dbdump;
 pub mod js;
+pub mod native;
 pub mod parse;
+pub mod rows;
+pub mod unicode;
 
 #[cfg(test)]
 mod kat {

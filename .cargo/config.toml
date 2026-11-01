@@ -1,0 +1,5 @@
+[env]
+# WrongStack's SQLite runtime (Bun) is built without STAT4. The bundled
+# SQLite must match: with STAT4, ANALYZE also creates `sqlite_stat4`, which a
+# WrongStack-written index never contains (and query planning differs).
+LIBSQLITE3_FLAGS = "-USQLITE_ENABLE_STAT4"

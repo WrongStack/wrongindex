@@ -60,8 +60,14 @@ fn copy_dir(src: &Path, dst: &Path) {
 /// Prepare `<work-root>/<name>` exactly as the fixture builder laid it out.
 /// Refuses to touch a directory this test did not create (e.g. a fixture
 /// build in progress).
-fn stage(name: &str) -> (PathBuf, PathBuf, PathBuf) {
-    let work = work_root().join(name);
+fn stage(name: &str, native: bool) -> (PathBuf, PathBuf, PathBuf) {
+    // A native index embeds its own root, so it needs no oracle path and gets
+    // its own directory (tests may run concurrently).
+    let work = work_root().join(if native {
+        format!("native-{name}")
+    } else {
+        name.to_string()
+    });
     if work.exists() {
         assert!(
             work.join(MARKER).exists(),
@@ -75,6 +81,12 @@ fn stage(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let root = work.join("project");
     let index = work.join("index");
     copy_dir(&repo().join("tests/fixtures/projects").join(name), &root);
+    if native {
+        // The index under test is written by the native engine, not copied.
+        wrongindex_engine::native::index_fresh(&root, &index)
+            .unwrap_or_else(|e| panic!("{name}: native index: {e}"));
+        return (work, root, index);
+    }
     std::fs::create_dir_all(&index).unwrap();
     std::fs::copy(
         repo()
@@ -165,7 +177,7 @@ fn absolutize(v: &Value, root: &Path) -> Value {
     }
 }
 
-async fn diff_fixture(c: &mut Client, name: &str) -> (usize, Vec<String>) {
+async fn diff_fixture(c: &mut Client, name: &str, native: bool) -> (usize, Vec<String>) {
     let recorded: Value = serde_json::from_slice(
         &std::fs::read(
             repo()
@@ -176,7 +188,7 @@ async fn diff_fixture(c: &mut Client, name: &str) -> (usize, Vec<String>) {
         .unwrap(),
     )
     .unwrap();
-    let (work, root, index) = stage(name);
+    let (work, root, index) = stage(name, native);
     let reg = c
         .call_raw(
             method::PROJECT_REGISTER,
@@ -243,17 +255,13 @@ async fn diff_fixture(c: &mut Client, name: &str) -> (usize, Vec<String>) {
     (ops.len(), mismatches)
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
-async fn oracle_queries_match_through_the_daemon() {
+async fn start_daemon(home: &Path) -> (Daemon, Client) {
     let engine = std::env::var("WRONGINDEX_TEST_ENGINE")
         .expect("set WRONGINDEX_TEST_ENGINE to a prepared WrongStack engine directory");
-    let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path().join("home");
-    let _daemon = Daemon(
+    let daemon = Daemon(
         Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
             .arg("--data-root")
-            .arg(&home)
+            .arg(home)
             .arg("--engine")
             .arg(engine)
             .stdin(Stdio::null())
@@ -263,13 +271,20 @@ async fn oracle_queries_match_through_the_daemon() {
             .unwrap(),
     );
     let deadline = Instant::now() + Duration::from_secs(15);
-    let mut c = loop {
-        if let Ok(c) = Client::connect(&DataRoot::resolve(Some(&home)).unwrap(), "diff").await {
-            break c;
+    loop {
+        if let Ok(c) = Client::connect(&DataRoot::resolve(Some(home)).unwrap(), "diff").await {
+            return (daemon, c);
         }
         assert!(Instant::now() < deadline, "daemon not ready");
         tokio::time::sleep(Duration::from_millis(50)).await;
-    };
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+async fn oracle_queries_match_through_the_daemon() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_daemon, mut c) = start_daemon(&tmp.path().join("home")).await;
 
     let mut fixtures: Vec<String> = std::fs::read_dir(repo().join("tests/fixtures/oracle"))
         .unwrap()
@@ -279,7 +294,7 @@ async fn oracle_queries_match_through_the_daemon() {
     assert!(fixtures.len() >= 8);
     let (mut total, mut all) = (0, Vec::new());
     for f in &fixtures {
-        let (n, m) = diff_fixture(&mut c, f).await;
+        let (n, m) = diff_fixture(&mut c, f, false).await;
         eprintln!("{f}: {n} operations, {} mismatches", m.len());
         total += n;
         all.extend(m);
@@ -291,6 +306,27 @@ async fn oracle_queries_match_through_the_daemon() {
         all.join("\n")
     );
     eprintln!("all {total} oracle queries identical through the daemon");
+}
+
+/// WI-502 consumption gate: WrongStack itself reads the natively written
+/// index and answers every recorded query exactly as for its own index.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+async fn native_index_answers_oracle_queries_through_wrongstack() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_daemon, mut c) = start_daemon(&tmp.path().join("home")).await;
+    let (n, m) = diff_fixture(&mut c, "config-only", true).await;
+    assert!(
+        m.is_empty(),
+        "{} of {n} queries differ on the native index:
+{}",
+        m.len(),
+        m.join(
+            "
+"
+        )
+    );
+    eprintln!("native config-only: all {n} oracle queries identical");
 }
 
 #[test]
