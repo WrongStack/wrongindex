@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+mod diagnostics;
+
 use clap::{Args, Parser, Subcommand};
 use serde_json::{Value, json};
 use wrongindex_contracts::{
@@ -65,6 +67,11 @@ enum Command {
         op: String,
         #[arg(long, default_value = "{}")]
         args: String,
+    },
+    /// Redacted diagnostics for support and bug reports.
+    Diagnostics {
+        #[command(subcommand)]
+        action: DiagnosticsAction,
     },
     /// Follow the service event stream (Ctrl+C to stop).
     Events {
@@ -196,6 +203,27 @@ struct IndexArgs {
 }
 
 #[derive(Debug, Subcommand)]
+enum DiagnosticsAction {
+    /// Write a redacted, bounded JSON bundle (no token, no source code).
+    Export {
+        /// Output file (refused if it exists unless --force).
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Only this project.
+        #[arg(long)]
+        project: Option<String>,
+        /// Replace project paths with short hashes (home is always `~`).
+        #[arg(long)]
+        redact_paths: bool,
+        /// Show the categories and their sizes without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum JobAction {
     Status {
         job_id: String,
@@ -289,6 +317,66 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        Command::Diagnostics {
+            action:
+                DiagnosticsAction::Export {
+                    output,
+                    project,
+                    redact_paths,
+                    dry_run,
+                    force,
+                },
+        } => {
+            let checks = doctor_checks(&root).await;
+            let (bundle, paths) = diagnostics::collect(&root, project.as_deref(), checks).await;
+            let redactor = diagnostics::Redactor::new(&root, &paths, redact_paths);
+            let mut bundle = redactor.value(&bundle);
+            // Keep the bundle bounded: drop the oldest log lines first.
+            while bundle.to_string().len() > diagnostics::MAX_BUNDLE_BYTES {
+                let Some(lines) = bundle["log"]["lines"].as_array_mut() else {
+                    break;
+                };
+                if lines.is_empty() {
+                    break;
+                }
+                let n = (lines.len() / 4).max(1);
+                lines.drain(..n);
+                bundle["log"]["truncated"] = json!(true);
+            }
+            if dry_run || output.is_none() {
+                let sizes = diagnostics::preview(&bundle);
+                if json {
+                    print_json(
+                        &json!({"categories": sizes.iter().map(|(k, n)| json!({"category": k, "bytes": n})).collect::<Vec<_>>()}),
+                    );
+                } else {
+                    println!("diagnostics bundle (preview; nothing written):");
+                    for (k, n) in sizes {
+                        println!("  {k:<12} {n:>9} bytes");
+                    }
+                    println!("never included: service token, source code, index contents");
+                }
+                return Ok(exit_code::SUCCESS);
+            }
+            let out = output.unwrap_or_default();
+            if out.exists() && !force {
+                return Err(fail(
+                    exit_code::INVALID_INPUT,
+                    format!("{} exists (use --force to replace it)", out.display()),
+                ));
+            }
+            let text = serde_json::to_string_pretty(&bundle).unwrap_or_default();
+            let tmp = out.with_extension("partial");
+            std::fs::write(&tmp, &text)
+                .and_then(|()| std::fs::rename(&tmp, &out))
+                .map_err(|e| fail(exit_code::INTERNAL, format!("{}: {e}", out.display())))?;
+            if json {
+                print_json(&json!({"written": out, "bytes": text.len()}));
+            } else {
+                println!("wrote {} ({} bytes)", out.display(), text.len());
+            }
+            Ok(exit_code::SUCCESS)
+        }
         Command::Events { project, snapshot } => {
             let mut since = None;
             if snapshot {
@@ -952,6 +1040,29 @@ async fn job(root: &DataRoot, action: JobAction, json: bool) -> Outcome {
 // ─── doctor / inspect ───────────────────────────────────────────────────────
 
 async fn doctor(root: &DataRoot, json: bool) -> Outcome {
+    let checks = doctor_checks(root).await;
+    let failed = checks.iter().any(|c| c["status"] == "fail");
+    if json {
+        print_json(&json!({"ok": !failed, "checks": checks}));
+    } else {
+        for c in &checks {
+            println!(
+                "{:<5} {:<22} {}",
+                c["status"].as_str().unwrap_or("").to_uppercase(),
+                c["check"].as_str().unwrap_or(""),
+                c["detail"].as_str().unwrap_or("")
+            );
+        }
+    }
+    Ok(if failed {
+        exit_code::INTERNAL
+    } else {
+        exit_code::SUCCESS
+    })
+}
+
+/// Read-only installation and service checks (shared with diagnostics).
+async fn doctor_checks(root: &DataRoot) -> Vec<Value> {
     let mut checks: Vec<Value> = Vec::new();
     let mut add = |name: &str, status: &str, detail: String| {
         checks.push(json!({"check": name, "status": status, "detail": detail}));
@@ -1028,24 +1139,7 @@ async fn doctor(root: &DataRoot, json: bool) -> Outcome {
         ),
         Err(e) => add("service_connect", "fail", e.to_string()),
     }
-    let failed = checks.iter().any(|c| c["status"] == "fail");
-    if json {
-        print_json(&json!({"ok": !failed, "checks": checks}));
-    } else {
-        for c in &checks {
-            println!(
-                "{:<5} {:<22} {}",
-                c["status"].as_str().unwrap_or("").to_uppercase(),
-                c["check"].as_str().unwrap_or(""),
-                c["detail"].as_str().unwrap_or("")
-            );
-        }
-    }
-    Ok(if failed {
-        exit_code::INTERNAL
-    } else {
-        exit_code::SUCCESS
-    })
+    checks
 }
 
 fn debug(action: DebugAction) -> Outcome {
