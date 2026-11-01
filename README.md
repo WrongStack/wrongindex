@@ -29,6 +29,17 @@ cargo build --release
 
 Without `--index-dir`, the project is registered with the index location WrongStack itself uses (`~/.wrongstack/projects/<slug>/codebase-index`, linked-worktree aware); `wrongindex resolve-index-dir <root>` prints it. Registering a project never modifies the source tree or the index. Use `--data-root <dir>` (or `WRONGINDEX_HOME`) for an isolated instance.
 
+## Windows installer
+
+```powershell
+cargo install tauri-cli --version "=2.12.4" --locked   # once
+pwsh scripts/release/package-windows.ps1
+```
+
+This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`, with `SHA256SUMS.txt`). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Stop the service (tray: Stop Index Service) before uninstalling or upgrading.
+
+Runtime requirements for native indexing of every language: Python (Python files), Go (Go files; regex fallback without it), and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses).
+
 ## Repository layout
 
 | Path | Purpose |

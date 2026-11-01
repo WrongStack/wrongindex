@@ -7,3 +7,4 @@ node_modules/
 
 .dfmt/
 /crates/wrongindex-desktop/gen/
+/crates/wrongindex-desktop/binaries/
