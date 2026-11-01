@@ -135,8 +135,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             .collect());
     };
     let (_dir, script) = private_script("wi-py-parse-", "batch.py", PY_BATCH_SCRIPT)?;
-    let mut out = Vec::with_capacity(files.len());
-    for chunk in chunks(files) {
+    par_chunks(files, |chunk| {
+        let mut out = Vec::with_capacity(chunk.len());
         let mut cmd = Command::new(py);
         cmd.arg("-I").arg(&script);
         let stdout = run_chunk(cmd, &script, chunk)?
@@ -163,8 +163,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             };
             out.push(with_relations(parsed, &content, "py"));
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 /// `privateScriptPath`: the program in a fresh private directory (removed
@@ -186,6 +186,44 @@ pub(super) fn private_script(
         .and_then(|mut f| f.write_all(body.as_bytes()))
         .map_err(|e| format!("parser script: {e}"))?;
     Ok((dir, script))
+}
+
+/// Run `f` over the [`chunks`] of `files`, several chunks at a time (each in
+/// its own child process), and concatenate the results in file order. The
+/// programs are deterministic per file, so concurrency changes speed only.
+pub(super) fn par_chunks<'a, F>(files: &[SourceFile<'a>], f: F) -> Result<Vec<Parsed>, String>
+where
+    F: Fn(&[SourceFile<'a>]) -> Result<Vec<Parsed>, String> + Sync,
+{
+    let cs = chunks(files);
+    let width = std::thread::available_parallelism()
+        .map_or(1, |n| n.get() / 2)
+        .clamp(1, 8);
+    let mut results: Vec<Option<Result<Vec<Parsed>, String>>> =
+        (0..cs.len()).map(|_| None).collect();
+    let ids: Vec<usize> = (0..cs.len()).collect();
+    for group in ids.chunks(width) {
+        std::thread::scope(|s| {
+            let handles: Vec<_> = group
+                .iter()
+                .map(|&i| {
+                    let (f, c) = (&f, cs[i]);
+                    (i, s.spawn(move || f(c)))
+                })
+                .collect();
+            for (i, h) in handles {
+                results[i] = Some(
+                    h.join()
+                        .unwrap_or_else(|_| Err("parser thread panicked".into())),
+                );
+            }
+        });
+    }
+    let mut out = Vec::with_capacity(files.len());
+    for r in results.into_iter().flatten() {
+        out.extend(r?);
+    }
+    Ok(out)
 }
 
 /// `chunkBatchFiles`.

@@ -19,7 +19,7 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use super::py::{SourceFile, chunks, private_script, resolve_command, run_chunk};
+use super::py::{SourceFile, par_chunks, private_script, resolve_command, run_chunk};
 use super::{Parsed, ParsedRef, ParsedSymbol, generic, with_relations};
 use crate::js::utf16;
 
@@ -105,8 +105,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
         }
         std::fs::write(&p, bytes).map_err(|e| format!("tree-sitter assets: {e}"))?;
     }
-    let mut out = Vec::with_capacity(files.len());
-    for chunk in chunks(files) {
+    par_chunks(files, |chunk| {
+        let mut out = Vec::with_capacity(chunk.len());
         let results = run_program(rt, &script, dir.path(), chunk)?;
         for f in chunk {
             let content = utf16(f.text);
@@ -133,8 +133,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             }
             out.push(with_relations(parsed, &content, f.lang));
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 /// `ts-parser.ts` `parseSymbols` (TypeScript compiler) for TS/JS files the
@@ -144,8 +144,8 @@ pub fn parse_typescript_fallback(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>
         return Err("TS/JS files the native parser refuses need Bun or Node.js on PATH".into());
     };
     let (dir, script) = private_script("wi-tsc-parse-", "ts_parse.mjs", TS_PROGRAM)?;
-    let mut out = Vec::with_capacity(files.len());
-    for chunk in chunks(files) {
+    par_chunks(files, |chunk| {
+        let mut out = Vec::with_capacity(chunk.len());
         let results = run_program(rt, &script, dir.path(), chunk)?;
         for f in chunk {
             let (_, symbols, refs) = results
@@ -166,8 +166,8 @@ pub fn parse_typescript_fallback(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>
                 unsupported: None,
             });
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 fn run_program(

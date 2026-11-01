@@ -12,7 +12,7 @@
 use std::process::Command;
 use std::sync::OnceLock;
 
-use super::py::{SourceFile, chunks, decode_batch, private_script, resolve_command, run_chunk};
+use super::py::{SourceFile, decode_batch, par_chunks, private_script, resolve_command, run_chunk};
 use super::{Parsed, ParsedSymbol, with_relations};
 use crate::js::{self, U16, utf16};
 use crate::jsre::Regex;
@@ -52,8 +52,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
         .path()
         .join(if cfg!(windows) { "batch.exe" } else { "batch" });
     build(go, &script, &exe)?;
-    let mut out = Vec::with_capacity(files.len());
-    for chunk in chunks(files) {
+    par_chunks(files, |chunk| {
+        let mut out = Vec::with_capacity(chunk.len());
         let cmd = Command::new(&exe);
         let stdout = run_chunk(cmd, &script, chunk)?
             .ok_or_else(|| "go parser failed on a chunk".to_string())?;
@@ -76,8 +76,8 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             };
             out.push(finish(parsed, f));
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 /// Deadline for building the parser program (cold build cache included).

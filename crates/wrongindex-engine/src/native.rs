@@ -202,22 +202,49 @@ struct GitTrust {
 /// aborts the whole process and cannot be caught like a panic.
 const PARSE_STACK_BYTES: usize = 256 * 1024 * 1024;
 
-/// Read and parse every discovered file on a dedicated large-stack thread.
-fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
-    let root = project_root.to_path_buf();
-    std::thread::Builder::new()
-        .name("wrongindex-parse".into())
-        .stack_size(PARSE_STACK_BYTES)
-        .spawn(move || collect_on_this_thread(&root))?
-        .join()
-        .unwrap_or_else(|_| Err(NativeError::Unsupported("parser thread panicked".into())))
+/// One discovered file after the read phase (no parsing yet).
+struct Source {
+    path: String,
+    lang: &'static str,
+    mtime_ms: i64,
+    content_hash: String,
+    /// See [`FileRow::failed`].
+    failed: bool,
+    text: String,
 }
 
-/// Read and parse every discovered file; refuse anything unsupported.
-fn collect_on_this_thread(
-    project_root: &Path,
-) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+/// Discovery plus the read phase: what the files are, without parsing.
+struct Scan {
+    files: Vec<Source>,
+    git: Option<GitTrust>,
+}
+
+impl Scan {
+    /// Sorted `(file, content_hash)` of the files that get rows.
+    fn hashes(&self) -> Vec<(String, String)> {
+        let mut v: Vec<(String, String)> = self
+            .files
+            .iter()
+            .filter(|f| !f.failed)
+            .map(|f| (f.path.clone(), f.content_hash.clone()))
+            .collect();
+        v.sort();
+        v
+    }
+}
+
+/// Phase timings on stderr when `WRONGINDEX_NATIVE_TIMINGS` is set.
+fn timing(phase: &str, since: std::time::Instant) {
+    if std::env::var_os("WRONGINDEX_NATIVE_TIMINGS").is_some() {
+        eprintln!("native: {phase} {} ms", since.elapsed().as_millis());
+    }
+}
+
+/// Discover and read every file; refuse anything unsupported.
+fn scan(project_root: &Path) -> Result<Scan, NativeError> {
+    let t = std::time::Instant::now();
     let d = wrongindex_discovery::discover(project_root, &[]);
+    timing("discover", t);
     if !d.complete {
         return Err(NativeError::Unsupported(format!(
             "incomplete discovery: {}",
@@ -241,13 +268,8 @@ fn collect_on_this_thread(
             "a project with no indexable files".into(),
         ));
     }
-    let mut rows = Vec::with_capacity(d.files.len());
-    // Python and Go are parsed afterwards, in toolchain batches: (row, text).
-    let mut py: Vec<(usize, String)> = Vec::new();
-    let mut go: Vec<(usize, String)> = Vec::new();
-    let mut tree: Vec<(usize, String)> = Vec::new();
-    // TS/JS files the oxc port refuses: WrongStack's own TypeScript parser.
-    let mut tsc: Vec<(usize, String)> = Vec::new();
+    let t = std::time::Instant::now();
+    let mut files = Vec::with_capacity(d.files.len());
     for path in d.files {
         let lang = match wrongindex_discovery::lang::detect_lang(&path) {
             Some(l) if parse::is_native_lang(l) => l,
@@ -262,14 +284,13 @@ fn collect_on_this_thread(
         // `readBatchFiles`: an oversized file is a per-file error; it gets no
         // rows and the run goes on.
         if meta.len() > MAX_INDEX_FILE_BYTES {
-            rows.push(FileRow {
+            files.push(Source {
                 path,
                 lang,
                 mtime_ms: 0,
                 content_hash: String::new(),
                 failed: true,
-                symbols: Vec::new(),
-                refs: Vec::new(),
+                text: String::new(),
             });
             continue;
         }
@@ -279,91 +300,199 @@ fn collect_on_this_thread(
             .map_or(0, |d| d.as_millis() as i64);
         let bytes = std::fs::read(&path)?;
         let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
-        let text = String::from_utf8_lossy(&bytes);
-        if lang == "py" || lang == "go" || parse::treesitter::LANGS.contains(&lang) {
-            let batch = match lang {
-                "py" => &mut py,
-                "go" => &mut go,
-                _ => &mut tree,
-            };
-            batch.push((rows.len(), text.into_owned()));
-            rows.push(FileRow {
-                path,
-                lang,
-                mtime_ms,
-                content_hash,
-                failed: false,
-                symbols: Vec::new(),
-                refs: Vec::new(),
-            });
-            continue;
-        }
-        let content = utf16(&text);
-        // A parser panic (e.g. a regex construct the JS-regex engine refuses
-        // to approximate) must never take the service down: the project is
-        // reported as unsupported and left to the compatibility worker.
-        let parsed: Parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            parse::parse_file(&path, lang, &content)
-        }))
-        .map_err(|p| {
-            let why = p
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_else(|| "parser panic".into());
-            NativeError::Unsupported(format!("{lang} parser failed on {path}: {why}"))
-        })?;
-        if let Some(why) = parsed.unsupported {
-            if !parse::ts::LANGS.contains(&lang) {
-                return Err(NativeError::Unsupported(format!("{why} ({path})")));
-            }
-            tsc.push((rows.len(), text.into_owned()));
-            rows.push(FileRow {
-                path,
-                lang,
-                mtime_ms,
-                content_hash,
-                failed: false,
-                symbols: Vec::new(),
-                refs: Vec::new(),
-            });
-            continue;
-        }
-        rows.push(FileRow {
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        files.push(Source {
             path,
             lang,
             mtime_ms,
             content_hash,
             failed: false,
-            symbols: parsed.symbols,
-            refs: parsed.refs,
+            text,
         });
     }
-    type Batch = fn(&[parse::py::SourceFile<'_>]) -> Result<Vec<Parsed>, String>;
-    for (batch, run) in [
-        (&py, parse::py::parse_all as Batch),
-        (&go, parse::go::parse_all as Batch),
-        (&tree, parse::treesitter::parse_all as Batch),
-        (&tsc, parse::treesitter::parse_typescript_fallback as Batch),
-    ] {
-        if batch.is_empty() {
-            continue;
-        }
-        let files: Vec<parse::py::SourceFile<'_>> = batch
-            .iter()
-            .map(|(i, text)| parse::py::SourceFile {
-                file: &rows[*i].path,
-                text,
-                lang: rows[*i].lang,
+    timing("read", t);
+    Ok(Scan { files, git })
+}
+
+/// Which route parses a file.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Route {
+    InProcess,
+    Python,
+    Go,
+    TreeSitter,
+    /// TS/JS the oxc port refused: WrongStack's own TypeScript parser.
+    TypeScript,
+}
+
+fn route_of(lang: &str) -> Route {
+    match lang {
+        "py" => Route::Python,
+        "go" => Route::Go,
+        l if parse::treesitter::LANGS.contains(&l) => Route::TreeSitter,
+        _ => Route::InProcess,
+    }
+}
+
+/// Parse one file in process; `Ok(None)` when a TS/JS file must go to the
+/// TypeScript parser instead.
+fn parse_in_process(src: &Source) -> Result<Option<Parsed>, NativeError> {
+    let content = utf16(&src.text);
+    // A parser panic (e.g. a regex construct the JS-regex engine refuses to
+    // approximate) must never take the service down: the project is reported
+    // as unsupported and left to the compatibility worker.
+    let parsed: Parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        parse::parse_file(&src.path, src.lang, &content)
+    }))
+    .map_err(|p| {
+        let why = p
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "parser panic".into());
+        NativeError::Unsupported(format!("{} parser failed on {}: {why}", src.lang, src.path))
+    })?;
+    match parsed.unsupported {
+        Some(_) if parse::ts::LANGS.contains(&src.lang) => Ok(None),
+        Some(why) => Err(NativeError::Unsupported(format!("{why} ({})", src.path))),
+        None => Ok(Some(parsed)),
+    }
+}
+
+/// Parse every scanned file. In-process parsing runs on several large-stack
+/// threads and the toolchain routes run concurrently; every result lands at
+/// its file's position, so the outcome does not depend on scheduling.
+fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+    let Scan { files, git } = scan;
+    let n = files.len();
+    let mut parsed: Vec<Option<Parsed>> = (0..n).map(|_| None).collect();
+    let mut routes: Vec<Route> = files.iter().map(|f| route_of(f.lang)).collect();
+
+    // 1. In process, in parallel.
+    let t = std::time::Instant::now();
+    let in_process: Vec<usize> = (0..n)
+        .filter(|&i| !files[i].failed && routes[i] == Route::InProcess)
+        .collect();
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, 16)
+        .min(in_process.len().max(1));
+    let per = in_process.len().div_ceil(threads).max(1);
+    type ThreadOut = Result<Vec<(usize, Option<Parsed>)>, NativeError>;
+    let results: Vec<ThreadOut> = std::thread::scope(|s| {
+        let handles: Vec<_> = in_process
+            .chunks(per)
+            .map(|ids| {
+                let files = &files;
+                std::thread::Builder::new()
+                    .name("wrongindex-parse".into())
+                    .stack_size(PARSE_STACK_BYTES)
+                    .spawn_scoped(s, move || {
+                        ids.iter()
+                            .map(|&i| parse_in_process(&files[i]).map(|p| (i, p)))
+                            .collect::<Result<Vec<_>, _>>()
+                    })
             })
-            .collect();
-        let parsed = run(&files).map_err(NativeError::Unsupported)?;
-        for ((i, _), p) in batch.iter().zip(parsed) {
-            rows[*i].symbols = p.symbols;
-            rows[*i].refs = p.refs;
+            .collect::<Result<_, _>>()
+            .map_err(NativeError::Io)?;
+        Ok::<_, NativeError>(
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join().unwrap_or_else(|_| {
+                        Err(NativeError::Unsupported("parser thread panicked".into()))
+                    })
+                })
+                .collect(),
+        )
+    })?;
+    for chunk in results {
+        for (i, p) in chunk? {
+            match p {
+                Some(p) => parsed[i] = Some(p),
+                None => routes[i] = Route::TypeScript,
+            }
         }
     }
+    timing("parse in process", t);
+
+    // 2. Toolchain routes, concurrently.
+    let t = std::time::Instant::now();
+    type Batch = fn(&[parse::py::SourceFile<'_>]) -> Result<Vec<Parsed>, String>;
+    let jobs: Vec<(Vec<usize>, Batch)> = [
+        (Route::Python, parse::py::parse_all as Batch),
+        (Route::Go, parse::go::parse_all as Batch),
+        (Route::TreeSitter, parse::treesitter::parse_all as Batch),
+        (
+            Route::TypeScript,
+            parse::treesitter::parse_typescript_fallback as Batch,
+        ),
+    ]
+    .into_iter()
+    .map(|(route, run)| {
+        let ids: Vec<usize> = (0..n)
+            .filter(|&i| !files[i].failed && routes[i] == route)
+            .collect();
+        (ids, run)
+    })
+    .filter(|(ids, _)| !ids.is_empty())
+    .collect();
+    let outcomes: Vec<Result<Vec<Parsed>, String>> = std::thread::scope(|s| {
+        let handles: Vec<_> = jobs
+            .iter()
+            .map(|(ids, run)| {
+                let files = &files;
+                s.spawn(move || {
+                    let batch: Vec<parse::py::SourceFile<'_>> = ids
+                        .iter()
+                        .map(|&i| parse::py::SourceFile {
+                            file: &files[i].path,
+                            text: &files[i].text,
+                            lang: files[i].lang,
+                        })
+                        .collect();
+                    run(&batch)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err("toolchain thread panicked".into()))
+            })
+            .collect()
+    });
+    for ((ids, _), outcome) in jobs.iter().zip(outcomes) {
+        let out = outcome.map_err(NativeError::Unsupported)?;
+        for (&i, p) in ids.iter().zip(out) {
+            parsed[i] = Some(p);
+        }
+    }
+    timing("parse toolchains", t);
+
+    let rows = files
+        .into_iter()
+        .zip(parsed)
+        .map(|(f, p)| {
+            let p = p.unwrap_or_default();
+            FileRow {
+                path: f.path,
+                lang: f.lang,
+                mtime_ms: f.mtime_ms,
+                content_hash: f.content_hash,
+                failed: f.failed,
+                symbols: p.symbols,
+                refs: p.refs,
+            }
+        })
+        .collect();
     Ok((rows, git))
+}
+
+/// Read and parse every discovered file.
+fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+    parse_scan(scan(project_root)?)
 }
 
 /// Statements of `schema.sql`: tables first, then the FTS table, then indexes.
@@ -499,16 +628,25 @@ fn assign_refs<'a>(refs: &'a [ParsedRef], inserted: &[(i64, &ParsedSymbol)]) -> 
 /// Like `runIndexerWithStore`, a run whose Git snapshot moved while files
 /// were read is discarded and retried once.
 pub fn index_fresh(project_root: &Path, index_dir: &Path) -> Result<Report, NativeError> {
+    index_fresh_from(project_root, index_dir, None)
+}
+
+/// [`index_fresh`] starting from a scan already made (the retry re-scans).
+fn index_fresh_from(
+    project_root: &Path,
+    index_dir: &Path,
+    first: Option<Scan>,
+) -> Result<Report, NativeError> {
     let db_path: PathBuf = index_dir.join("index.db");
     if db_path.exists() {
         return Err(NativeError::Unsupported(
             "an existing index (only fresh indexes are written natively)".into(),
         ));
     }
-    match index_once(project_root, index_dir, &db_path) {
+    match index_once(project_root, index_dir, &db_path, first) {
         Err(NativeError::SourceChanged) => {
             remove_fresh_db(&db_path);
-            index_once(project_root, index_dir, &db_path).inspect_err(|e| {
+            index_once(project_root, index_dir, &db_path, None).inspect_err(|e| {
                 if matches!(e, NativeError::SourceChanged) {
                     remove_fresh_db(&db_path);
                 }
@@ -539,26 +677,21 @@ pub enum Rebuild {
 /// (another connection may have it open).
 pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
     let db = index_dir.join("index.db");
-    if db.exists() {
-        let (files, _) = collect(project_root)?;
-        let mut current: Vec<(String, String)> = files
-            .iter()
-            .filter(|f| !f.failed)
-            .map(|f| (f.path.clone(), f.content_hash.clone()))
-            .collect();
-        current.sort();
-        if let Some((stored, stamp)) = stored_state(&db)?
-            && stored == current
-        {
-            return Ok(Rebuild::Unchanged { graph_stamp: stamp });
-        }
+    // Read (and hash) before parsing anything: an unchanged project costs a
+    // discovery and a read, and a changed one is not scanned twice.
+    let first = scan(project_root)?;
+    if db.exists()
+        && let Some((stored, stamp)) = stored_state(&db)?
+        && stored == first.hashes()
+    {
+        return Ok(Rebuild::Unchanged { graph_stamp: stamp });
     }
     let staging = index_dir.join(format!(
         ".wrongindex-staging-{}",
         uuid::Uuid::new_v4().simple()
     ));
     let result = (|| {
-        let report = index_fresh(project_root, &staging)?;
+        let report = index_fresh_from(project_root, &staging, Some(first))?;
         for suffix in ["-wal", "-shm"] {
             let mut p = db.as_os_str().to_owned();
             p.push(suffix);
@@ -627,8 +760,13 @@ fn index_once(
     project_root: &Path,
     index_dir: &Path,
     db_path: &Path,
+    first: Option<Scan>,
 ) -> Result<Report, NativeError> {
-    let (files, git) = collect(project_root)?;
+    let (files, git) = match first {
+        Some(scan) => parse_scan(scan)?,
+        None => collect(project_root)?,
+    };
+    let t_write = std::time::Instant::now();
     std::fs::create_dir_all(index_dir)?;
     let mut conn = Connection::open(db_path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
@@ -758,9 +896,16 @@ fn index_once(
     for name in SECONDARY_INDEXES {
         tx.execute_batch(&secondary_index_sql(name))?;
     }
+    timing("write: inserts", t_write);
+    let t = std::time::Instant::now();
     tx.execute_batch(RESOLVE_REFS_SQL)?;
+    timing("write: resolve", t);
+    let t = std::time::Instant::now();
     crate::relations::relation_pass(&tx, &project_root.to_string_lossy())?;
+    timing("write: relations", t);
+    let t = std::time::Instant::now();
     crate::binding::bind_refs_all(&tx)?;
+    timing("write: binding", t);
     set_meta(
         &tx,
         "ref_binding_version",
@@ -769,7 +914,9 @@ fn index_once(
     set_meta(&tx, "ref_resolution_version", "2")?;
     set_meta(&tx, "module_owner_version", "2")?;
     set_meta(&tx, "relation_graph_version", "2")?;
+    let t = std::time::Instant::now();
     let (sym_ranks, file_ranks) = crate::rank::rank_rows(&tx)?;
+    timing("write: rank", t);
     savepoint += 1;
     crate::rank::replace_ranks(
         &tx,
@@ -806,7 +953,9 @@ fn index_once(
             )?;
         }
     }
+    let t = std::time::Instant::now();
     write_stat1(&tx)?;
+    timing("write: stat1", t);
     let written = files.iter().filter(|f| !f.failed).count();
     let changed = written;
     let graph_stamp = format!("{}:{changed}", now_ms());
@@ -815,6 +964,7 @@ fn index_once(
     tx.commit()?;
     conn.close().map_err(|(_, e)| e)?;
 
+    timing("write", t_write);
     Ok(Report {
         files_indexed: written - files_empty,
         files_empty,
