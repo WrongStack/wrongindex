@@ -133,6 +133,9 @@ pub struct Hello {
     pub protocol_minor: u32,
     pub supported_profile_ids: Vec<String>,
     pub selected_profile_id: Option<String>,
+    /// SHA-256 over the canonical storage + semantic profile (WI-007).
+    #[serde(default)]
+    pub profile_fingerprint: Option<String>,
     pub capabilities: Vec<String>,
     pub limits: Limits,
 }

@@ -89,6 +89,11 @@ impl Shared {
             protocol_minor: PROTOCOL_MINOR,
             supported_profile_ids: vec![BASELINE_PROFILE_ID.to_string()],
             selected_profile_id: selected_profile,
+            profile_fingerprint: Some(
+                wrongindex_storage::profile::baseline_semantic()
+                    .profile_fingerprint
+                    .clone(),
+            ),
             capabilities: vec!["register".into(), "check".into(), "jobs".into()],
             limits: Limits {
                 max_frame_bytes: MAX_FRAME_BYTES,

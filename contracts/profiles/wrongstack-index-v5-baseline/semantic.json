@@ -1,0 +1,287 @@
+{
+  "schema": "wrongindex.semantic-profile/1",
+  "id": "wrongstack-index-v5-baseline",
+  "storageFingerprint": "5bd58c46a80ce4d57e672c427869eb759f37b156adf1017c2b3124291f5f6051",
+  "semanticFingerprint": "87b42b6f7b34df28022b6be9d833c2834be283370fdde88567b799fe1f4918fb",
+  "profileFingerprint": "4b7fa3a5a061d1af34cfd011b924175b26cfa5479b8956e3957b35ab1efbdaa6",
+  "semantic": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "versionMarkers": {
+      "version": "5",
+      "ref_resolution_version": "2",
+      "ref_binding_version": "2",
+      "relation_graph_version": "2",
+      "module_resolution_version": "1",
+      "module_owner_version": "2",
+      "rank_version": "1"
+    },
+    "parserRoutes": [
+      {
+        "langs": [
+          "ts",
+          "tsx",
+          "js",
+          "jsx"
+        ],
+        "modules": [
+          "ts-parser"
+        ]
+      },
+      {
+        "langs": [
+          "go"
+        ],
+        "modules": [
+          "go-parser"
+        ]
+      },
+      {
+        "langs": [
+          "py"
+        ],
+        "modules": [
+          "py-parser"
+        ]
+      },
+      {
+        "langs": [
+          "rs"
+        ],
+        "modules": [
+          "rs-parser"
+        ]
+      },
+      {
+        "langs": [
+          "json"
+        ],
+        "modules": [
+          "json-parser"
+        ]
+      },
+      {
+        "langs": [
+          "yaml"
+        ],
+        "modules": [
+          "yaml-parser"
+        ]
+      },
+      {
+        "langs": [
+          "c",
+          "cpp",
+          "java",
+          "csharp",
+          "php",
+          "ruby",
+          "swift",
+          "kotlin",
+          "shell",
+          "elixir"
+        ],
+        "modules": [
+          "tree-sitter-parser",
+          "generic-parser"
+        ]
+      },
+      {
+        "langs": [],
+        "modules": [
+          "generic-parser"
+        ],
+        "default": true
+      }
+    ],
+    "helperBackends": {
+      "go-parser": "child process: `go run` of WrongStack-owned helper source (batched via parser-batch); regex fallback when unavailable",
+      "py-parser": "child process: python3 -> python -> py (Windows) running WrongStack-owned helper; regex fallback when unavailable",
+      "ts-parser": "in-process TypeScript compiler API",
+      "rs-parser": "in-process (no cargo subprocess at this commit)",
+      "tree-sitter-parser": "in-process WASM grammars; regex fallback on load failure or zero symbols",
+      "generic-parser": "in-process regex extractor",
+      "json-parser": "in-process",
+      "yaml-parser": "in-process"
+    },
+    "routeSourceSha256": {
+      "languages.ts": "badcae9d6fb2cbd3bc6c23d60417afbcfde3eab384bba579f94b1b1618c93e08",
+      "parser-dispatch.ts": "de5ddfb6c9a67c97694b5982a9b421808dcaf10d5ef79d018b977cc476003662",
+      "parser-batch.ts": "d5e9a0c2fae5a1adf44c3c392e6adcca6a0bb5c20fbf9a256895e6dd47310230",
+      "go-parser.ts": "d4761fca1f827249f10ee44d82df0442bb6e4176679ce910e315f32a74f3ab3a",
+      "py-parser.ts": "55269cdc86daebb2dd31ece2f9f915ec0dbea0f2b42fd2a62d15b79c2103f9c1",
+      "rs-parser.ts": "4fab6bb37f3bc29866b92d59ba59763dcf11db22408de721ccddbb26c4909a6a",
+      "ts-parser.ts": "c7cc9a334980b4370e98a06af6d6a92915e6d997c43c9a090ead7eb21e967286",
+      "tree-sitter-parser.ts": "ff8c16791428e4d642d9a764fa01ae28a7d09cf8e6e5ca1dfd7944e4eba5a8f8",
+      "generic-parser.ts": "706a6d97ee89fc30523a381719ae242b86af4b822805038c6bafb611817c4512",
+      "json-parser.ts": "32a2c08f5a2943126dfab7e18e04d17ff4851a4c15c293e02891d80154da4f7f",
+      "yaml-parser.ts": "8f60d0481278da46b14304eacf055d2abc2e88a3010305b4b03ff8a378b6a660",
+      "import-extractor.ts": "7f4fee0c65c218dce2d96c5bed3ffaf37d54ac705eb32531698a9b29ae5a4e1c"
+    },
+    "extensions": {
+      ".bash": "shell",
+      ".c": "c",
+      ".cc": "cpp",
+      ".cjs": "js",
+      ".cpp": "cpp",
+      ".cs": "csharp",
+      ".css": "css",
+      ".cts": "ts",
+      ".cxx": "cpp",
+      ".dart": "dart",
+      ".ex": "elixir",
+      ".exs": "elixir",
+      ".go": "go",
+      ".gql": "graphql",
+      ".graphql": "graphql",
+      ".h": "c",
+      ".hh": "cpp",
+      ".hpp": "cpp",
+      ".hs": "haskell",
+      ".htm": "html",
+      ".html": "html",
+      ".hxx": "cpp",
+      ".java": "java",
+      ".js": "js",
+      ".json": "json",
+      ".jsonc": "json",
+      ".jsx": "jsx",
+      ".kt": "kotlin",
+      ".kts": "kotlin",
+      ".less": "css",
+      ".lhs": "haskell",
+      ".lua": "lua",
+      ".md": "md",
+      ".mdx": "md",
+      ".mjs": "js",
+      ".mts": "ts",
+      ".php": "php",
+      ".pl": "other",
+      ".pm": "other",
+      ".proto": "proto",
+      ".ps1": "shell",
+      ".py": "py",
+      ".pyi": "py",
+      ".pyw": "py",
+      ".r": "r",
+      ".R": "r",
+      ".rb": "ruby",
+      ".rs": "rs",
+      ".sc": "scala",
+      ".scala": "scala",
+      ".scss": "css",
+      ".sh": "shell",
+      ".sql": "sql",
+      ".svelte": "svelte",
+      ".swift": "swift",
+      ".tf": "other",
+      ".tfvars": "other",
+      ".toml": "toml",
+      ".ts": "ts",
+      ".tsx": "tsx",
+      ".vue": "vue",
+      ".yaml": "yaml",
+      ".yml": "yaml",
+      ".zig": "zig",
+      ".zsh": "shell"
+    },
+    "specialFilenames": {
+      "makefile": "other",
+      "gnumakefile": "other",
+      "dockerfile": "other",
+      "docker-compose.yml": "yaml",
+      "docker-compose.yaml": "yaml",
+      "cmakelists.txt": "other",
+      "gemfile": "ruby",
+      "rakefile": "ruby",
+      "procfile": "other",
+      "justfile": "other"
+    },
+    "families": {
+      "ts": "js",
+      "tsx": "js",
+      "js": "js",
+      "jsx": "js",
+      "vue": "js",
+      "svelte": "js",
+      "go": "go",
+      "py": "py",
+      "rs": "rs",
+      "java": "jvm",
+      "kotlin": "jvm",
+      "scala": "jvm",
+      "csharp": "dotnet",
+      "c": "c",
+      "cpp": "c",
+      "ruby": "ruby",
+      "php": "php",
+      "swift": "swift",
+      "dart": "dart",
+      "elixir": "elixir",
+      "haskell": "haskell",
+      "zig": "zig",
+      "lua": "lua",
+      "r": "r",
+      "shell": "shell",
+      "sql": "sql",
+      "json": "data",
+      "yaml": "data",
+      "toml": "data",
+      "html": "web",
+      "css": "web",
+      "proto": "proto",
+      "graphql": "graphql",
+      "md": "other",
+      "other": "other"
+    },
+    "fingerprints": {
+      "contentHash": {
+        "algorithm": "xxhash64",
+        "seed": 0,
+        "format": "lowercase-hex-16",
+        "input": "utf8-encode(utf8-decode-lossy(file bytes)); BOM retained"
+      },
+      "structural": "SHA-256 canonicalization over declarations and outgoing refs (fingerprint.ts); parity fixtures pending",
+      "signatureHash": "files/symbols signature_hash per baseline writer; parity fixtures pending"
+    },
+    "positions": {
+      "line": "1-based",
+      "column": "0-based UTF-16 code units of the decoded text; a UTF-8 BOM occupies column 0"
+    },
+    "querySurface": {
+      "context": [
+        "limit",
+        "query"
+      ],
+      "fileGraph": [
+        "packageFilter"
+      ],
+      "incomingCalls": [
+        "file",
+        "limit",
+        "symbol",
+        "transitive"
+      ],
+      "outgoingCalls": [
+        "limit",
+        "symbol",
+        "transitive"
+      ],
+      "packageGraph": [],
+      "search": [
+        "file",
+        "kind",
+        "lang",
+        "limit",
+        "query"
+      ],
+      "stats": [],
+      "symbolGraph": [
+        "fileFilter"
+      ],
+      "vectorSearch": [
+        "limit",
+        "vector"
+      ]
+    }
+  }
+}

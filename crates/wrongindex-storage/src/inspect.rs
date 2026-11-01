@@ -452,6 +452,30 @@ fn analyze(
         );
         bump(Verdict::CompatibleWithUnknownData);
     }
+    // Semantic markers: same storage schema but a different engine revision.
+    // WrongStack treats a stale relation/ref marker as "rebuild everything"
+    // on its next run, so a mismatch is not silently compatible.
+    for (key, expected) in &crate::profile::baseline_semantic().semantic.version_markers {
+        if key == "version" {
+            continue;
+        }
+        match out.metadata.get(key) {
+            None => report.add(
+                Severity::Info,
+                "semantic_marker_absent",
+                format!("metadata '{key}' absent (index never finalized by this engine revision); the baseline recomputes it"),
+            ),
+            Some(actual) if actual != expected => {
+                report.add(
+                    Severity::Incompatible,
+                    "semantic_marker_mismatch",
+                    format!("metadata '{key}' is '{actual}', profile expects '{expected}'; the engine semantics differ"),
+                );
+                bump(Verdict::Divergent);
+            }
+            Some(_) => {}
+        }
+    }
     if !out.unknown_metadata_keys.is_empty() {
         bump(Verdict::CompatibleWithUnknownData);
     }
@@ -740,6 +764,22 @@ mod tests {
         let r = inspect_index(&db);
         assert_eq!(r.verdict, Verdict::RepairRequired, "{:#?}", r.findings);
         assert!(!r.write_admissible);
+    }
+
+    #[test]
+    fn semantic_marker_mismatch_is_divergent() {
+        let (_dir, db) = copy_fixture("basic-ts");
+        mutate(
+            &db,
+            "UPDATE metadata SET value = '3' WHERE key = 'relation_graph_version'",
+        );
+        let r = inspect_index(&db);
+        assert_eq!(r.verdict, Verdict::Divergent, "{:#?}", r.findings);
+        assert!(
+            r.findings
+                .iter()
+                .any(|f| f.code == "semantic_marker_mismatch")
+        );
     }
 
     #[test]

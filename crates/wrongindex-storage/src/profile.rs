@@ -46,6 +46,34 @@ pub struct Profile {
     pub metadata_keys: Vec<String>,
 }
 
+const BASELINE_SEMANTIC: &str =
+    include_str!("../../../contracts/profiles/wrongstack-index-v5-baseline/semantic.json");
+
+/// Semantic half of the profile (WI-007): version markers the baseline engine
+/// writes and the fingerprint covering storage + semantics.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticProfile {
+    pub id: String,
+    pub profile_fingerprint: String,
+    pub storage_fingerprint: String,
+    pub semantic_fingerprint: String,
+    pub semantic: SemanticSection,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticSection {
+    pub version_markers: BTreeMap<String, String>,
+}
+
+pub fn baseline_semantic() -> &'static SemanticProfile {
+    static SEMANTIC: OnceLock<SemanticProfile> = OnceLock::new();
+    SEMANTIC.get_or_init(|| {
+        serde_json::from_str(BASELINE_SEMANTIC).expect("embedded semantic profile is valid")
+    })
+}
+
 /// The current WrongStack baseline profile (`SCHEMA_VERSION` 5).
 pub fn baseline_profile() -> &'static Profile {
     static PROFILE: OnceLock<Profile> = OnceLock::new();
@@ -111,6 +139,27 @@ mod tests {
         }
         assert!(p.optional_tables.contains_key("symbol_vectors"));
         assert!(p.metadata_keys.iter().any(|k| k == "next_symbol_id"));
+    }
+
+    #[test]
+    fn semantic_profile_matches_storage_profile() {
+        let s = baseline_semantic();
+        assert_eq!(s.id, baseline_profile().id);
+        assert_eq!(s.profile_fingerprint.len(), 64);
+        assert_eq!(
+            s.semantic
+                .version_markers
+                .get("version")
+                .map(String::as_str),
+            Some("5")
+        );
+        assert_eq!(
+            s.semantic
+                .version_markers
+                .get("relation_graph_version")
+                .map(String::as_str),
+            Some("2")
+        );
     }
 
     #[test]
