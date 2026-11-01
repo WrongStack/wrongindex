@@ -33,14 +33,34 @@ fn spellings(p: &str) -> [String; 3] {
     [p.to_string(), p.replace('\\', "/"), p.replace('\\', "\\\\")]
 }
 
+/// Every registered project's paths and names, for redaction. Built from
+/// all projects (not only an exported subset), because the log and other
+/// free text can mention any of them.
+#[derive(Debug, Default)]
+pub struct Known {
+    pub paths: Vec<String>,
+    pub names: Vec<String>,
+    /// False when the project set could not be read (service unreachable):
+    /// path redaction cannot then be guaranteed for free text.
+    pub complete: bool,
+}
+
 impl Redactor {
-    pub fn new(root: &DataRoot, project_paths: &[String], redact_paths: bool) -> Self {
+    pub fn new(root: &DataRoot, known: &Known, redact_paths: bool) -> Self {
         let mut rules: Vec<(String, String)> = Vec::new();
         if redact_paths {
-            for p in project_paths {
+            for p in &known.paths {
                 let tag = format!("<path:{}>", short_hash(&p.to_lowercase()));
                 for form in spellings(p) {
                     rules.push((form, tag.clone()));
+                }
+            }
+            // Names inside free text (log lines, error messages). Applied
+            // after the full paths, which are longer and sort first.
+            for n in &known.names {
+                if n.chars().count() >= 2 {
+                    let tag = format!("<name:{}>", short_hash(&n.to_lowercase()));
+                    rules.push((n.clone(), tag));
                 }
             }
         }
@@ -153,12 +173,8 @@ fn log_tail(root: &DataRoot) -> Value {
 }
 
 /// Collect the bundle (unredacted) and the project paths to redact.
-pub async fn collect(
-    root: &DataRoot,
-    project: Option<&str>,
-    doctor: Vec<Value>,
-) -> (Value, Vec<String>) {
-    let mut paths = Vec::new();
+pub async fn collect(root: &DataRoot, project: Option<&str>, doctor: Vec<Value>) -> (Value, Known) {
+    let mut known = Known::default();
     let mut bundle = json!({
         "schema": "wrongindex.diagnostics/1",
         "generatedAtMs": std::time::SystemTime::now()
@@ -181,18 +197,29 @@ pub async fn collect(
             bundle["service"] = json!({"running": true, "health": health});
             let list = c
                 .call_raw(method::PROJECT_LIST, None, json!({}), None)
-                .await
-                .unwrap_or_default();
+                .await;
+            known.complete = list.is_ok();
+            let list = list.unwrap_or_default();
+            let all = list["projects"].as_array().cloned().unwrap_or_default();
+            for p in &all {
+                for key in ["checkoutRoot", "indexDir"] {
+                    if let Some(s) = p[key].as_str() {
+                        known.paths.push(s.to_string());
+                        let last = s.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next();
+                        if let Some(last) = last.filter(|l| !l.is_empty()) {
+                            known.names.push(last.to_string());
+                        }
+                    }
+                }
+                if let Some(n) = p["displayName"].as_str() {
+                    known.names.push(n.to_string());
+                }
+            }
             let mut projects = Vec::new();
-            for p in list["projects"].as_array().into_iter().flatten() {
+            for p in &all {
                 let id = p["projectId"].as_str().unwrap_or_default().to_string();
                 if project.is_some_and(|want| want != id) {
                     continue;
-                }
-                for key in ["checkoutRoot", "indexDir"] {
-                    if let Some(s) = p[key].as_str() {
-                        paths.push(s.to_string());
-                    }
                 }
                 let status = c
                     .call_raw(method::PROJECT_GET, Some(&id), json!({}), None)
@@ -230,7 +257,7 @@ pub async fn collect(
         }
     }
     bundle["log"] = log_tail(root);
-    (bundle, paths)
+    (bundle, known)
 }
 
 /// Category sizes for the preview.
@@ -255,8 +282,12 @@ mod tests {
         let root = DataRoot::resolve(Some(tmp.path())).unwrap();
         std::fs::create_dir_all(root.token_file().parent().unwrap()).unwrap();
         std::fs::write(root.token_file(), "s3cr3t-token-value-0123456789").unwrap();
-        let project = r"D:\Work\Secret Project".to_string();
-        let r = Redactor::new(&root, std::slice::from_ref(&project), true);
+        let known = Known {
+            paths: vec![r"D:\Work\Secret Project".to_string()],
+            names: vec!["Secret Project".into(), "Other".into()],
+            complete: true,
+        };
+        let r = Redactor::new(&root, &known, true);
         let v = json!({
             "a": r"d:\work\secret project\src\x.ts",
             "b": "D:/Work/Secret Project/y",
@@ -264,9 +295,11 @@ mod tests {
             "k": {r"D:\Work\Secret Project": 1},
             "j": r#"{"root":"D:\\Work\\Secret Project\\a"}"#,
             "displayName": "Secret Project",
+            "log": "indexed Other in 3 ms; Secret Project is current",
         });
         let out = r.value(&v).to_string();
         assert!(!out.to_lowercase().contains("secret project"), "{out}");
+        assert!(!out.contains("Other"), "{out}");
         assert!(!out.contains("s3cr3t"), "{out}");
         assert!(out.contains("<path:"), "{out}");
         assert!(out.contains("<redacted-token>"), "{out}");

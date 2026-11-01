@@ -328,8 +328,15 @@ async fn run(cli: Cli) -> Outcome {
                 },
         } => {
             let checks = doctor_checks(&root).await;
-            let (bundle, paths) = diagnostics::collect(&root, project.as_deref(), checks).await;
-            let redactor = diagnostics::Redactor::new(&root, &paths, redact_paths);
+            let (mut bundle, known) = diagnostics::collect(&root, project.as_deref(), checks).await;
+            if redact_paths && !known.complete {
+                // Fail closed: without the project set, paths in free text
+                // cannot be redacted, so the log is left out entirely.
+                bundle["log"] = json!({
+                    "omitted": "project paths unknown (service not reachable); log left out under --redact-paths",
+                });
+            }
+            let redactor = diagnostics::Redactor::new(&root, &known, redact_paths);
             let mut bundle = redactor.value(&bundle);
             // Keep the bundle bounded: drop the oldest log lines first.
             while bundle.to_string().len() > diagnostics::MAX_BUNDLE_BYTES {
