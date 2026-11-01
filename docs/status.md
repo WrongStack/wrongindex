@@ -11,17 +11,21 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | WI-000 | Done | `scripts/baseline/export.ts`: 275 contract files hashed from `HEAD` blobs. 5 `packages/core/src/utils/*` files are dirty in the inspected working tree and are listed in the manifest. |
 | WI-001 | Partial | DDL, `table_xinfo` columns, index SQL, and metadata keys exported from a real oracle database (`schema.sql`, `manifest.json`). Repair/drop behavior encoded from `writer-init.ts`. Not yet: full metadata-key audit of every writer path, SQLite compile-option capture at release. |
 | WI-002 | Done (generated) | `scripts/inventory/languages.ts` -> `contracts/inventory/languages.json`, generated from the clean oracle's sources with per-file hashes: 65 extensions, 10 special filenames, 35 languages, 8 dispatch routes (fallback order recovered from `dispatch()`), 16 languages with no dedicated route (generic regex), 17 `WRONGSTACK_*` env switches, 4 real child-process spawn sites (git discovery, project-server daemon, Python probe, Go/Python helper runner). Helper toolchains on the capture machine recorded. |
-| WI-003 | Not started | Writer/mutable-constructor inventory. |
-| WI-004 | Not started | Query/API request-response fixtures. |
+| WI-003 | Done (generated, review list) | `scripts/inventory/writers.ts` -> `contracts/inventory/writers.json`: `git grep` at the baseline commit across the whole monorepo (tests excluded). 40 mutating `IndexStore` methods (from the class hierarchy; construction itself runs the schema initializer), 43 entry points classified read/write, write-capable consumers in files importing index code: `cli`, `codebase-index-mcp`, `plugins`, `tools`, `tui`, `webui-server` (+ test reset in `docs`). 14 same-name sites in unrelated code (mailbox `clearAll`, core `resolveRefs`, chronicle/sage/coordination `spawnDetachedServer`) are listed separately as suspected collisions. Name-based: confirm per site before WI-305. |
+| WI-004 | Done (seed) | `build-fixtures.ts` runs WrongStack's in-process op dispatcher (`callInline`) over vectors derived from each fixture's symbols: stats, package/file/symbol graphs, search (every symbol name, empty, no-match, short, kind/lang/file filters, limit 1), incoming/outgoing calls (direct, transitive, file-scoped), context, vector search. 671 operations across 8 fixtures, 0 errors, recorded in `tests/fixtures/oracle/*/queries.json` with paths normalized to `<root>`/`<indexDir>` and times to `<volatile>`. Verified deterministic within one database (run twice) and across rebuilds. Results include database row IDs: differential tests must map IDs to semantic identities. Fixture `index.db` bytes are captured before any query, since opening an `IndexStore` runs the schema initializer. Not covered yet: model-facing tool serializers (skeleton, repo map, impact, flow, atlas). |
 | WI-005 | Partial | 8 fixture projects through the clean oracle: `basic-ts`, `config-only`, `go-basic` (module, receiver method, import alias), `py-basic` (package re-export, decorator, nested function, non-ASCII identifier, aliased import), `rs-basic` (trait/impl, `macro_rules!` not executed, aliased use), `treesitter-mix` (Java, C, Ruby, shell, SQL, Dockerfile), `encodings` (LF, CRLF, BOM, invalid UTF-8, empty, astral identifier), `paths-unicode` (spaces, Turkish characters). Missing: remaining tree-sitter routes (C++, C#, PHP, Swift, Kotlin, Elixir), resolution/rename/delete edit sequences, optional-table and storage-history fixtures, long/UNC/junction paths. |
 | WI-006 | Done (seed corpus) | `scripts/oracle/prepare-clean-wrongstack.ts` `git archive`s the baseline commit (root manifests, `scripts/`, 8 workspace packages), junctions third-party `node_modules` (pinned by the archived `bun.lock`, hash recorded), redirects every `@wrongstack/*` into the archive, and rebuilds 6 workspace dists from archived source (~14 s). `build-fixtures.ts` detects `.wrongindex-oracle.json` and records archive/lock/dist hashes; fixtures are no longer provisional. The clean oracle reproduced the earlier working-tree fixtures exactly (metadata, files, symbols, refs, ranks, 17 KATs, profile manifest). Remaining: oracle covers only two fixture projects (see WI-005). |
 | WI-007 | Started | Storage profile manifest exists; semantic (parser/ranking/query) profile does not. |
-| WI-008 | Not started | Baseline performance/process tree. |
+| WI-008 | Done (first baseline) | `scripts/bench/baseline.ts`: 5 isolated Bun processes, corpus = `src/` of 8 WrongStack packages as a Git repo (1,556 files, 38.5 MB, 1,542 indexed, 18,253 symbols). Median (min-max) ms: cold full 4,980 (4,830-4,999); no-op full 405 (309-537); targeted no-op 3 (2-5); 1-file edit 32 (26-36); 10-file edit 57 (57-67). Peak RSS 376 MiB. 0 errors. In-process indexer only (no IPC/watcher latency). Machine: Ryzen 9 9950X3D, 32 logical CPUs, 126 GiB - much stronger than the plan's reference machine, so these do not calibrate the budgets yet. Process-tree capture: NOT RUN. |
 | WI-009 | Partial | WrongIndex is MIT (same license and holder as WrongStack). No WrongStack code extracted yet; extraction review still required per file. |
 
 Finding recorded during M0: `files.content_hash` is xxHash64 of `utf8(readFile(file, 'utf8'))`, not of the raw bytes. For invalid UTF-8 the stored hash differs from the raw-byte hash. The Rust port uses `String::from_utf8_lossy`, which matches all 17 known answers including five invalid-UTF-8 cases.
 
 Finding: the oracle shows an import alias (`import { greet as hello }`) whose call ref stays unresolved (`to_id = NULL`). This is baseline behavior to preserve, not a WrongIndex bug.
+
+Finding (resolver port): `crates/wrongindex-storage/src/wrongstack_paths.rs` ports `resolveWstackPaths(...).projectCodebaseIndex` (on-disk case, linked-worktree identity, slug + SHA-256 prefix, per-worktree index dirs, `WRONGSTACK_HOME`). `scripts/oracle/resolver-diff.ts` compares it with the real resolver on live scenarios: 14/14 match (plain, case variants, trailing/forward slashes, dot segments, non-ASCII, 40-char slug cap, slug-less name, real `git worktree` main + linked, submodule-style gitdir, malformed `.git`, junction). `wrongindex project add` no longer needs `--index-dir`; `wrongindex resolve-index-dir` prints the location.
+
+Finding (production check): read-only `wrongindex inspect` of this machine's live WrongStack index (343 MB; 19,352 files, 172,152 symbols, 680,728 refs) returns `compatible` with no unknown metadata keys; `index.db` SHA-256 identical before and after.
 
 Finding (WI-002): `.go` and `.py` parse output depends on helper toolchains at index time (`go run` of a WrongStack-owned helper; `python3`/`python`/`py`). Without them WrongStack silently falls back to the regex extractor, so baseline output is machine-dependent. Oracle provenance now records the toolchains (capture machine: go 1.27.0, Python 3.14.8; `python3` is the Windows Store stub). The native replacement must either match the helper output or declare the difference.
 
@@ -55,7 +59,8 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 49 tests (contracts 4, storage 16, registry 11, ipc 14, daemon integration 4); storage includes oracle-hash parity over all 28 fixture files |
+| `cargo test --workspace` | PASS — 54 tests (contracts 4, storage 21, registry 11, ipc 14, daemon integration 4); storage includes oracle-hash parity over all fixture files and resolver KATs |
+| `bun scripts/oracle/resolver-diff.ts` | PASS — 14/14 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
 | Manual CLI smoke against a temp data root | start/idempotent start/add/conflict/check/rebuild-refused/status/doctor/stop/inspect behaved as specified |
@@ -77,7 +82,6 @@ CI on the security fix (run 41294030531) FAILED, exposing a real environment cas
 
 ## Next tasks
 
-1. WI-003 writer/mutable-constructor inventory; WI-004 query/API fixtures (search, stats, graphs, calls, context) captured through the clean oracle.
-2. WI-005 remainder (see table) and WI-008 baseline timings/process tree.
-3. Port WrongStack's index-path resolver (`wstack-paths.ts`) behind shared fixtures so `--index-dir` becomes optional.
-4. WI-109 ownership guard, then M2 (WI-200..209): leases, watcher, scheduler.
+1. WI-007 semantic profile manifest (parser/ranking/query identifiers), then close M0 with the WI-005 remainder.
+2. WI-109 ownership guard and epochs.
+3. M2 (WI-200..209): session leases, Windows watcher, dirty sets/debounce, fair scheduler, discovery port (with git isolation), reconciliation.

@@ -1,0 +1,3284 @@
+{
+  "fixture": "basic-ts",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 14,
+        "totalFiles": 4,
+        "byLang": {
+          "json": 4,
+          "ts": 8,
+          "tsx": 2
+        },
+        "byKind": {
+          "class": 1,
+          "const": 1,
+          "function": 4,
+          "method": 2,
+          "mod": 2,
+          "object": 1,
+          "property": 3
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:basic-ts",
+            "label": "basic-ts",
+            "kind": "package",
+            "package": "basic-ts",
+            "symbolCount": 14,
+            "fileCount": 4,
+            "rank": 1
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "basic-ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/package.json",
+            "label": "package.json",
+            "kind": "file",
+            "package": "basic-ts",
+            "file": "<root>/package.json",
+            "symbolCount": 4,
+            "lang": "json",
+            "external": false,
+            "lastModifiedMs": 1793524167841
+          },
+          {
+            "id": "file:<root>/src/greet.ts",
+            "label": "greet.ts",
+            "kind": "file",
+            "package": "basic-ts",
+            "file": "<root>/src/greet.ts",
+            "symbolCount": 3,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793524167869,
+            "rank": 0.5878986402555934
+          },
+          {
+            "id": "file:<root>/src/runner.ts",
+            "label": "runner.ts",
+            "kind": "file",
+            "package": "basic-ts",
+            "file": "<root>/src/runner.ts",
+            "symbolCount": 5,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793524167891,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/src/view.tsx",
+            "label": "view.tsx",
+            "kind": "file",
+            "package": "basic-ts",
+            "file": "<root>/src/view.tsx",
+            "symbolCount": 2,
+            "lang": "tsx",
+            "external": false,
+            "lastModifiedMs": 1793524167916,
+            "rank": 0.1757972805111868
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/src/view.tsx",
+            "target": "file:<root>/src/runner.ts",
+            "weight": 2,
+            "refType": "call"
+          },
+          {
+            "source": "file:<root>/src/runner.ts",
+            "target": "file:<root>/src/greet.ts",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/package.json"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "package.json",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "object",
+            "file": "<root>/package.json",
+            "package": "basic-ts",
+            "lang": "json",
+            "line": 1,
+            "signature": "\"package.json\" = { ... }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167841
+          },
+          {
+            "id": "sym:2",
+            "label": "name",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "property",
+            "file": "<root>/package.json",
+            "package": "basic-ts",
+            "lang": "json",
+            "line": 1,
+            "signature": "\"name\": ...",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167841
+          },
+          {
+            "id": "sym:3",
+            "label": "version",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "property",
+            "file": "<root>/package.json",
+            "package": "basic-ts",
+            "lang": "json",
+            "line": 1,
+            "signature": "\"version\": ...",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167841
+          },
+          {
+            "id": "sym:4",
+            "label": "type",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "property",
+            "file": "<root>/package.json",
+            "package": "basic-ts",
+            "lang": "json",
+            "line": 1,
+            "signature": "\"type\": ...",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167841
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/greet.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:5",
+            "label": "greet",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "function",
+            "file": "<root>/src/greet.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function greet(name: string): string",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167869,
+            "rank": 1
+          },
+          {
+            "id": "sym:6",
+            "label": "helper",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "function",
+            "file": "<root>/src/greet.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 6,
+            "signature": "function helper(n: string): string",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167869,
+            "rank": 1
+          },
+          {
+            "id": "sym:7",
+            "label": "çağrı",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "const",
+            "file": "<root>/src/greet.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 10,
+            "signature": "çağrı = (x: number) => x * 2",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167869
+          },
+          {
+            "id": "sym:8",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "mod",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793524167891
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:5",
+            "target": "sym:6",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:8",
+            "target": "sym:5",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/runner.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:8",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "mod",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167891
+          },
+          {
+            "id": "sym:9",
+            "label": "Runner",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "class",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 3,
+            "signature": "export class Runner {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167891,
+            "rank": 1
+          },
+          {
+            "id": "sym:10",
+            "label": "run",
+            "kind": "symbol",
+            "symbolId": 10,
+            "symbolKind": "method",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 4,
+            "signature": "run(): string",
+            "scope": "Runner",
+            "external": false,
+            "lastModifiedMs": 1793524167891
+          },
+          {
+            "id": "sym:11",
+            "label": "create",
+            "kind": "symbol",
+            "symbolId": 11,
+            "symbolKind": "method",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 7,
+            "signature": "static create(): Runner",
+            "scope": "Runner",
+            "external": false,
+            "lastModifiedMs": 1793524167891,
+            "rank": 0.5092648389298033
+          },
+          {
+            "id": "sym:12",
+            "label": "main",
+            "kind": "symbol",
+            "symbolId": 12,
+            "symbolKind": "function",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 12,
+            "signature": "export default function main(): void",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167891,
+            "rank": 0.32191674206022197
+          },
+          {
+            "id": "sym:5",
+            "label": "greet",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "function",
+            "file": "<root>/src/greet.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function greet(name: string): string",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793524167869,
+            "rank": 0.5382745807625618
+          },
+          {
+            "id": "sym:13",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 13,
+            "symbolKind": "mod",
+            "file": "<root>/src/view.tsx",
+            "package": "basic-ts",
+            "lang": "tsx",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793524167916
+          },
+          {
+            "id": "sym:14",
+            "label": "View",
+            "kind": "symbol",
+            "symbolId": 14,
+            "symbolKind": "function",
+            "file": "<root>/src/view.tsx",
+            "package": "basic-ts",
+            "lang": "tsx",
+            "line": 3,
+            "signature": "export function View(props: { label: string })",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793524167916,
+            "rank": 0.32191674206022197
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:8",
+            "target": "sym:5",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:11",
+            "target": "sym:9",
+            "weight": 2,
+            "refType": "call"
+          },
+          {
+            "source": "sym:12",
+            "target": "sym:9",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:13",
+            "target": "sym:9",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:14",
+            "target": "sym:9",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/view.tsx"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:13",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 13,
+            "symbolKind": "mod",
+            "file": "<root>/src/view.tsx",
+            "package": "basic-ts",
+            "lang": "tsx",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167916
+          },
+          {
+            "id": "sym:14",
+            "label": "View",
+            "kind": "symbol",
+            "symbolId": 14,
+            "symbolKind": "function",
+            "file": "<root>/src/view.tsx",
+            "package": "basic-ts",
+            "lang": "tsx",
+            "line": 3,
+            "signature": "export function View(props: { label: string })",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167916,
+            "rank": 1
+          },
+          {
+            "id": "sym:9",
+            "label": "Runner",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "class",
+            "file": "<root>/src/runner.ts",
+            "package": "basic-ts",
+            "lang": "ts",
+            "line": 3,
+            "signature": "export class Runner {",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793524167891,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:13",
+            "target": "sym:9",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:14",
+            "target": "sym:9",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Runner",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/runner.ts",
+            "line": 3,
+            "col": 13,
+            "signature": "export class Runner {",
+            "docComment": "",
+            "score": 2.5279416614382297,
+            "snippet": "Runner Runner …"
+          },
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "method",
+            "name": "create",
+            "file": "<root>/src/runner.ts",
+            "line": 7,
+            "col": 9,
+            "signature": "static create(): Runner",
+            "docComment": "",
+            "score": 1.5690588587817598,
+            "snippet": "…eate(): Runner"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "View",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 14,
+            "lang": "tsx",
+            "kind": "function",
+            "name": "View",
+            "file": "<root>/src/view.tsx",
+            "line": 3,
+            "col": 16,
+            "signature": "export function View(props: { label: string })",
+            "docComment": "",
+            "score": 3.0364152695658726,
+            "snippet": "View View expo…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "create",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "method",
+            "name": "create",
+            "file": "<root>/src/runner.ts",
+            "line": 7,
+            "col": 9,
+            "signature": "static create(): Runner",
+            "docComment": "",
+            "score": 3.40685700402751,
+            "snippet": "create create …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "greet",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "ts",
+            "kind": "function",
+            "name": "greet",
+            "file": "<root>/src/greet.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function greet(name: string): string",
+            "docComment": "Greets a person by name.",
+            "score": 3.0062057486552147,
+            "snippet": "greet greet ex…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "helper",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "ts",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/src/greet.ts",
+            "line": 6,
+            "col": 9,
+            "signature": "function helper(n: string): string",
+            "docComment": "",
+            "score": 3.182100765863764,
+            "snippet": "helper helper …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "main",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 12,
+            "lang": "ts",
+            "kind": "function",
+            "name": "main",
+            "file": "<root>/src/runner.ts",
+            "line": 12,
+            "col": 24,
+            "signature": "export default function main(): void",
+            "docComment": "",
+            "score": 3.2207330052527734,
+            "snippet": "main main expo…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "name",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "json",
+            "kind": "property",
+            "name": "name",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 2,
+            "signature": "\"name\": ...",
+            "docComment": "",
+            "score": 2.7812096282001444,
+            "snippet": "name name \"nam…"
+          },
+          {
+            "id": 5,
+            "lang": "ts",
+            "kind": "function",
+            "name": "greet",
+            "file": "<root>/src/greet.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function greet(name: string): string",
+            "docComment": "Greets a person by name.",
+            "score": 1.5978580889732903,
+            "snippet": "…reet(name: str…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "package.json",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "json",
+            "kind": "object",
+            "name": "package.json",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 0,
+            "signature": "\"package.json\" = { ... }",
+            "docComment": "",
+            "score": 6.288768636473527,
+            "snippet": "package.json p…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "run",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "ts",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/runner.ts",
+            "line": 4,
+            "col": 2,
+            "signature": "run(): string",
+            "docComment": "",
+            "score": 2.0556758572558276,
+            "snippet": "run run run():…"
+          },
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/runner.ts",
+            "line": 3,
+            "col": 13,
+            "signature": "export class Runner {",
+            "docComment": "",
+            "score": 1.868477869944936,
+            "snippet": "Runner Runner …"
+          },
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "method",
+            "name": "create",
+            "file": "<root>/src/runner.ts",
+            "line": 7,
+            "col": 9,
+            "signature": "static create(): Runner",
+            "docComment": "",
+            "score": 1.1597386913615737,
+            "snippet": "…eate(): Runner"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "type",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "json",
+            "kind": "property",
+            "name": "type",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 42,
+            "signature": "\"type\": ...",
+            "docComment": "",
+            "score": 3.7969418407469657,
+            "snippet": "type type \"typ…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "version",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "json",
+            "kind": "property",
+            "name": "version",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 22,
+            "signature": "\"version\": ...",
+            "docComment": "",
+            "score": 3.5671925185439313,
+            "snippet": "version versio…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "çağrı",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "ts",
+            "kind": "const",
+            "name": "çağrı",
+            "file": "<root>/src/greet.ts",
+            "line": 10,
+            "col": 13,
+            "signature": "çağrı = (x: number) => x * 2",
+            "docComment": "",
+            "score": 3.3424706259702925,
+            "snippet": "çağrı çağrı ça…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "json",
+            "kind": "object",
+            "name": "package.json",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 0,
+            "signature": "\"package.json\" = { ... }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 2,
+            "lang": "json",
+            "kind": "property",
+            "name": "name",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 2,
+            "signature": "\"name\": ...",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 3,
+            "lang": "json",
+            "kind": "property",
+            "name": "version",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 22,
+            "signature": "\"version\": ...",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "json",
+            "kind": "property",
+            "name": "type",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 42,
+            "signature": "\"type\": ...",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "ts",
+            "kind": "function",
+            "name": "greet",
+            "file": "<root>/src/greet.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function greet(name: string): string",
+            "docComment": "Greets a person by name.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "ts",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/src/greet.ts",
+            "line": 6,
+            "col": 9,
+            "signature": "function helper(n: string): string",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "ts",
+            "kind": "const",
+            "name": "çağrı",
+            "file": "<root>/src/greet.ts",
+            "line": 10,
+            "col": 13,
+            "signature": "çağrı = (x: number) => x * 2",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/runner.ts",
+            "line": 3,
+            "col": 13,
+            "signature": "export class Runner {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 10,
+            "lang": "ts",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/runner.ts",
+            "line": 4,
+            "col": 2,
+            "signature": "run(): string",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "method",
+            "name": "create",
+            "file": "<root>/src/runner.ts",
+            "line": 7,
+            "col": 9,
+            "signature": "static create(): Runner",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 12
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "ts",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/runner.ts",
+            "line": 4,
+            "col": 2,
+            "signature": "run(): string",
+            "docComment": "",
+            "score": 2.5607284638187306,
+            "snippet": "run run run(): string"
+          },
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/runner.ts",
+            "line": 3,
+            "col": 13,
+            "signature": "export class Runner {",
+            "docComment": "",
+            "score": 2.4340493171987228,
+            "snippet": "Runner Runner export class Runner {"
+          },
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "method",
+            "name": "create",
+            "file": "<root>/src/runner.ts",
+            "line": 7,
+            "col": 9,
+            "signature": "static create(): Runner",
+            "docComment": "",
+            "score": 1.4645697167269423,
+            "snippet": "create create static create(): Runner"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "class",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "const",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "method",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "object",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "property",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "json",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "ts",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "tsx",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/package.json",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 4,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "type",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "type",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "type",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "type",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "type",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "greet",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 8,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "greet",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "helper",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 6,
+              "signature": "function helper(n: string): string"
+            },
+            "callType": "call",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "greet",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 8,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "greet",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "helper",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 6,
+              "signature": "function helper(n: string): string"
+            },
+            "callType": "call",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "greet",
+        "file": "<root>/src/greet.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 8,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "call",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "call",
+            "line": 3
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "file": "<root>/src/greet.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "call",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çağrı",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "çağrı",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çağrı",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "çağrı",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çağrı",
+        "file": "<root>/src/greet.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "helper",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 6,
+              "signature": "function helper(n: string): string"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/src/runner.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 14,
+              "name": "View",
+              "kind": "function",
+              "lang": "tsx",
+              "file": "<root>/src/view.tsx",
+              "line": 3,
+              "signature": "export function View(props: { label: string })"
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 11,
+              "name": "create",
+              "kind": "method",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 7,
+              "signature": "static create(): Runner"
+            },
+            "callType": "type_ref",
+            "line": 7
+          },
+          {
+            "symbol": {
+              "id": 11,
+              "name": "create",
+              "kind": "method",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 7,
+              "signature": "static create(): Runner"
+            },
+            "callType": "call",
+            "line": 8
+          },
+          {
+            "symbol": {
+              "id": 12,
+              "name": "main",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 12,
+              "signature": "export default function main(): void"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 4
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 14,
+              "name": "View",
+              "kind": "function",
+              "lang": "tsx",
+              "file": "<root>/src/view.tsx",
+              "line": 3,
+              "signature": "export function View(props: { label: string })"
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 11,
+              "name": "create",
+              "kind": "method",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 7,
+              "signature": "static create(): Runner"
+            },
+            "callType": "type_ref",
+            "line": 7
+          },
+          {
+            "symbol": {
+              "id": 12,
+              "name": "main",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 12,
+              "signature": "export default function main(): void"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "file": "<root>/src/runner.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 14,
+              "name": "View",
+              "kind": "function",
+              "lang": "tsx",
+              "file": "<root>/src/view.tsx",
+              "line": 3,
+              "signature": "export function View(props: { label: string })"
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 11,
+              "name": "create",
+              "kind": "method",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 7,
+              "signature": "static create(): Runner"
+            },
+            "callType": "type_ref",
+            "line": 7
+          },
+          {
+            "symbol": {
+              "id": 11,
+              "name": "create",
+              "kind": "method",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 7,
+              "signature": "static create(): Runner"
+            },
+            "callType": "call",
+            "line": 8
+          },
+          {
+            "symbol": {
+              "id": 12,
+              "name": "main",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 12,
+              "signature": "export default function main(): void"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 4
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "file": "<root>/src/runner.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "create",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "create",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "type_ref",
+            "line": 7
+          },
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "call",
+            "line": 8
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "create",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "create",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "type_ref",
+            "line": 7
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "create",
+        "file": "<root>/src/runner.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "file": "<root>/src/runner.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "greet",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 2,
+              "signature": "export function greet(name: string): string"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "helper",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/src/greet.ts",
+              "line": 6,
+              "signature": "function helper(n: string): string"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/src/view.tsx",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "View",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "View",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "View",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "View",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "Runner",
+              "kind": "class",
+              "lang": "ts",
+              "file": "<root>/src/runner.ts",
+              "line": 3,
+              "signature": "export class Runner {"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "View",
+        "file": "<root>/src/view.tsx",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> Runner View",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "src/runner.ts",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "Runner",
+                "kind": "class",
+                "line": 3,
+                "signature": "export class Runner {",
+                "seed": true
+              },
+              {
+                "name": "create",
+                "kind": "method",
+                "line": 7,
+                "signature": "static create(): Runner",
+                "seed": true
+              },
+              {
+                "name": "main",
+                "kind": "function",
+                "line": 12,
+                "signature": "export default function main(): void",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "src/view.tsx",
+            "relevance": 0.40944047953063506,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "View",
+                "kind": "function",
+                "line": 3,
+                "signature": "export function View(props: { label: string })",
+                "seed": true
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 2,
+        "query": "<module> Runner View",
+        "seedCount": 3,
+        "semanticSeedCount": 0,
+        "indexStatus": "ok"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

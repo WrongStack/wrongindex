@@ -1,0 +1,2075 @@
+{
+  "fixture": "config-only",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 10,
+        "totalFiles": 3,
+        "byLang": {
+          "json": 5,
+          "yaml": 5
+        },
+        "byKind": {
+          "const": 1,
+          "function": 1,
+          "literal": 2,
+          "object": 1,
+          "property": 5
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:(root)",
+            "label": "(root)",
+            "kind": "package",
+            "package": "(root)",
+            "symbolCount": 10,
+            "fileCount": 3
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "(root)"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/config/app.yaml",
+            "label": "app.yaml",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/config/app.yaml",
+            "symbolCount": 5,
+            "lang": "yaml",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          },
+          {
+            "id": "file:<root>/package.json",
+            "label": "package.json",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/package.json",
+            "symbolCount": 5,
+            "lang": "json",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/config/app.yaml"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "server",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "property",
+            "file": "<root>/config/app.yaml",
+            "package": "(root)",
+            "lang": "yaml",
+            "line": 1,
+            "signature": "server: ",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          },
+          {
+            "id": "sym:2",
+            "label": "port",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "literal",
+            "file": "<root>/config/app.yaml",
+            "package": "(root)",
+            "lang": "yaml",
+            "line": 2,
+            "signature": "port: 8080",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          },
+          {
+            "id": "sym:3",
+            "label": "hosts",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "property",
+            "file": "<root>/config/app.yaml",
+            "package": "(root)",
+            "lang": "yaml",
+            "line": 3,
+            "signature": "hosts: ",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          },
+          {
+            "id": "sym:4",
+            "label": "features",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "property",
+            "file": "<root>/config/app.yaml",
+            "package": "(root)",
+            "lang": "yaml",
+            "line": 6,
+            "signature": "features: ",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          },
+          {
+            "id": "sym:5",
+            "label": "search",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "literal",
+            "file": "<root>/config/app.yaml",
+            "package": "(root)",
+            "lang": "yaml",
+            "line": 7,
+            "signature": "search: true",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167970
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/config/empty.json"
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/package.json"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:6",
+            "label": "package.json",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "object",
+            "file": "<root>/package.json",
+            "package": "(root)",
+            "lang": "json",
+            "line": 1,
+            "signature": "\"package.json\" = { ... }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          },
+          {
+            "id": "sym:7",
+            "label": "name",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "property",
+            "file": "<root>/package.json",
+            "package": "(root)",
+            "lang": "json",
+            "line": 2,
+            "signature": "\"name\": ...",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          },
+          {
+            "id": "sym:8",
+            "label": "version",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "property",
+            "file": "<root>/package.json",
+            "package": "(root)",
+            "lang": "json",
+            "line": 3,
+            "signature": "\"version\": ...",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          },
+          {
+            "id": "sym:9",
+            "label": "scripts",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "const",
+            "file": "<root>/package.json",
+            "package": "(root)",
+            "lang": "json",
+            "line": 4,
+            "signature": "\"scripts\": { ... }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          },
+          {
+            "id": "sym:10",
+            "label": "build",
+            "kind": "symbol",
+            "symbolId": 10,
+            "symbolKind": "function",
+            "file": "<root>/package.json",
+            "package": "(root)",
+            "lang": "json",
+            "line": 4,
+            "signature": "\"build\": \"...\"",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793524167943
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "build build \"b…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "features",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "features",
+            "file": "<root>/config/app.yaml",
+            "line": 6,
+            "col": 0,
+            "signature": "features: ",
+            "docComment": "",
+            "score": 2.890905428500167,
+            "snippet": "features featu…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "hosts",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "hosts",
+            "file": "<root>/config/app.yaml",
+            "line": 3,
+            "col": 2,
+            "signature": "hosts: ",
+            "docComment": "",
+            "score": 3.125585063405472,
+            "snippet": "hosts hosts ho…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "name",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "json",
+            "kind": "property",
+            "name": "name",
+            "file": "<root>/package.json",
+            "line": 2,
+            "col": 2,
+            "signature": "\"name\": ...",
+            "docComment": "",
+            "score": 3.070199622234672,
+            "snippet": "name name \"nam…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "package.json",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "json",
+            "kind": "object",
+            "name": "package.json",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 0,
+            "signature": "\"package.json\" = { ... }",
+            "docComment": "",
+            "score": 4.885195451544455,
+            "snippet": "package.json p…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "port",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "yaml",
+            "kind": "literal",
+            "name": "port",
+            "file": "<root>/config/app.yaml",
+            "line": 2,
+            "col": 2,
+            "signature": "port: 8080",
+            "docComment": "",
+            "score": 3.097644791682539,
+            "snippet": "port port port…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "scripts",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "json",
+            "kind": "const",
+            "name": "scripts",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 2,
+            "signature": "\"scripts\": { ... }",
+            "docComment": "",
+            "score": 2.7530974366754766,
+            "snippet": "scripts script…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "search",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "yaml",
+            "kind": "literal",
+            "name": "search",
+            "file": "<root>/config/app.yaml",
+            "line": 7,
+            "col": 2,
+            "signature": "search: true",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "search search …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "server",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "server",
+            "file": "<root>/config/app.yaml",
+            "line": 1,
+            "col": 0,
+            "signature": "server: ",
+            "docComment": "",
+            "score": 3.043236510798185,
+            "snippet": "server server …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "version",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 8,
+            "lang": "json",
+            "kind": "property",
+            "name": "version",
+            "file": "<root>/package.json",
+            "line": 3,
+            "col": 2,
+            "signature": "\"version\": ...",
+            "docComment": "",
+            "score": 2.8434616851440375,
+            "snippet": "version versio…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "server",
+            "file": "<root>/config/app.yaml",
+            "line": 1,
+            "col": 0,
+            "signature": "server: ",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 2,
+            "lang": "yaml",
+            "kind": "literal",
+            "name": "port",
+            "file": "<root>/config/app.yaml",
+            "line": 2,
+            "col": 2,
+            "signature": "port: 8080",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 3,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "hosts",
+            "file": "<root>/config/app.yaml",
+            "line": 3,
+            "col": 2,
+            "signature": "hosts: ",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "yaml",
+            "kind": "property",
+            "name": "features",
+            "file": "<root>/config/app.yaml",
+            "line": 6,
+            "col": 0,
+            "signature": "features: ",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "yaml",
+            "kind": "literal",
+            "name": "search",
+            "file": "<root>/config/app.yaml",
+            "line": 7,
+            "col": 2,
+            "signature": "search: true",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "json",
+            "kind": "object",
+            "name": "package.json",
+            "file": "<root>/package.json",
+            "line": 1,
+            "col": 0,
+            "signature": "\"package.json\" = { ... }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "json",
+            "kind": "property",
+            "name": "name",
+            "file": "<root>/package.json",
+            "line": 2,
+            "col": 2,
+            "signature": "\"name\": ...",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 8,
+            "lang": "json",
+            "kind": "property",
+            "name": "version",
+            "file": "<root>/package.json",
+            "line": 3,
+            "col": 2,
+            "signature": "\"version\": ...",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 9,
+            "lang": "json",
+            "kind": "const",
+            "name": "scripts",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 2,
+            "signature": "\"scripts\": { ... }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 10
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "bui",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "build build \"b…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "kind": "const",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "build build \"b…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "kind": "literal",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "kind": "object",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "kind": "property",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "lang": "json",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "build build \"b…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "lang": "yaml",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "file": "<root>/config/app.yaml",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "limit": 1
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "json",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/package.json",
+            "line": 4,
+            "col": 15,
+            "signature": "\"build\": \"...\"",
+            "docComment": "",
+            "score": 2.9399592536444,
+            "snippet": "build build \"b…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "server",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "server",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "server",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "server",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "server",
+        "file": "<root>/config/app.yaml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "port",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "port",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "port",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "port",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "port",
+        "file": "<root>/config/app.yaml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "hosts",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "hosts",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "hosts",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "hosts",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "hosts",
+        "file": "<root>/config/app.yaml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "features",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "features",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "features",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "features",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "features",
+        "file": "<root>/config/app.yaml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "search",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "search",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "search",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "search",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "search",
+        "file": "<root>/config/app.yaml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package.json",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package.json",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "name",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "version",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "version",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "scripts",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "scripts",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "scripts",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "scripts",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "scripts",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "file": "<root>/package.json",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "build features hosts",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "config/app.yaml",
+            "relevance": 1,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "hosts",
+                "kind": "property",
+                "line": 3,
+                "signature": "hosts: ",
+                "seed": false
+              },
+              {
+                "name": "features",
+                "kind": "property",
+                "line": 6,
+                "signature": "features: ",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "package.json",
+            "relevance": 0.9406108597285067,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "build",
+                "kind": "function",
+                "line": 4,
+                "signature": "\"build\": \"...\"",
+                "seed": false
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 2,
+        "query": "build features hosts",
+        "seedCount": 3,
+        "semanticSeedCount": 0,
+        "indexStatus": "unranked"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

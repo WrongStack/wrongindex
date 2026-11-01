@@ -60,6 +60,8 @@ if (head !== baseline.commit) {
 const base = `${resolve(wrongstack)}/packages/tools/src/codebase-index`;
 const { IndexStore } = await import(`${base}/writer.ts`);
 const { runIndexerWithStore } = await import(`${base}/indexer.ts`);
+const { callInline } = await import(`${base}/index-inline.ts`);
+const { indexStorePool } = await import(`${base}/writer.ts`);
 const { xxhash64Hex, xxhash64String } = await import(`${base}/content-hash.ts`);
 
 /** Metadata values that legitimately differ per run. */
@@ -163,7 +165,18 @@ async function buildFixture(name: string, env: Record<string, string>) {
       objects.filter((o) => o.type === 'table' && o.name !== 'symbols_fts').map((o) => [o.name, tableColumns(db, o.name)]),
     );
     db.close();
-    return { root, work, dbPath, result, snap, objects, columns };
+    // Capture the published bytes before any query: opening an IndexStore runs
+    // WrongStack's schema initializer, which is itself a potential mutation.
+    const dbBytes = readFileSync(dbPath);
+    // WI-004: public query operations, run twice to prove they are
+    // deterministic over one database before recording them.
+    const queries = await captureQueries(root, indexDir, snap);
+    const again = await captureQueries(root, indexDir, snap);
+    indexStorePool.closeAll();
+    if (JSON.stringify(queries) !== JSON.stringify(again)) {
+      throw new Error(`${name}: query results are not deterministic over the same database`);
+    }
+    return { root, work, dbPath, dbBytes, result, snap, objects, columns, queries };
   } finally {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k];
@@ -173,6 +186,91 @@ async function buildFixture(name: string, env: Record<string, string>) {
 }
 
 const sha256 = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
+
+/** Values that legitimately differ per run (times), never semantic output. */
+const VOLATILE_KEYS = /^(lastIndexed|last_indexed|durationMs|elapsedMs|indexedAt|generatedAt|mtimeMs|mtime_ms|timestamp)$/;
+
+/** Make results machine-independent: project paths become `<root>/rel/path`. */
+function normalize(value: unknown, root: string, key = ''): unknown {
+  if (VOLATILE_KEYS.test(key) && (typeof value === 'number' || typeof value === 'string')) return '<volatile>';
+  if (typeof value === 'string') {
+    // Index dir is a sibling of the project root under the fixture work dir.
+    const indexDir = join(root, '..', 'index');
+    let out = value;
+    for (const [needle, label] of [
+      [root, '<root>'],
+      [indexDir, '<indexDir>'],
+    ] as const) {
+      for (const v of [needle, needle.split(sep).join('/')]) {
+        if (out.includes(v)) {
+          out = out
+            .split(v)
+            .join(label)
+            .replace(new RegExp(`${label}[^\\s"'),]*`, 'g'), (m) => m.split('\\').join('/'));
+        }
+      }
+    }
+    return out;
+  }
+  if (Array.isArray(value)) return value.map((v) => normalize(v, root));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, root, k)]));
+  }
+  return value;
+}
+
+type Snap = ReturnType<typeof snapshot>;
+
+/** Query vectors derived from the fixture's own symbols (compatibility §8). */
+function queryVectors(root: string, indexDir: string, snap: Snap): Array<{ op: string; args: Record<string, unknown> }> {
+  const abs = (rel: string) => join(root, rel.replace(/^<root>\//, ''));
+  const base = { projectRoot: root, indexDir };
+  const vectors: Array<{ op: string; args: Record<string, unknown> }> = [];
+  const names = [...new Set(snap.symbols.map((s) => String(s.name)))].sort();
+  const files = [...new Set(snap.files.map((f) => String(f.file)))].sort();
+  const packages = [...new Set(snap.files.map((f) => String(f.package ?? '')))].sort();
+  const kinds = [...new Set(snap.symbols.map((s) => String(s.kind)))].sort();
+  const langs = [...new Set(snap.symbols.map((s) => String(s.lang)))].sort();
+
+  vectors.push({ op: 'stats', args: { ...base } });
+  vectors.push({ op: 'packageGraph', args: { ...base } });
+  for (const pkg of ['', ...packages.filter(Boolean)]) vectors.push({ op: 'fileGraph', args: { ...base, packageFilter: pkg } });
+  for (const f of files) vectors.push({ op: 'symbolGraph', args: { ...base, fileFilter: abs(f) } });
+  for (const q of [...names, '', 'zzzz_no_match', 'ru', names[0]?.slice(0, 3) ?? 'abc']) {
+    vectors.push({ op: 'search', args: { ...base, query: q, limit: 10 } });
+  }
+  for (const kind of kinds) vectors.push({ op: 'search', args: { ...base, query: names[0] ?? 'a', kind, limit: 5 } });
+  for (const lang of langs) vectors.push({ op: 'search', args: { ...base, query: names[0] ?? 'a', lang, limit: 5 } });
+  if (files[0]) vectors.push({ op: 'search', args: { ...base, query: names[0] ?? 'a', file: abs(files[0]), limit: 5 } });
+  vectors.push({ op: 'search', args: { ...base, query: names[0] ?? 'a', limit: 1 } });
+  for (const sym of snap.symbols) {
+    const name = String(sym.name);
+    for (const transitive of [false, true]) {
+      vectors.push({ op: 'incomingCalls', args: { ...base, symbol: name, transitive, limit: 50 } });
+      vectors.push({ op: 'outgoingCalls', args: { ...base, symbol: name, transitive, limit: 50 } });
+    }
+    vectors.push({ op: 'incomingCalls', args: { ...base, symbol: name, file: abs(String(sym.file)), limit: 50 } });
+  }
+  vectors.push({ op: 'context', args: { ...base, query: names.slice(0, 3).join(' ') || 'x', limit: 5 } });
+  vectors.push({ op: 'context', args: { ...base, query: 'zzzz_no_match', limit: 5 } });
+  vectors.push({ op: 'vectorSearch', args: { ...base, vector: new Array(384).fill(0.01), limit: 5 } });
+  return vectors;
+}
+
+async function captureQueries(root: string, indexDir: string, snap: Snap) {
+  const out: Array<{ op: string; args: unknown; result?: unknown; error?: { name: string; message: string } }> = [];
+  for (const { op, args } of queryVectors(root, indexDir, snap)) {
+    const recordedArgs = normalize(Object.fromEntries(Object.entries(args).filter(([k]) => k !== 'projectRoot' && k !== 'indexDir')), root);
+    try {
+      const result = await callInline(op, args, { timeoutMs: 60_000 }, false);
+      out.push({ op, args: recordedArgs, result: normalize(result, root) });
+    } catch (err) {
+      const e = err as Error;
+      out.push({ op, args: recordedArgs, error: { name: e.name, message: String(normalize(e.message, root)) } });
+    }
+  }
+  return out;
+}
 
 function probe(cmd: string[]): string | null {
   try {
@@ -223,13 +321,19 @@ for (const name of fixtures) {
   const outDir = join(repo, 'tests/fixtures/oracle', name);
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
-  cpSync(built.dbPath, join(outDir, 'index.db'));
+  writeFileSync(join(outDir, 'index.db'), built.dbBytes);
   writeFileSync(
     join(outDir, 'snapshot.json'),
     `${JSON.stringify({ fixture: name, provenance, result: { filesIndexed: built.result.filesIndexed, symbolsIndexed: built.result.symbolsIndexed, errors: built.result.errors }, ...built.snap }, null, 2)}\n`,
   );
+  writeFileSync(
+    join(outDir, 'queries.json'),
+    `${JSON.stringify({ fixture: name, provenance, operations: built.queries }, null, 2)}
+`,
+  );
   rmSync(built.work, { recursive: true, force: true });
-  console.error(`fixture ${name}: ${built.result.filesIndexed} files, ${built.result.symbolsIndexed} symbols`);
+  const failed = built.queries.filter((q) => q.error).length;
+  console.error(`fixture ${name}: ${built.result.filesIndexed} files, ${built.result.symbolsIndexed} symbols, ${built.queries.length} queries (${failed} errored)`);
   profileSource ??= built;
 }
 

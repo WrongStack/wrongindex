@@ -58,6 +58,13 @@ enum Command {
         /// Path to index.db or the directory containing it.
         path: PathBuf,
     },
+    /// Print where WrongStack keeps the index for a checkout (read-only).
+    ResolveIndexDir {
+        root: PathBuf,
+        /// WrongStack state root (default: WRONGSTACK_HOME or ~/.wrongstack).
+        #[arg(long)]
+        wrongstack_home: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -79,9 +86,13 @@ enum ProjectAction {
     /// Register a checkout and its existing index directory.
     Add {
         root: PathBuf,
-        /// Index directory (the WrongStack resolver port is not implemented yet; pass it explicitly).
+        /// Index directory. Default: the location WrongStack itself uses
+        /// (`~/.wrongstack/projects/<slug>/codebase-index`, worktree-aware).
         #[arg(long)]
-        index_dir: PathBuf,
+        index_dir: Option<PathBuf>,
+        /// WrongStack state root used to resolve the default index directory.
+        #[arg(long)]
+        wrongstack_home: Option<PathBuf>,
         #[arg(long, default_value = "manual")]
         watch: String,
         #[arg(long)]
@@ -204,6 +215,18 @@ async fn run(cli: Cli) -> Outcome {
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
         Command::Inspect { path } => inspect(&path, json),
+        Command::ResolveIndexDir {
+            root,
+            wrongstack_home,
+        } => {
+            let r = resolve_default_index_dir(&root, wrongstack_home.as_deref())?;
+            if json {
+                print_json(&serde_json::to_value(&r).unwrap_or_default());
+            } else {
+                println!("{}", r.index_dir);
+            }
+            Ok(exit_code::SUCCESS)
+        }
     }
 }
 
@@ -373,9 +396,28 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
         ProjectAction::Add {
             root: checkout,
             index_dir,
-            watch,
+            wrongstack_home,
             name,
+            watch,
         } => {
+            let index_dir = match index_dir {
+                Some(dir) => dir.display().to_string(),
+                None => {
+                    let r = resolve_default_index_dir(&checkout, wrongstack_home.as_deref())?;
+                    if !json {
+                        eprintln!(
+                            "using WrongStack's index location{}: {}",
+                            if r.linked_worktree {
+                                " (linked worktree)"
+                            } else {
+                                ""
+                            },
+                            r.index_dir
+                        );
+                    }
+                    r.index_dir
+                }
+            };
             let watch_policy = WatchPolicy::parse(&watch).ok_or_else(|| {
                 fail(
                     exit_code::INVALID_INPUT,
@@ -384,7 +426,7 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
             })?;
             let params = RegisterProjectParams {
                 checkout_root: checkout.display().to_string(),
-                index_dir: index_dir.display().to_string(),
+                index_dir,
                 display_name: name,
                 watch_policy,
                 repository_identity: None,
@@ -748,6 +790,28 @@ async fn doctor(root: &DataRoot, json: bool) -> Outcome {
     } else {
         exit_code::SUCCESS
     })
+}
+
+fn resolve_default_index_dir(
+    checkout: &Path,
+    wrongstack_home: Option<&Path>,
+) -> Result<wrongindex_storage::ResolvedIndexDir, Failure> {
+    let global = match wrongstack_home {
+        Some(p) => p.to_path_buf(),
+        None => wrongindex_storage::wstack_global_root().ok_or_else(|| {
+            fail(
+                exit_code::INVALID_INPUT,
+                "cannot determine the WrongStack home; pass --wrongstack-home or --index-dir",
+            )
+        })?,
+    };
+    if !checkout.is_dir() {
+        return Err(fail(
+            exit_code::INVALID_INPUT,
+            format!("{} is not a directory", checkout.display()),
+        ));
+    }
+    Ok(wrongindex_storage::resolve_index_dir(checkout, &global))
 }
 
 fn inspect(path: &Path, json: bool) -> Outcome {

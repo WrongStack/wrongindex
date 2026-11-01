@@ -1,0 +1,870 @@
+{
+  "schema": "wrongindex.writer-inventory/1",
+  "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+  "method": "git grep at the baseline commit, test files excluded; name-based classification for review",
+  "storeClassFiles": [
+    "writer.ts",
+    "writer-store-derived.ts",
+    "writer-store-base.ts"
+  ],
+  "mutatingMethods": [
+    "allocateSymbolIds",
+    "applyImportResolutions",
+    "beginWriteTransaction",
+    "bindRefsByImports",
+    "checkpointWal",
+    "clearAll",
+    "commitBatch",
+    "commitWriteTransaction",
+    "compactIfNeeded",
+    "deferSecondaryIndexes",
+    "deleteFile",
+    "deleteRefsForFile",
+    "deleteSymbolsForFile",
+    "initSchema",
+    "insertRefs",
+    "insertRefsBatch",
+    "insertSymbols",
+    "invalidateIncomingRefsForFiles",
+    "markStaleConcepts",
+    "optimize",
+    "optimizeFtsIfNeeded",
+    "pruneOrphanConcepts",
+    "pruneOrphanFileVectors",
+    "reconcileVectorProvider",
+    "recordFtsChurn",
+    "replaceEmptyFile",
+    "replaceRanks",
+    "replaceSubsystems",
+    "resolveRefs",
+    "resolveRefsForNames",
+    "resolveRefsForNamesUnsafe",
+    "restoreSecondaryIndexes",
+    "rollbackWriteTransaction",
+    "setFilePackages",
+    "setGitBlobs",
+    "setLastIndexed",
+    "setMetadata",
+    "upsertFile",
+    "upsertFileConcept",
+    "upsertFileVectors"
+  ],
+  "readMethods": [
+    "close",
+    "countFileVectors",
+    "countSearch",
+    "dataVersion",
+    "findIncomingCallsByName",
+    "findOutgoingCallsByName",
+    "findRefsFrom",
+    "findRefsTo",
+    "findTransitiveIncomingCallsByName",
+    "findTransitiveOutgoingCallsByName",
+    "getAllFileConcepts",
+    "getAllFileMetas",
+    "getAllImportRefs",
+    "getAllIndexable",
+    "getAllResolvedRefs",
+    "getAllSymbols",
+    "getConceptCoverage",
+    "getConceptEdges",
+    "getFileConcept",
+    "getFileGraph",
+    "getFileMeta",
+    "getFileMetas",
+    "getFilePackages",
+    "getFileRankMap",
+    "getFileStructuralFingerprint",
+    "getFileSymbols",
+    "getFileVectorStates",
+    "getFilesWithDanglingImports",
+    "getImportVisibility",
+    "getImportersOfFiles",
+    "getImportsWithoutTarget",
+    "getIndexSummary",
+    "getMaxSymbolId",
+    "getMetadata",
+    "getNamespaceDeclarations",
+    "getOrBuildBm25",
+    "getPackageFileCounts",
+    "getPackageGraph",
+    "getRankCounts",
+    "getRankedFiles",
+    "getReadyConceptSummaries",
+    "getRefNamesTargeting",
+    "getStats",
+    "getSubsystems",
+    "getSymbolGraph",
+    "getSymbolGraphFacts",
+    "getSymbolNameCandidates",
+    "getSymbolsByIds",
+    "getTopFileRanks",
+    "getTopSymbolRanks",
+    "getUnresolvedImports",
+    "indexDeletionHost",
+    "indexStoreBatchesHost",
+    "indexStoreMaintenanceHost",
+    "indexTransactionHost",
+    "invalidateBm25",
+    "search",
+    "searchFileVectors",
+    "searchRanked",
+    "stmt",
+    "writerCacheLifecycleHost",
+    "writerSymbolQueriesHost"
+  ],
+  "unclassifiedMethods": [],
+  "constructorIsMutation": "IndexStore construction runs initIndexSchema: version-mismatch DROP, column repair, FTS rebuild, symbol_vectors drop when the vector flag is off.",
+  "entryPoints": {
+    "indexer.ts": [
+      "resolveParallelBatch",
+      "runIndexer",
+      "runIndexerWithStore"
+    ],
+    "index-service.ts": [
+      "indexService",
+      "searchService",
+      "contextService",
+      "vectorSearchService",
+      "statsService",
+      "packageGraphService",
+      "fileGraphService",
+      "symbolGraphService",
+      "incomingCallsService",
+      "outgoingCallsService"
+    ],
+    "background-indexer.ts": [
+      "isIndexReady",
+      "setIndexReady",
+      "isIndexing",
+      "getIndexState",
+      "onIndexStateChange",
+      "shutdownCodebaseIndexHost",
+      "runStartupIndex",
+      "enqueueReindex",
+      "cancelPendingReindexes",
+      "searchCodebaseIndex",
+      "codebaseIndexStats",
+      "codebaseContext",
+      "codebaseVectorSearch",
+      "packageGraphService",
+      "fileGraphService",
+      "symbolGraphService",
+      "incomingCallsService",
+      "outgoingCallsService",
+      "shutdownCodebaseIndexServer",
+      "checkCodebaseIndexServerHealth",
+      "ensureCodebaseIndexServer",
+      "resetIndexStateForTesting"
+    ],
+    "index-inline.ts": [
+      "callInline"
+    ],
+    "concept-enrichment.ts": [
+      "enrichConcepts",
+      "recoverSubsystemConceptEdges",
+      "enrichProjectConcepts"
+    ],
+    "embedding-pass.ts": [
+      "embedFiles",
+      "embedProjectFiles"
+    ],
+    "graph-rank-pass.ts": [
+      "createImplicitVisibility",
+      "loadWiringGraph",
+      "shouldRefreshRanks",
+      "runGraphRankPass"
+    ],
+    "project-server-launch.ts": [
+      "spawnDetachedServer",
+      "forceKillKnownServer",
+      "forceKillServer"
+    ]
+  },
+  "entryPointKinds": {
+    "callInline": "write",
+    "cancelPendingReindexes": "write",
+    "checkCodebaseIndexServerHealth": "read",
+    "codebaseContext": "write",
+    "codebaseIndexStats": "write",
+    "codebaseVectorSearch": "write",
+    "contextService": "read",
+    "createImplicitVisibility": "write",
+    "embedFiles": "write",
+    "embedProjectFiles": "write",
+    "enqueueReindex": "write",
+    "enrichConcepts": "write",
+    "enrichProjectConcepts": "write",
+    "ensureCodebaseIndexServer": "write",
+    "fileGraphService": "read",
+    "forceKillKnownServer": "write",
+    "forceKillServer": "write",
+    "getIndexState": "read",
+    "incomingCallsService": "read",
+    "indexService": "write",
+    "isIndexReady": "read",
+    "isIndexing": "read",
+    "loadWiringGraph": "write",
+    "onIndexStateChange": "read",
+    "outgoingCallsService": "read",
+    "packageGraphService": "read",
+    "recoverSubsystemConceptEdges": "write",
+    "resetIndexStateForTesting": "write",
+    "resolveParallelBatch": "write",
+    "runGraphRankPass": "write",
+    "runIndexer": "write",
+    "runIndexerWithStore": "write",
+    "runStartupIndex": "write",
+    "searchCodebaseIndex": "read",
+    "searchService": "read",
+    "setIndexReady": "write",
+    "shouldRefreshRanks": "write",
+    "shutdownCodebaseIndexHost": "write",
+    "shutdownCodebaseIndexServer": "write",
+    "spawnDetachedServer": "write",
+    "statsService": "read",
+    "symbolGraphService": "read",
+    "vectorSearchService": "read"
+  },
+  "summaryByPackage": {
+    "packages/cli": {
+      "cancelPendingReindexes": 1,
+      "embedProjectFiles": 1,
+      "enqueueReindex": 1,
+      "enrichProjectConcepts": 1,
+      "ensureCodebaseIndexServer": 1,
+      "runStartupIndex": 3,
+      "shutdownCodebaseIndexHost": 2
+    },
+    "packages/webui-server": {
+      "cancelPendingReindexes": 1,
+      "enqueueReindex": 2,
+      "ensureCodebaseIndexServer": 2,
+      "runStartupIndex": 2,
+      "shutdownCodebaseIndexHost": 1,
+      "shutdownCodebaseIndexServer": 2
+    },
+    "packages/plugins": {
+      "enqueueReindex": 1
+    },
+    "packages/tools": {
+      "enqueueReindex": 4
+    },
+    "packages/codebase-index-mcp": {
+      "ensureCodebaseIndexServer": 1,
+      "runStartupIndex": 1,
+      "shutdownCodebaseIndexHost": 3
+    },
+    "packages/tui": {
+      "ensureCodebaseIndexServer": 1,
+      "shutdownCodebaseIndexServer": 1
+    },
+    "docs": {
+      "resetIndexStateForTesting": 4
+    }
+  },
+  "suspectedNameCollisions": 14,
+  "externalSites": [
+    {
+      "path": "docs/archive/reports/codebase-tools-e2e-proof-followup.ts",
+      "line": 30,
+      "text": "resetIndexStateForTesting();",
+      "via": "resetIndexStateForTesting",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "docs/archive/reports/codebase-tools-e2e-proof-followup.ts",
+      "line": 116,
+      "text": "resetIndexStateForTesting();",
+      "via": "resetIndexStateForTesting",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "docs/archive/reports/codebase-tools-e2e-proof.ts",
+      "line": 138,
+      "text": "resetIndexStateForTesting();",
+      "via": "resetIndexStateForTesting",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "docs/archive/reports/codebase-tools-e2e-proof.ts",
+      "line": 615,
+      "text": "resetIndexStateForTesting();",
+      "via": "resetIndexStateForTesting",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/chronicle/src/project-server-client.ts",
+      "line": 521,
+      "text": "private spawnDetachedServer(): void {",
+      "via": "spawnDetachedServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/cli/src/slash-commands/codebase-map.ts",
+      "line": 107,
+      "text": "const result = await embedProjectFiles(projectRoot, port, {",
+      "via": "embedProjectFiles",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/slash-commands/codebase-map.ts",
+      "line": 125,
+      "text": "const result = await enrichProjectConcepts(projectRoot, port, {",
+      "via": "enrichProjectConcepts",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/slash-commands/codebase-reindex.ts",
+      "line": 42,
+      "text": "const r = await runStartupIndex({ projectRoot: opts.projectRoot, force });",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/slash-commands/mailbox.ts",
+      "line": 496,
+      "text": "await mb.clearAll();",
+      "via": ".clearAll()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/cli/src/tool-gateway.ts",
+      "line": 461,
+      "text": "await runStartupIndex({ projectRoot: root, signal });",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/tool-gateway.ts",
+      "line": 534,
+      "text": "await shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 101,
+      "text": "void ensureCodebaseIndexServer({",
+      "via": "ensureCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 123,
+      "text": "//    getIndexState()/onIndexStateChange() — the status bar chip \"⚙ indexing",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 123,
+      "text": "//    getIndexState()/onIndexStateChange() — the status bar chip \"⚙ indexing",
+      "via": "onIndexStateChange",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 128,
+      "text": "void runStartupIndex({ projectRoot, signal: context.signal, timeoutMs: idx.indexTimeoutMs })",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 165,
+      "text": "enqueueReindex({ projectRoot: activeRoot, files, debounceMs, onError });",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 181,
+      "text": "cancelPendingReindexes();",
+      "via": "cancelPendingReindexes",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/cli/src/wiring/codebase-index.ts",
+      "line": 184,
+      "text": "void shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 322,
+      "text": "await ensureCodebaseIndexServer({",
+      "via": "ensureCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 329,
+      "text": "const health = await checkCodebaseIndexServerHealth(projectRoot, args.indexDir);",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 334,
+      "text": "await shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 348,
+      "text": "void runStartupIndex({ projectRoot, ...(args.indexDir ? { indexDir: args.indexDir } : {}) })",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 392,
+      "text": "await shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/codebase-index-mcp/src/main.ts",
+      "line": 404,
+      "text": "await shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/coordination/src/mailbox-project-server-client.ts",
+      "line": 628,
+      "text": "private spawnDetachedServer(): number | undefined {",
+      "via": "spawnDetachedServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/coordination/src/mailbox-server-dispatch.ts",
+      "line": 109,
+      "text": "return activeMailbox.clearAll();",
+      "via": ".clearAll()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/core/src/core/fallback-profile-manager.ts",
+      "line": 246,
+      "text": "const resolved = this.resolveRefs(explicitRefs, opts.exclude);",
+      "via": ".resolveRefs()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/core/src/core/fallback-profile-manager.ts",
+      "line": 276,
+      "text": "return this.resolveRefs([ref], exclude);",
+      "via": ".resolveRefs()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/core/src/core/fallback-profile-manager.ts",
+      "line": 373,
+      "text": "this.resolveRefs(explicitRefs, current).length > 0;",
+      "via": ".resolveRefs()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/core/src/core/fallback-profile-manager.ts",
+      "line": 382,
+      "text": "? this.resolveRefs(explicitRefs, current)",
+      "via": ".resolveRefs()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/mailbox-mcp/src/adapter.ts",
+      "line": 549,
+      "text": "await mailbox.clearAll();",
+      "via": ".clearAll()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/plug-lsp/src/tools/codebase-lsp-search.ts",
+      "line": 191,
+      "text": "const { results, total, indexSummary } = await searchCodebaseIndex(",
+      "via": "searchCodebaseIndex",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/plugins/src/file-watcher/index.ts",
+      "line": 253,
+      "text": "enqueueReindex({",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/sage/src/project-server-client-io.ts",
+      "line": 53,
+      "text": "spawnDetachedServer(): void;",
+      "via": "spawnDetachedServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/sage/src/project-server-client.ts",
+      "line": 404,
+      "text": "protected spawnDetachedServer(): void {",
+      "via": "spawnDetachedServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/tools/src/edit.ts",
+      "line": 363,
+      "text": "enqueueReindex({ projectRoot: ctx.projectRoot, files: [absPath] });",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tools/src/patch.ts",
+      "line": 271,
+      "text": "enqueueReindex({ projectRoot: ctx.projectRoot, files: touched });",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tools/src/read.ts",
+      "line": 552,
+      "text": "const state = getIndexState();",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tools/src/read.ts",
+      "line": 555,
+      "text": "const { results, total } = await searchCodebaseIndex(",
+      "via": "searchCodebaseIndex",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tools/src/replace.ts",
+      "line": 298,
+      "text": "enqueueReindex({",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tools/src/write.ts",
+      "line": 214,
+      "text": "enqueueReindex({ projectRoot: ctx.projectRoot, files: [prepared.absPath] });",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connection-actions.ts",
+      "line": 499,
+      "text": "const result = await shutdownCodebaseIndexServer(",
+      "via": "shutdownCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connection-actions.ts",
+      "line": 540,
+      "text": "await checkCodebaseIndexServerHealth(projectRoot, indexDir, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connection-actions.ts",
+      "line": 549,
+      "text": "await ensureCodebaseIndexServer({ projectRoot, indexDir });",
+      "via": "ensureCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connection-actions.ts",
+      "line": 550,
+      "text": "const health = await checkCodebaseIndexServerHealth(projectRoot, indexDir, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connections-health.ts",
+      "line": 221,
+      "text": "const health = await checkCodebaseIndexServerHealth(projectRoot, undefined, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/connections-health.ts",
+      "line": 224,
+      "text": "const connection = getIndexState().server;",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/hooks/use-tui-environment-state.ts",
+      "line": 126,
+      "text": "const [indexState, setIndexState] = useState(() => getIndexState());",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/hooks/use-tui-environment-state.ts",
+      "line": 132,
+      "text": "// `getIndexState()` itself and stays exact.",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/hooks/use-tui-environment-state.ts",
+      "line": 135,
+      "text": "update(getIndexState());",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/tui/src/hooks/use-tui-environment-state.ts",
+      "line": 136,
+      "text": "return onIndexStateChange(update);",
+      "via": "onIndexStateChange",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-index-server-control.ts",
+      "line": 55,
+      "text": "const result = await shutdownCodebaseIndexServer(",
+      "via": "shutdownCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 53,
+      "text": "void ensureCodebaseIndexServer({",
+      "via": "ensureCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 62,
+      "text": "void runStartupIndex({",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 156,
+      "text": "enqueueReindex({",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 178,
+      "text": "const unsubscribeIndexState = onIndexStateChange((state) => {",
+      "via": "onIndexStateChange",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 224,
+      "text": "cancelPendingReindexes();",
+      "via": "cancelPendingReindexes",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codebase-indexing.ts",
+      "line": 225,
+      "text": "void shutdownCodebaseIndexHost();",
+      "via": "shutdownCodebaseIndexHost",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codemap-handlers.ts",
+      "line": 59,
+      "text": "void runStartupIndex({",
+      "via": "runStartupIndex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codemap-handlers.ts",
+      "line": 77,
+      "text": "res.end(JSON.stringify({ ...indexJobs.get(deps.projectRoot), progress: getIndexState() }));",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codemap-handlers.ts",
+      "line": 150,
+      "text": "packageGraphService({",
+      "via": "packageGraphService",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codemap-handlers.ts",
+      "line": 168,
+      "text": "fileGraphService({",
+      "via": "fileGraphService",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/codemap-handlers.ts",
+      "line": 187,
+      "text": "symbolGraphService({",
+      "via": "symbolGraphService",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/completion-handlers.ts",
+      "line": 337,
+      "text": "const result = await searchCodebaseIndex(",
+      "via": "searchCodebaseIndex",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/collector.ts",
+      "line": 224,
+      "text": "const health = await checkCodebaseIndexServerHealth(projectRoot, indexDir, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/collector.ts",
+      "line": 227,
+      "text": "const connection = getIndexState().server;",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/service-action-restarts.ts",
+      "line": 187,
+      "text": "const result = await shutdownCodebaseIndexServer(",
+      "via": "shutdownCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/service-action-restarts.ts",
+      "line": 228,
+      "text": "await checkCodebaseIndexServerHealth(projectRoot, indexDir, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/service-action-restarts.ts",
+      "line": 237,
+      "text": "await ensureCodebaseIndexServer({ projectRoot, indexDir });",
+      "via": "ensureCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/connections/service-action-restarts.ts",
+      "line": 238,
+      "text": "const health = await checkCodebaseIndexServerHealth(projectRoot, indexDir, {",
+      "via": "checkCodebaseIndexServerHealth",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/file-handlers.ts",
+      "line": 520,
+      "text": "enqueueReindex({ projectRoot, files: [realResolved] });",
+      "via": "enqueueReindex",
+      "kind": "write",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/http-server/api-router.ts",
+      "line": 543,
+      "text": "codebaseIndexServer: getIndexState().server,",
+      "via": "getIndexState",
+      "kind": "read",
+      "evidence": "imports-index"
+    },
+    {
+      "path": "packages/webui-server/src/server/mailbox-handlers.ts",
+      "line": 441,
+      "text": "await mb.clearAll();",
+      "via": ".clearAll()",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/webui/src/lib/ws-client-session-methods.ts",
+      "line": 75,
+      "text": "shutdownCodebaseIndexServer(",
+      "via": "shutdownCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    },
+    {
+      "path": "packages/webui/src/lib/ws-client-session-methods.ts",
+      "line": 298,
+      "text": "shutdownCodebaseIndexServer(",
+      "via": "shutdownCodebaseIndexServer",
+      "kind": "write",
+      "evidence": "name-collision-suspected"
+    }
+  ],
+  "indexModuleSiteCount": 178
+}

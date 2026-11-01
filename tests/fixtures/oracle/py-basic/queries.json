@@ -1,0 +1,2686 @@
+{
+  "fixture": "py-basic",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 9,
+        "totalFiles": 3,
+        "byLang": {
+          "py": 9
+        },
+        "byKind": {
+          "class": 1,
+          "function": 3,
+          "method": 2,
+          "mod": 3
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:(root)",
+            "label": "(root)",
+            "kind": "package",
+            "package": "(root)",
+            "symbolCount": 1,
+            "fileCount": 1,
+            "rank": 0.18341636234319925
+          },
+          {
+            "id": "pkg:py:pkg",
+            "label": "py:pkg",
+            "kind": "package",
+            "package": "py:pkg",
+            "symbolCount": 8,
+            "fileCount": 2,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "pkg:(root)",
+            "target": "pkg:py:pkg",
+            "weight": 3,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "(root)"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/main.py",
+            "label": "main.py",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/main.py",
+            "symbolCount": 1,
+            "lang": "py",
+            "external": false,
+            "lastModifiedMs": 1793526307141,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/pkg/core.py",
+            "label": "core.py",
+            "kind": "file",
+            "package": "py:pkg",
+            "file": "<root>/pkg/core.py",
+            "symbolCount": 0,
+            "lang": "py",
+            "external": true,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/pkg/__init__.py",
+            "label": "__init__.py",
+            "kind": "file",
+            "package": "py:pkg",
+            "file": "<root>/pkg/__init__.py",
+            "symbolCount": 0,
+            "lang": "py",
+            "external": true,
+            "lastModifiedMs": 1793526307096,
+            "rank": 0.7260168632209579
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/main.py",
+            "target": "file:<root>/pkg/core.py",
+            "weight": 2,
+            "refType": "call"
+          },
+          {
+            "source": "file:<root>/main.py",
+            "target": "file:<root>/pkg/__init__.py",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "py:pkg"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/pkg/__init__.py",
+            "label": "__init__.py",
+            "kind": "file",
+            "package": "py:pkg",
+            "file": "<root>/pkg/__init__.py",
+            "symbolCount": 1,
+            "lang": "py",
+            "external": false,
+            "lastModifiedMs": 1793526307096,
+            "rank": 0.15361991840031813
+          },
+          {
+            "id": "file:<root>/pkg/core.py",
+            "label": "core.py",
+            "kind": "file",
+            "package": "py:pkg",
+            "file": "<root>/pkg/core.py",
+            "symbolCount": 7,
+            "lang": "py",
+            "external": false,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/main.py",
+            "label": "main.py",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/main.py",
+            "symbolCount": 0,
+            "lang": "py",
+            "external": true,
+            "lastModifiedMs": 1793526307141,
+            "rank": 0.2115927689596447
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/main.py",
+            "target": "file:<root>/pkg/core.py",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "file:<root>/pkg/__init__.py",
+            "target": "file:<root>/pkg/core.py",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/main.py"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "mod",
+            "file": "<root>/main.py",
+            "package": "(root)",
+            "lang": "py",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307141,
+            "rank": 1
+          },
+          {
+            "id": "sym:6",
+            "label": "run",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "method",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 18,
+            "signature": "def run(self, times) -> str",
+            "scope": "core.Engine.run",
+            "external": true,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          },
+          {
+            "id": "sym:7",
+            "label": "helper",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "function",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 22,
+            "signature": "def helper(value) -> str",
+            "scope": "core.helper",
+            "external": true,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:1",
+            "target": "sym:6",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:1",
+            "target": "sym:7",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/pkg/__init__.py"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:9",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "mod",
+            "file": "<root>/pkg/__init__.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307096,
+            "rank": 1
+          },
+          {
+            "id": "sym:4",
+            "label": "Engine",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "class",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 11,
+            "signature": "class Engine: ...",
+            "scope": "core.Engine",
+            "external": true,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:9",
+            "target": "sym:4",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/pkg/core.py"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:2",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "mod",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307119
+          },
+          {
+            "id": "sym:3",
+            "label": "decorate",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "function",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 4,
+            "signature": "def decorate(fn)",
+            "scope": "core.decorate",
+            "external": false,
+            "lastModifiedMs": 1793526307119
+          },
+          {
+            "id": "sym:4",
+            "label": "Engine",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "class",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 11,
+            "signature": "class Engine: ...",
+            "scope": "core.Engine",
+            "external": false,
+            "lastModifiedMs": 1793526307119,
+            "rank": 0.8557786400965471
+          },
+          {
+            "id": "sym:5",
+            "label": "__init__",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "method",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 14,
+            "signature": "def __init__(self, name) -> None",
+            "scope": "core.Engine.__init__",
+            "external": false,
+            "lastModifiedMs": 1793526307119
+          },
+          {
+            "id": "sym:6",
+            "label": "run",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "method",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 18,
+            "signature": "def run(self, times) -> str",
+            "scope": "core.Engine.run",
+            "external": false,
+            "lastModifiedMs": 1793526307119,
+            "rank": 1
+          },
+          {
+            "id": "sym:7",
+            "label": "helper",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "function",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 22,
+            "signature": "def helper(value) -> str",
+            "scope": "core.helper",
+            "external": false,
+            "lastModifiedMs": 1793526307119,
+            "rank": 0.7019143570016356
+          },
+          {
+            "id": "sym:8",
+            "label": "çalıştır",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "function",
+            "file": "<root>/pkg/core.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 28,
+            "signature": "def çalıştır() -> None",
+            "scope": "core.çalıştır",
+            "external": false,
+            "lastModifiedMs": 1793526307119,
+            "rank": 0.759595965340348
+          },
+          {
+            "id": "sym:1",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "mod",
+            "file": "<root>/main.py",
+            "package": "(root)",
+            "lang": "py",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793526307141,
+            "rank": 0.7019143570016356
+          },
+          {
+            "id": "sym:9",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "mod",
+            "file": "<root>/pkg/__init__.py",
+            "package": "py:pkg",
+            "lang": "py",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793526307096,
+            "rank": 0.5096016597200832
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:6",
+            "target": "sym:7",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:8",
+            "target": "sym:4",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:8",
+            "target": "sym:6",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:1",
+            "target": "sym:6",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:1",
+            "target": "sym:7",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:9",
+            "target": "sym:4",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Engine",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "py",
+            "kind": "class",
+            "name": "Engine",
+            "file": "<root>/pkg/core.py",
+            "line": 11,
+            "col": 0,
+            "signature": "class Engine: ...",
+            "docComment": "Runs things.",
+            "score": 2.379128629584685,
+            "snippet": "Engine Engine …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "__init__",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "py",
+            "kind": "method",
+            "name": "__init__",
+            "file": "<root>/pkg/core.py",
+            "line": 14,
+            "col": 4,
+            "signature": "def __init__(self, name) -> None",
+            "docComment": "",
+            "score": 2.3440554802541977,
+            "snippet": "init __init__ …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "decorate",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "py",
+            "kind": "function",
+            "name": "decorate",
+            "file": "<root>/pkg/core.py",
+            "line": 4,
+            "col": 0,
+            "signature": "def decorate(fn)",
+            "docComment": "",
+            "score": 2.5715109985537965,
+            "snippet": "decorate decor…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "helper",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "py",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/pkg/core.py",
+            "line": 22,
+            "col": 0,
+            "signature": "def helper(value) -> str",
+            "docComment": "",
+            "score": 2.4909414633510667,
+            "snippet": "helper helper …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "run",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "py",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/pkg/core.py",
+            "line": 18,
+            "col": 4,
+            "signature": "def run(self, times) -> str",
+            "docComment": "",
+            "score": 1.6156063068648676,
+            "snippet": "run run def ru…"
+          },
+          {
+            "id": 4,
+            "lang": "py",
+            "kind": "class",
+            "name": "Engine",
+            "file": "<root>/pkg/core.py",
+            "line": 11,
+            "col": 0,
+            "signature": "class Engine: ...",
+            "docComment": "Runs things.",
+            "score": 0.8595117478911245,
+            "snippet": "… ... Runs thin…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "çalıştır",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 8,
+            "lang": "py",
+            "kind": "function",
+            "name": "çalıştır",
+            "file": "<root>/pkg/core.py",
+            "line": 28,
+            "col": 0,
+            "signature": "def çalıştır() -> None",
+            "docComment": "",
+            "score": 2.452520772399636,
+            "snippet": "çalıştır çalış…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "py",
+            "kind": "function",
+            "name": "decorate",
+            "file": "<root>/pkg/core.py",
+            "line": 4,
+            "col": 0,
+            "signature": "def decorate(fn)",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "py",
+            "kind": "class",
+            "name": "Engine",
+            "file": "<root>/pkg/core.py",
+            "line": 11,
+            "col": 0,
+            "signature": "class Engine: ...",
+            "docComment": "Runs things.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "py",
+            "kind": "method",
+            "name": "__init__",
+            "file": "<root>/pkg/core.py",
+            "line": 14,
+            "col": 4,
+            "signature": "def __init__(self, name) -> None",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "py",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/pkg/core.py",
+            "line": 18,
+            "col": 4,
+            "signature": "def run(self, times) -> str",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "py",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/pkg/core.py",
+            "line": 22,
+            "col": 0,
+            "signature": "def helper(value) -> str",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 8,
+            "lang": "py",
+            "kind": "function",
+            "name": "çalıştır",
+            "file": "<root>/pkg/core.py",
+            "line": 28,
+            "col": 0,
+            "signature": "def çalıştır() -> None",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 6
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "py",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/pkg/core.py",
+            "line": 18,
+            "col": 4,
+            "signature": "def run(self, times) -> str",
+            "docComment": "",
+            "score": 1.9456762963086183,
+            "snippet": "run run def run(self, times) -> str"
+          },
+          {
+            "id": 4,
+            "lang": "py",
+            "kind": "class",
+            "name": "Engine",
+            "file": "<root>/pkg/core.py",
+            "line": 11,
+            "col": 0,
+            "signature": "class Engine: ...",
+            "docComment": "Runs things.",
+            "score": 1.131668866220319,
+            "snippet": "Engine Engine class Engine: ... Runs things."
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "class",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "method",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "py",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/main.py",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/main.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "decorate",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "decorate",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "decorate",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "decorate",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "decorate",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Engine",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/pkg/__init__.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Engine",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Engine",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/pkg/__init__.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Engine",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Engine",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 9,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/pkg/__init__.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "__init__",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "__init__",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "__init__",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "__init__",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "__init__",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "call",
+            "line": 4
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 19
+          },
+          {
+            "symbol": {
+              "id": 8,
+              "name": "çalıştır",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 28,
+              "signature": "def çalıştır() -> None"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "py",
+              "file": "<root>/main.py",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çalıştır",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "çalıştır",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "call",
+            "line": 29
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 29
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çalıştır",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "çalıştır",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "call",
+            "line": 29
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 29
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "çalıştır",
+        "file": "<root>/pkg/core.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "Engine",
+              "kind": "class",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 11,
+              "signature": "class Engine: ..."
+            },
+            "callType": "import",
+            "line": 1
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "helper",
+              "kind": "function",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 22,
+              "signature": "def helper(value) -> str"
+            },
+            "callType": "import",
+            "line": 2
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "run",
+              "kind": "method",
+              "lang": "py",
+              "file": "<root>/pkg/core.py",
+              "line": 18,
+              "signature": "def run(self, times) -> str"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 4,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/pkg/__init__.py",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> Engine __init__",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "pkg/core.py",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "Engine",
+                "kind": "class",
+                "line": 11,
+                "signature": "class Engine: ...",
+                "seed": true
+              },
+              {
+                "name": "__init__",
+                "kind": "method",
+                "line": 14,
+                "signature": "def __init__(self, name) -> None",
+                "seed": true
+              },
+              {
+                "name": "çalıştır",
+                "kind": "function",
+                "line": 28,
+                "signature": "def çalıştır() -> None",
+                "seed": false
+              },
+              {
+                "name": "run",
+                "kind": "method",
+                "line": 18,
+                "signature": "def run(self, times) -> str",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "pkg/__init__.py",
+            "relevance": 0.37506347220914105,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "<module>",
+                "kind": "mod",
+                "line": 1,
+                "signature": "",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "main.py",
+            "relevance": 0.09279803685239954,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "<module>",
+                "kind": "mod",
+                "line": 1,
+                "signature": "",
+                "seed": false
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 3,
+        "query": "<module> Engine __init__",
+        "seedCount": 2,
+        "semanticSeedCount": 0,
+        "indexStatus": "ok"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

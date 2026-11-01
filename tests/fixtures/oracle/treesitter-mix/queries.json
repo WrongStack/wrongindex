@@ -1,0 +1,3619 @@
+{
+  "fixture": "treesitter-mix",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 17,
+        "totalFiles": 6,
+        "byLang": {
+          "c": 3,
+          "java": 3,
+          "other": 4,
+          "ruby": 4,
+          "shell": 1,
+          "sql": 2
+        },
+        "byKind": {
+          "class": 2,
+          "const": 1,
+          "function": 3,
+          "method": 4,
+          "mod": 2,
+          "namespace": 2,
+          "property": 1,
+          "type": 2
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:(root)",
+            "label": "(root)",
+            "kind": "package",
+            "package": "(root)",
+            "symbolCount": 17,
+            "fileCount": 6,
+            "rank": 1
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "(root)"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/Dockerfile",
+            "label": "Dockerfile",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/Dockerfile",
+            "symbolCount": 4,
+            "lang": "other",
+            "external": false,
+            "lastModifiedMs": 1793526307422
+          },
+          {
+            "id": "file:<root>/src/App.java",
+            "label": "App.java",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/src/App.java",
+            "symbolCount": 3,
+            "lang": "java",
+            "external": false,
+            "lastModifiedMs": 1793526307233,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/src/build.sh",
+            "label": "build.sh",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/src/build.sh",
+            "symbolCount": 1,
+            "lang": "shell",
+            "external": false,
+            "lastModifiedMs": 1793526307313
+          },
+          {
+            "id": "file:<root>/src/schema.sql",
+            "label": "schema.sql",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/src/schema.sql",
+            "symbolCount": 2,
+            "lang": "sql",
+            "external": false,
+            "lastModifiedMs": 1793526307398
+          },
+          {
+            "id": "file:<root>/src/tool.rb",
+            "label": "tool.rb",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/src/tool.rb",
+            "symbolCount": 4,
+            "lang": "ruby",
+            "external": false,
+            "lastModifiedMs": 1793526307282,
+            "rank": 0.666666666666667
+          },
+          {
+            "id": "file:<root>/src/util.c",
+            "label": "util.c",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/src/util.c",
+            "symbolCount": 3,
+            "lang": "c",
+            "external": false,
+            "lastModifiedMs": 1793526307257,
+            "rank": 0.666666666666667
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/Dockerfile"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "mod",
+            "file": "<root>/Dockerfile",
+            "package": "(root)",
+            "lang": "other",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307422
+          },
+          {
+            "id": "sym:2",
+            "label": "base",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "namespace",
+            "file": "<root>/Dockerfile",
+            "package": "(root)",
+            "lang": "other",
+            "line": 1,
+            "signature": "FROM alpine:3.20 AS base",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307422
+          },
+          {
+            "id": "sym:3",
+            "label": "APP",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "const",
+            "file": "<root>/Dockerfile",
+            "package": "(root)",
+            "lang": "other",
+            "line": 2,
+            "signature": "ENV APP=1",
+            "scope": "base",
+            "external": false,
+            "lastModifiedMs": 1793526307422
+          },
+          {
+            "id": "sym:4",
+            "label": "EXPOSE:8080",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "property",
+            "file": "<root>/Dockerfile",
+            "package": "(root)",
+            "lang": "other",
+            "line": 3,
+            "signature": "EXPOSE 8080",
+            "scope": "base",
+            "external": false,
+            "lastModifiedMs": 1793526307422
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/App.java"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:5",
+            "label": "App",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "class",
+            "file": "<root>/src/App.java",
+            "package": "(root)",
+            "lang": "java",
+            "line": 3,
+            "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307233,
+            "rank": 0.5497630023159951
+          },
+          {
+            "id": "sym:6",
+            "label": "main",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "method",
+            "file": "<root>/src/App.java",
+            "package": "(root)",
+            "lang": "java",
+            "line": 4,
+            "signature": "public static void main(String[] args) { new App().run(); }",
+            "scope": "App",
+            "external": false,
+            "lastModifiedMs": 1793526307233,
+            "rank": 1
+          },
+          {
+            "id": "sym:7",
+            "label": "run",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "method",
+            "file": "<root>/src/App.java",
+            "package": "(root)",
+            "lang": "java",
+            "line": 7,
+            "signature": "void run() { System.out.println(\"x\"); }",
+            "scope": "App",
+            "external": false,
+            "lastModifiedMs": 1793526307233,
+            "rank": 0.5497630023159951
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:6",
+            "target": "sym:5",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:6",
+            "target": "sym:7",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/build.sh"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:8",
+            "label": "build",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "function",
+            "file": "<root>/src/build.sh",
+            "package": "(root)",
+            "lang": "shell",
+            "line": 2,
+            "signature": "build() { echo building }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307313
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/schema.sql"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:9",
+            "label": "users",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "type",
+            "file": "<root>/src/schema.sql",
+            "package": "(root)",
+            "lang": "sql",
+            "line": 1,
+            "signature": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307398
+          },
+          {
+            "id": "sym:10",
+            "label": "idx_users_name",
+            "kind": "symbol",
+            "symbolId": 10,
+            "symbolKind": "type",
+            "file": "<root>/src/schema.sql",
+            "package": "(root)",
+            "lang": "sql",
+            "line": 2,
+            "signature": "CREATE INDEX idx_users_name ON users(name);",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307398
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/tool.rb"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:11",
+            "label": "Tools",
+            "kind": "symbol",
+            "symbolId": 11,
+            "symbolKind": "namespace",
+            "file": "<root>/src/tool.rb",
+            "package": "(root)",
+            "lang": "ruby",
+            "line": 1,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307282
+          },
+          {
+            "id": "sym:12",
+            "label": "Runner",
+            "kind": "symbol",
+            "symbolId": 12,
+            "symbolKind": "class",
+            "file": "<root>/src/tool.rb",
+            "package": "(root)",
+            "lang": "ruby",
+            "line": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "scope": "Tools",
+            "external": false,
+            "lastModifiedMs": 1793526307282
+          },
+          {
+            "id": "sym:13",
+            "label": "call",
+            "kind": "symbol",
+            "symbolId": 13,
+            "symbolKind": "method",
+            "file": "<root>/src/tool.rb",
+            "package": "(root)",
+            "lang": "ruby",
+            "line": 3,
+            "signature": "def call(x) helper(x) end",
+            "scope": "Tools.Runner",
+            "external": false,
+            "lastModifiedMs": 1793526307282,
+            "rank": 1
+          },
+          {
+            "id": "sym:14",
+            "label": "helper",
+            "kind": "symbol",
+            "symbolId": 14,
+            "symbolKind": "method",
+            "file": "<root>/src/tool.rb",
+            "package": "(root)",
+            "lang": "ruby",
+            "line": 9,
+            "signature": "def helper(x) = x * 2",
+            "scope": "Tools.Runner",
+            "external": false,
+            "lastModifiedMs": 1793526307282,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:13",
+            "target": "sym:14",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/util.c"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:15",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 15,
+            "symbolKind": "mod",
+            "file": "<root>/src/util.c",
+            "package": "(root)",
+            "lang": "c",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307257
+          },
+          {
+            "id": "sym:16",
+            "label": "add",
+            "kind": "symbol",
+            "symbolId": 16,
+            "symbolKind": "function",
+            "file": "<root>/src/util.c",
+            "package": "(root)",
+            "lang": "c",
+            "line": 3,
+            "signature": "static int add(int a, int b) { return a + b; }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307257,
+            "rank": 1
+          },
+          {
+            "id": "sym:17",
+            "label": "main",
+            "kind": "symbol",
+            "symbolId": 17,
+            "symbolKind": "function",
+            "file": "<root>/src/util.c",
+            "package": "(root)",
+            "lang": "c",
+            "line": 5,
+            "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307257,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:17",
+            "target": "sym:16",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.480130121835532,
+            "snippet": "…ols module Too…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "APP",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "other",
+            "kind": "const",
+            "name": "APP",
+            "file": "<root>/Dockerfile",
+            "line": 2,
+            "col": 0,
+            "signature": "ENV APP=1",
+            "docComment": "",
+            "score": 3.3054796258502335,
+            "snippet": "APP APP ENV AP…"
+          },
+          {
+            "id": 5,
+            "lang": "java",
+            "kind": "class",
+            "name": "App",
+            "file": "<root>/src/App.java",
+            "line": 3,
+            "col": 0,
+            "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+            "docComment": "",
+            "score": 2.5278844469930624,
+            "snippet": "App App public…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "App",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "other",
+            "kind": "const",
+            "name": "APP",
+            "file": "<root>/Dockerfile",
+            "line": 2,
+            "col": 0,
+            "signature": "ENV APP=1",
+            "docComment": "",
+            "score": 3.3054796258502335,
+            "snippet": "APP APP ENV AP…"
+          },
+          {
+            "id": 5,
+            "lang": "java",
+            "kind": "class",
+            "name": "App",
+            "file": "<root>/src/App.java",
+            "line": 3,
+            "col": 0,
+            "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+            "docComment": "",
+            "score": 2.5278844469930624,
+            "snippet": "App App public…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "EXPOSE:8080",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "other",
+            "kind": "property",
+            "name": "EXPOSE:8080",
+            "file": "<root>/Dockerfile",
+            "line": 3,
+            "col": 0,
+            "signature": "EXPOSE 8080",
+            "docComment": "",
+            "score": 7.806286800496886,
+            "snippet": "EXPOSE:8080 EX…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Runner",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 12,
+            "lang": "ruby",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/tool.rb",
+            "line": 2,
+            "col": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "docComment": "",
+            "score": 2.306425876527295,
+            "snippet": "Runner Runner …"
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.1262253179167632,
+            "snippet": "…ass Runner def…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Tools",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 2.8443119459257273,
+            "snippet": "Tools Tools mo…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "add",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 16,
+            "lang": "c",
+            "kind": "function",
+            "name": "add",
+            "file": "<root>/src/util.c",
+            "line": 3,
+            "col": 0,
+            "signature": "static int add(int a, int b) { return a + b; }",
+            "docComment": "",
+            "score": 3.85960439906457,
+            "snippet": "add add static…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "base",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "other",
+            "kind": "namespace",
+            "name": "base",
+            "file": "<root>/Dockerfile",
+            "line": 1,
+            "col": 0,
+            "signature": "FROM alpine:3.20 AS base",
+            "docComment": "",
+            "score": 3.925283352802405,
+            "snippet": "base base FROM…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "build",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 8,
+            "lang": "shell",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/src/build.sh",
+            "line": 2,
+            "col": 0,
+            "signature": "build() { echo building }",
+            "docComment": "",
+            "score": 4.263890615566803,
+            "snippet": "build build bu…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "call",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 13,
+            "lang": "ruby",
+            "kind": "method",
+            "name": "call",
+            "file": "<root>/src/tool.rb",
+            "line": 3,
+            "col": 4,
+            "signature": "def call(x) helper(x) end",
+            "docComment": "",
+            "score": 2.313642385749262,
+            "snippet": "call call def …"
+          },
+          {
+            "id": 12,
+            "lang": "ruby",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/tool.rb",
+            "line": 2,
+            "col": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "docComment": "",
+            "score": 0.9708085967768727,
+            "snippet": "… def call(x) h…"
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 0.8773676586120126,
+            "snippet": "… def call(x) h…"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "helper",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 14,
+            "lang": "ruby",
+            "kind": "method",
+            "name": "helper",
+            "file": "<root>/src/tool.rb",
+            "line": 9,
+            "col": 4,
+            "signature": "def helper(x) = x * 2",
+            "docComment": "",
+            "score": 1.788252119510865,
+            "snippet": "helper helper …"
+          },
+          {
+            "id": 13,
+            "lang": "ruby",
+            "kind": "method",
+            "name": "call",
+            "file": "<root>/src/tool.rb",
+            "line": 3,
+            "col": 4,
+            "signature": "def call(x) helper(x) end",
+            "docComment": "",
+            "score": 1.176296789219936,
+            "snippet": "…(x) helper(x) …"
+          },
+          {
+            "id": 12,
+            "lang": "ruby",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/tool.rb",
+            "line": 2,
+            "col": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "docComment": "",
+            "score": 1.1451804713068623,
+            "snippet": "…(x) helper(x) …"
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.0591062857547155,
+            "snippet": "…(x) helper(x) …"
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "idx_users_name",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "sql",
+            "kind": "type",
+            "name": "idx_users_name",
+            "file": "<root>/src/schema.sql",
+            "line": 2,
+            "col": 0,
+            "signature": "CREATE INDEX idx_users_name ON users(name);",
+            "docComment": "",
+            "score": 8.635114421949403,
+            "snippet": "idx users name…"
+          },
+          {
+            "id": 9,
+            "lang": "sql",
+            "kind": "type",
+            "name": "users",
+            "file": "<root>/src/schema.sql",
+            "line": 1,
+            "col": 0,
+            "signature": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+            "docComment": "",
+            "score": 3.956301769378279,
+            "snippet": "users users CR…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "main",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 17,
+            "lang": "c",
+            "kind": "function",
+            "name": "main",
+            "file": "<root>/src/util.c",
+            "line": 5,
+            "col": 0,
+            "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }",
+            "docComment": "",
+            "score": 2.451940278005723,
+            "snippet": "main main int …"
+          },
+          {
+            "id": 6,
+            "lang": "java",
+            "kind": "method",
+            "name": "main",
+            "file": "<root>/src/App.java",
+            "line": 4,
+            "col": 4,
+            "signature": "public static void main(String[] args) { new App().run(); }",
+            "docComment": "",
+            "score": 2.1443167744920895,
+            "snippet": "main main publ…"
+          },
+          {
+            "id": 5,
+            "lang": "java",
+            "kind": "class",
+            "name": "App",
+            "file": "<root>/src/App.java",
+            "line": 3,
+            "col": 0,
+            "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+            "docComment": "",
+            "score": 1.1314811213123928,
+            "snippet": "…void main(Stri…"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "run",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "java",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/App.java",
+            "line": 7,
+            "col": 4,
+            "signature": "void run() { System.out.println(\"x\"); }",
+            "docComment": "",
+            "score": 2.5431503102291306,
+            "snippet": "run run void r…"
+          },
+          {
+            "id": 12,
+            "lang": "ruby",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/tool.rb",
+            "line": 2,
+            "col": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "docComment": "",
+            "score": 1.7967838574203236,
+            "snippet": "Runner Runner …"
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 0.8773676586120126,
+            "snippet": "…lass Runner de…"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "users",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "sql",
+            "kind": "type",
+            "name": "users",
+            "file": "<root>/src/schema.sql",
+            "line": 1,
+            "col": 0,
+            "signature": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+            "docComment": "",
+            "score": 2.5158063032047306,
+            "snippet": "users users CR…"
+          },
+          {
+            "id": 10,
+            "lang": "sql",
+            "kind": "type",
+            "name": "idx_users_name",
+            "file": "<root>/src/schema.sql",
+            "line": 2,
+            "col": 0,
+            "signature": "CREATE INDEX idx_users_name ON users(name);",
+            "docComment": "",
+            "score": 2.7104432480855203,
+            "snippet": "idx users name…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "other",
+            "kind": "namespace",
+            "name": "base",
+            "file": "<root>/Dockerfile",
+            "line": 1,
+            "col": 0,
+            "signature": "FROM alpine:3.20 AS base",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 3,
+            "lang": "other",
+            "kind": "const",
+            "name": "APP",
+            "file": "<root>/Dockerfile",
+            "line": 2,
+            "col": 0,
+            "signature": "ENV APP=1",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "other",
+            "kind": "property",
+            "name": "EXPOSE:8080",
+            "file": "<root>/Dockerfile",
+            "line": 3,
+            "col": 0,
+            "signature": "EXPOSE 8080",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "java",
+            "kind": "class",
+            "name": "App",
+            "file": "<root>/src/App.java",
+            "line": 3,
+            "col": 0,
+            "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "java",
+            "kind": "method",
+            "name": "main",
+            "file": "<root>/src/App.java",
+            "line": 4,
+            "col": 4,
+            "signature": "public static void main(String[] args) { new App().run(); }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "java",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/App.java",
+            "line": 7,
+            "col": 4,
+            "signature": "void run() { System.out.println(\"x\"); }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 8,
+            "lang": "shell",
+            "kind": "function",
+            "name": "build",
+            "file": "<root>/src/build.sh",
+            "line": 2,
+            "col": 0,
+            "signature": "build() { echo building }",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 9,
+            "lang": "sql",
+            "kind": "type",
+            "name": "users",
+            "file": "<root>/src/schema.sql",
+            "line": 1,
+            "col": 0,
+            "signature": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 10,
+            "lang": "sql",
+            "kind": "type",
+            "name": "idx_users_name",
+            "file": "<root>/src/schema.sql",
+            "line": 2,
+            "col": 0,
+            "signature": "CREATE INDEX idx_users_name ON users(name);",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 15
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "java",
+            "kind": "method",
+            "name": "run",
+            "file": "<root>/src/App.java",
+            "line": 7,
+            "col": 4,
+            "signature": "void run() { System.out.println(\"x\"); }",
+            "docComment": "",
+            "score": 3.1192548369538984,
+            "snippet": "run run void run() "
+          },
+          {
+            "id": 12,
+            "lang": "ruby",
+            "kind": "class",
+            "name": "Runner",
+            "file": "<root>/src/tool.rb",
+            "line": 2,
+            "col": 2,
+            "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+            "docComment": "",
+            "score": 2.1302228154807112,
+            "snippet": "Runner Runner class Runner def call(x) hel…"
+          },
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 0.9776768891945053,
+            "snippet": "Tools Tools module Tools class Runner def call(x) helper(x) end private d…"
+          }
+        ],
+        "total": 5
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "class",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "const",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "method",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "namespace",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.480130121835532,
+            "snippet": "…ols module Too…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "property",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "type",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "c",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "java",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "other",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "ruby",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.480130121835532,
+            "snippet": "…ols module Too…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "shell",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "sql",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/Dockerfile",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ruby",
+            "kind": "namespace",
+            "name": "Tools",
+            "file": "<root>/src/tool.rb",
+            "line": 1,
+            "col": 0,
+            "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+            "docComment": "",
+            "score": 1.480130121835532,
+            "snippet": "…ols module Too…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/Dockerfile",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "base",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "base",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "base",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "base",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "base",
+        "file": "<root>/Dockerfile",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "APP",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "APP",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "APP",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "APP",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "APP",
+        "file": "<root>/Dockerfile",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "EXPOSE:8080",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "EXPOSE:8080",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "EXPOSE:8080",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "EXPOSE:8080",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "EXPOSE:8080",
+        "file": "<root>/Dockerfile",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "App",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "App",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "App",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "App",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "App",
+        "file": "<root>/src/App.java",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "App",
+              "kind": "class",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 3,
+              "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "run",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 7,
+              "signature": "void run() { System.out.println(\"x\"); }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 16,
+              "name": "add",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 3,
+              "signature": "static int add(int a, int b) { return a + b; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "App",
+              "kind": "class",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 3,
+              "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "run",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 7,
+              "signature": "void run() { System.out.println(\"x\"); }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 16,
+              "name": "add",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 3,
+              "signature": "static int add(int a, int b) { return a + b; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "file": "<root>/src/App.java",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "run",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "run",
+        "file": "<root>/src/App.java",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 4,
+              "signature": "public static void main(String[] args) { new App().run(); }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "build",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "build",
+        "file": "<root>/src/build.sh",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "users",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "users",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "users",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "users",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "users",
+        "file": "<root>/src/schema.sql",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "idx_users_name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "idx_users_name",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "idx_users_name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "idx_users_name",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "idx_users_name",
+        "file": "<root>/src/schema.sql",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Tools",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Tools",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Tools",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Tools",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Tools",
+        "file": "<root>/src/tool.rb",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Runner",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Runner",
+        "file": "<root>/src/tool.rb",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "call",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "call",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 14,
+              "name": "helper",
+              "kind": "method",
+              "lang": "ruby",
+              "file": "<root>/src/tool.rb",
+              "line": 9,
+              "signature": "def helper(x) = x * 2"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "call",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "call",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 14,
+              "name": "helper",
+              "kind": "method",
+              "lang": "ruby",
+              "file": "<root>/src/tool.rb",
+              "line": 9,
+              "signature": "def helper(x) = x * 2"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "call",
+        "file": "<root>/src/tool.rb",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 13,
+              "name": "call",
+              "kind": "method",
+              "lang": "ruby",
+              "file": "<root>/src/tool.rb",
+              "line": 3,
+              "signature": "def call(x) helper(x) end"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 13,
+              "name": "call",
+              "kind": "method",
+              "lang": "ruby",
+              "file": "<root>/src/tool.rb",
+              "line": 3,
+              "signature": "def call(x) helper(x) end"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "file": "<root>/src/tool.rb",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 13,
+              "name": "call",
+              "kind": "method",
+              "lang": "ruby",
+              "file": "<root>/src/tool.rb",
+              "line": 3,
+              "signature": "def call(x) helper(x) end"
+            },
+            "callType": "call",
+            "line": 4
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/src/util.c",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "add",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 17,
+              "name": "main",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 5,
+              "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "add",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "add",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 17,
+              "name": "main",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 5,
+              "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "add",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "add",
+        "file": "<root>/src/util.c",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 17,
+              "name": "main",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 5,
+              "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "App",
+              "kind": "class",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 3,
+              "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "run",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 7,
+              "signature": "void run() { System.out.println(\"x\"); }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 16,
+              "name": "add",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 3,
+              "signature": "static int add(int a, int b) { return a + b; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "App",
+              "kind": "class",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 3,
+              "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 7,
+              "name": "run",
+              "kind": "method",
+              "lang": "java",
+              "file": "<root>/src/App.java",
+              "line": 7,
+              "signature": "void run() { System.out.println(\"x\"); }"
+            },
+            "callType": "call",
+            "line": 5
+          },
+          {
+            "symbol": {
+              "id": 16,
+              "name": "add",
+              "kind": "function",
+              "lang": "c",
+              "file": "<root>/src/util.c",
+              "line": 3,
+              "signature": "static int add(int a, int b) { return a + b; }"
+            },
+            "callType": "call",
+            "line": 5
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 3
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "file": "<root>/src/util.c",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": true,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> APP App",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "src/App.java",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "App",
+                "kind": "class",
+                "line": 3,
+                "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+                "seed": true
+              },
+              {
+                "name": "main",
+                "kind": "method",
+                "line": 4,
+                "signature": "public static void main(String[] args) { new App().run(); }",
+                "seed": false
+              },
+              {
+                "name": "run",
+                "kind": "method",
+                "line": 7,
+                "signature": "void run() { System.out.println(\"x\"); }",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "Dockerfile",
+            "relevance": 0.18717100981646323,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "APP",
+                "kind": "const",
+                "line": 2,
+                "signature": "ENV APP=1",
+                "seed": true
+              }
+            ]
+          },
+          {
+            "file": "src/tool.rb",
+            "relevance": 0.041905786893552836,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "Tools",
+                "kind": "namespace",
+                "line": 1,
+                "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+                "seed": true
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 3,
+        "query": "<module> APP App",
+        "seedCount": 3,
+        "semanticSeedCount": 0,
+        "indexStatus": "ok"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

@@ -7,6 +7,9 @@
     "oracle:prepare": "bun scripts/oracle/prepare-clean-wrongstack.ts",
     "oracle:build": "bun scripts/oracle/build-fixtures.ts",
     "inventory:languages": "bun scripts/inventory/languages.ts",
+    "inventory:writers": "bun scripts/inventory/writers.ts",
+    "oracle:resolver-diff": "bun scripts/oracle/resolver-diff.ts",
+    "bench:baseline": "bun scripts/bench/baseline.ts",
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked"
   }
 }

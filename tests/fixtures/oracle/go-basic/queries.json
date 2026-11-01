@@ -1,0 +1,1799 @@
+{
+  "fixture": "go-basic",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 6,
+        "totalFiles": 2,
+        "byLang": {
+          "go": 6
+        },
+        "byKind": {
+          "function": 3,
+          "method": 1,
+          "mod": 1,
+          "type": 1
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:example.com/gobasic/internal/util",
+            "label": "example.com/gobasic/internal/util",
+            "kind": "package",
+            "package": "example.com/gobasic/internal/util",
+            "symbolCount": 2,
+            "fileCount": 1,
+            "rank": 0.354740048313464
+          },
+          {
+            "id": "pkg:example.com/gobasic",
+            "label": "example.com/gobasic",
+            "kind": "package",
+            "package": "example.com/gobasic",
+            "symbolCount": 4,
+            "fileCount": 1,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "pkg:example.com/gobasic",
+            "target": "pkg:example.com/gobasic/internal/util",
+            "weight": 2,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "example.com/gobasic"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/main.go",
+            "label": "main.go",
+            "kind": "file",
+            "package": "example.com/gobasic",
+            "file": "<root>/main.go",
+            "symbolCount": 4,
+            "lang": "go",
+            "external": false,
+            "lastModifiedMs": 1793526307051,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/internal/util/util.go",
+            "label": "util.go",
+            "kind": "file",
+            "package": "example.com/gobasic/internal/util",
+            "file": "<root>/internal/util/util.go",
+            "symbolCount": 0,
+            "lang": "go",
+            "external": true,
+            "lastModifiedMs": 1793526307074,
+            "rank": 0.354740048313464
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/main.go",
+            "target": "file:<root>/internal/util/util.go",
+            "weight": 2,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "example.com/gobasic/internal/util"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/internal/util/util.go",
+            "label": "util.go",
+            "kind": "file",
+            "package": "example.com/gobasic/internal/util",
+            "file": "<root>/internal/util/util.go",
+            "symbolCount": 2,
+            "lang": "go",
+            "external": false,
+            "lastModifiedMs": 1793526307074,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/main.go",
+            "label": "main.go",
+            "kind": "file",
+            "package": "example.com/gobasic",
+            "file": "<root>/main.go",
+            "symbolCount": 0,
+            "lang": "go",
+            "external": true,
+            "lastModifiedMs": 1793526307051,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/main.go",
+            "target": "file:<root>/internal/util/util.go",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/internal/util/util.go"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "Greet",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "function",
+            "file": "<root>/internal/util/util.go",
+            "package": "example.com/gobasic/internal/util",
+            "lang": "go",
+            "line": 4,
+            "signature": "func Greet(name string) string",
+            "scope": "util.Greet",
+            "external": false,
+            "lastModifiedMs": 1793526307074,
+            "rank": 1
+          },
+          {
+            "id": "sym:2",
+            "label": "helper",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "function",
+            "file": "<root>/internal/util/util.go",
+            "package": "example.com/gobasic/internal/util",
+            "lang": "go",
+            "line": 6,
+            "signature": "func helper() int",
+            "scope": "util.helper",
+            "external": false,
+            "lastModifiedMs": 1793526307074
+          },
+          {
+            "id": "sym:5",
+            "label": "Start",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "method",
+            "file": "<root>/main.go",
+            "package": "example.com/gobasic",
+            "lang": "go",
+            "line": 12,
+            "signature": "func (s *Server) Start() error",
+            "scope": "main.Server.Start",
+            "external": true,
+            "lastModifiedMs": 1793526307051,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:5",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/main.go"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:3",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "mod",
+            "file": "<root>/main.go",
+            "package": "example.com/gobasic",
+            "lang": "go",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307051
+          },
+          {
+            "id": "sym:4",
+            "label": "Server",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "type",
+            "file": "<root>/main.go",
+            "package": "example.com/gobasic",
+            "lang": "go",
+            "line": 9,
+            "signature": "type Server struct{ port int }",
+            "scope": "main",
+            "external": false,
+            "lastModifiedMs": 1793526307051
+          },
+          {
+            "id": "sym:5",
+            "label": "Start",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "method",
+            "file": "<root>/main.go",
+            "package": "example.com/gobasic",
+            "lang": "go",
+            "line": 12,
+            "signature": "func (s *Server) Start() error",
+            "scope": "main.Server.Start",
+            "external": false,
+            "lastModifiedMs": 1793526307051,
+            "rank": 1
+          },
+          {
+            "id": "sym:6",
+            "label": "main",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "function",
+            "file": "<root>/main.go",
+            "package": "example.com/gobasic",
+            "lang": "go",
+            "line": 17,
+            "signature": "func main()",
+            "scope": "main.main",
+            "external": false,
+            "lastModifiedMs": 1793526307051,
+            "rank": 0.5497630023159951
+          },
+          {
+            "id": "sym:1",
+            "label": "Greet",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "function",
+            "file": "<root>/internal/util/util.go",
+            "package": "example.com/gobasic/internal/util",
+            "lang": "go",
+            "line": 4,
+            "signature": "func Greet(name string) string",
+            "scope": "util.Greet",
+            "external": true,
+            "lastModifiedMs": 1793526307074,
+            "rank": 0.5497630023159951
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:5",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "call"
+          },
+          {
+            "source": "sym:6",
+            "target": "sym:5",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Greet",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "go",
+            "kind": "function",
+            "name": "Greet",
+            "file": "<root>/internal/util/util.go",
+            "line": 4,
+            "col": 0,
+            "signature": "func Greet(name string) string",
+            "docComment": "Greet returns a greeting.",
+            "score": 2.106427829835353,
+            "snippet": "Greet Greet fu…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Server",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "go",
+            "kind": "type",
+            "name": "Server",
+            "file": "<root>/main.go",
+            "line": 9,
+            "col": 5,
+            "signature": "type Server struct{ port int }",
+            "docComment": "Server holds config.",
+            "score": 0.9046825799980147,
+            "snippet": "Server Server …"
+          },
+          {
+            "id": 5,
+            "lang": "go",
+            "kind": "method",
+            "name": "Start",
+            "file": "<root>/main.go",
+            "line": 12,
+            "col": 0,
+            "signature": "func (s *Server) Start() error",
+            "docComment": "Start runs the server.",
+            "score": 0.695699078835057,
+            "snippet": "…(s *Server) St…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Start",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "go",
+            "kind": "method",
+            "name": "Start",
+            "file": "<root>/main.go",
+            "line": 12,
+            "col": 0,
+            "signature": "func (s *Server) Start() error",
+            "docComment": "Start runs the server.",
+            "score": 1.9997709244156183,
+            "snippet": "Start Start fu…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "helper",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "go",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/internal/util/util.go",
+            "line": 6,
+            "col": 0,
+            "signature": "func helper() int",
+            "docComment": "",
+            "score": 2.169580694562865,
+            "snippet": "helper helper …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "main",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "go",
+            "kind": "function",
+            "name": "main",
+            "file": "<root>/main.go",
+            "line": 17,
+            "col": 0,
+            "signature": "func main()",
+            "docComment": "",
+            "score": 2.30054129986847,
+            "snippet": "main main func…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "go",
+            "kind": "function",
+            "name": "Greet",
+            "file": "<root>/internal/util/util.go",
+            "line": 4,
+            "col": 0,
+            "signature": "func Greet(name string) string",
+            "docComment": "Greet returns a greeting.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 2,
+            "lang": "go",
+            "kind": "function",
+            "name": "helper",
+            "file": "<root>/internal/util/util.go",
+            "line": 6,
+            "col": 0,
+            "signature": "func helper() int",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "go",
+            "kind": "type",
+            "name": "Server",
+            "file": "<root>/main.go",
+            "line": 9,
+            "col": 5,
+            "signature": "type Server struct{ port int }",
+            "docComment": "Server holds config.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "go",
+            "kind": "method",
+            "name": "Start",
+            "file": "<root>/main.go",
+            "line": 12,
+            "col": 0,
+            "signature": "func (s *Server) Start() error",
+            "docComment": "Start runs the server.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "go",
+            "kind": "function",
+            "name": "main",
+            "file": "<root>/main.go",
+            "line": 17,
+            "col": 0,
+            "signature": "func main()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 5
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "go",
+            "kind": "method",
+            "name": "Start",
+            "file": "<root>/main.go",
+            "line": 12,
+            "col": 0,
+            "signature": "func (s *Server) Start() error",
+            "docComment": "Start runs the server.",
+            "score": 1.2087702713652266,
+            "snippet": "…rt func (s *Server) Start() error Start runs the server."
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "method",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "type",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "go",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/internal/util/util.go",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 2,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Greet",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "Start",
+              "kind": "method",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 12,
+              "signature": "func (s *Server) Start() error"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Greet",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Greet",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "Start",
+              "kind": "method",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 12,
+              "signature": "func (s *Server) Start() error"
+            },
+            "callType": "call",
+            "line": 13
+          },
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 17,
+              "signature": "func main()"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Greet",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Greet",
+        "file": "<root>/internal/util/util.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "Start",
+              "kind": "method",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 12,
+              "signature": "func (s *Server) Start() error"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "helper",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "helper",
+        "file": "<root>/internal/util/util.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 2,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/main.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Server",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Server",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Server",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Server",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Server",
+        "file": "<root>/main.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Start",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 17,
+              "signature": "func main()"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Start",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "Greet",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/internal/util/util.go",
+              "line": 4,
+              "signature": "func Greet(name string) string"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Start",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 17,
+              "signature": "func main()"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Start",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "Greet",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/internal/util/util.go",
+              "line": 4,
+              "signature": "func Greet(name string) string"
+            },
+            "callType": "call",
+            "line": 13
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 1,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Start",
+        "file": "<root>/main.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 6,
+              "name": "main",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 17,
+              "signature": "func main()"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "Start",
+              "kind": "method",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 12,
+              "signature": "func (s *Server) Start() error"
+            },
+            "callType": "call",
+            "line": 19
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "main",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "Start",
+              "kind": "method",
+              "lang": "go",
+              "file": "<root>/main.go",
+              "line": 12,
+              "signature": "func (s *Server) Start() error"
+            },
+            "callType": "call",
+            "line": 19
+          },
+          {
+            "symbol": {
+              "id": 1,
+              "name": "Greet",
+              "kind": "function",
+              "lang": "go",
+              "file": "<root>/internal/util/util.go",
+              "line": 4,
+              "signature": "func Greet(name string) string"
+            },
+            "callType": "",
+            "line": 0
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 2
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "main",
+        "file": "<root>/main.go",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> Greet Server",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "main.go",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "Start",
+                "kind": "method",
+                "line": 12,
+                "signature": "func (s *Server) Start() error",
+                "seed": true
+              },
+              {
+                "name": "Server",
+                "kind": "type",
+                "line": 9,
+                "signature": "type Server struct{ port int }",
+                "seed": true
+              },
+              {
+                "name": "main",
+                "kind": "function",
+                "line": 17,
+                "signature": "func main()",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "internal/util/util.go",
+            "relevance": 0.7795419906938913,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "Greet",
+                "kind": "function",
+                "line": 4,
+                "signature": "func Greet(name string) string",
+                "seed": true
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 2,
+        "query": "<module> Greet Server",
+        "seedCount": 3,
+        "semanticSeedCount": 0,
+        "indexStatus": "ok"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

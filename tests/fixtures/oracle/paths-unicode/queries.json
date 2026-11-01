@@ -1,0 +1,1442 @@
+{
+  "fixture": "paths-unicode",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 4,
+        "totalFiles": 3,
+        "byLang": {
+          "ts": 4
+        },
+        "byKind": {
+          "const": 1,
+          "function": 2,
+          "mod": 1
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:(root)",
+            "label": "(root)",
+            "kind": "package",
+            "package": "(root)",
+            "symbolCount": 4,
+            "fileCount": 3,
+            "rank": 1
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "(root)"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/dir with space\\file name.ts",
+            "label": "file name.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/dir with space\\file name.ts",
+            "symbolCount": 1,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307425,
+            "rank": 1
+          },
+          {
+            "id": "file:<root>/dir with space\\çalışma\\dosya.ts",
+            "label": "dosya.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/dir with space\\çalışma\\dosya.ts",
+            "symbolCount": 1,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307426
+          },
+          {
+            "id": "file:<root>/index.ts",
+            "label": "index.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/index.ts",
+            "symbolCount": 2,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307426,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/index.ts",
+            "target": "file:<root>/dir with space\\file name.ts",
+            "weight": 2,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/dir with space\\file name.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "spaced",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "function",
+            "file": "<root>/dir with space\\file name.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "export function spaced()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425,
+            "rank": 1
+          },
+          {
+            "id": "sym:3",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "mod",
+            "file": "<root>/index.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793526307426
+          },
+          {
+            "id": "sym:4",
+            "label": "v",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "const",
+            "file": "<root>/index.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "v = spaced()",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793526307426,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:3",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:4",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/dir with space\\çalışma\\dosya.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:2",
+            "label": "türkçe",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "function",
+            "file": "<root>/dir with space\\çalışma\\dosya.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "export function türkçe()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307426
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/index.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:3",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "mod",
+            "file": "<root>/index.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307426
+          },
+          {
+            "id": "sym:4",
+            "label": "v",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "const",
+            "file": "<root>/index.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "v = spaced()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307426,
+            "rank": 1
+          },
+          {
+            "id": "sym:1",
+            "label": "spaced",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "function",
+            "file": "<root>/dir with space\\file name.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "export function spaced()",
+            "scope": "",
+            "external": true,
+            "lastModifiedMs": 1793526307425,
+            "rank": 1
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:3",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "import"
+          },
+          {
+            "source": "sym:4",
+            "target": "sym:1",
+            "weight": 1,
+            "refType": "call"
+          }
+        ]
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "spaced",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "function",
+            "name": "spaced",
+            "file": "<root>/dir with space\\file name.ts",
+            "line": 1,
+            "col": 16,
+            "signature": "export function spaced()",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "spaced spaced …"
+          },
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "v",
+            "file": "<root>/index.ts",
+            "line": 2,
+            "col": 13,
+            "signature": "v = spaced()",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "v v v = spaced…"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "türkçe",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "ts",
+            "kind": "function",
+            "name": "türkçe",
+            "file": "<root>/dir with space\\çalışma\\dosya.ts",
+            "line": 1,
+            "col": 16,
+            "signature": "export function türkçe()",
+            "docComment": "",
+            "score": 1.1633436515621114,
+            "snippet": "türkçe türkçe …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "v",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "v",
+            "file": "<root>/index.ts",
+            "line": 2,
+            "col": 13,
+            "signature": "v = spaced()",
+            "docComment": "",
+            "score": 1.9374275012141502,
+            "snippet": "v v v = spaced()"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "function",
+            "name": "spaced",
+            "file": "<root>/dir with space\\file name.ts",
+            "line": 1,
+            "col": 16,
+            "signature": "export function spaced()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 2,
+            "lang": "ts",
+            "kind": "function",
+            "name": "türkçe",
+            "file": "<root>/dir with space\\çalışma\\dosya.ts",
+            "line": 1,
+            "col": 16,
+            "signature": "export function türkçe()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "v",
+            "file": "<root>/index.ts",
+            "line": 2,
+            "col": 13,
+            "signature": "v = spaced()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "const",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "ts",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/dir with space\\file name.ts",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "spaced",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "v",
+              "kind": "const",
+              "lang": "ts",
+              "file": "<root>/index.ts",
+              "line": 2,
+              "signature": "v = spaced()"
+            },
+            "callType": "call",
+            "line": 2
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "spaced",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "spaced",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "v",
+              "kind": "const",
+              "lang": "ts",
+              "file": "<root>/index.ts",
+              "line": 2,
+              "signature": "v = spaced()"
+            },
+            "callType": "call",
+            "line": 2
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "spaced",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "spaced",
+        "file": "<root>/dir with space\\file name.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 4,
+              "name": "v",
+              "kind": "const",
+              "lang": "ts",
+              "file": "<root>/index.ts",
+              "line": 2,
+              "signature": "v = spaced()"
+            },
+            "callType": "call",
+            "line": 2
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "türkçe",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "türkçe",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "türkçe",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "türkçe",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "türkçe",
+        "file": "<root>/dir with space\\çalışma\\dosya.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "spaced",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/dir with space\\file name.ts",
+              "line": 1,
+              "signature": "export function spaced()"
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "spaced",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/dir with space\\file name.ts",
+              "line": 1,
+              "signature": "export function spaced()"
+            },
+            "callType": "import",
+            "line": 1
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/index.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "v",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "v",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "spaced",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/dir with space\\file name.ts",
+              "line": 1,
+              "signature": "export function spaced()"
+            },
+            "callType": "call",
+            "line": 2
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "v",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "v",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 1,
+              "name": "spaced",
+              "kind": "function",
+              "lang": "ts",
+              "file": "<root>/dir with space\\file name.ts",
+              "line": 1,
+              "signature": "export function spaced()"
+            },
+            "callType": "call",
+            "line": 2
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "v",
+        "file": "<root>/index.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> spaced türkçe",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "dir with space/file name.ts",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "spaced",
+                "kind": "function",
+                "line": 1,
+                "signature": "export function spaced()",
+                "seed": true
+              }
+            ]
+          },
+          {
+            "file": "index.ts",
+            "relevance": 1,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "v",
+                "kind": "const",
+                "line": 2,
+                "signature": "v = spaced()",
+                "seed": true
+              }
+            ]
+          },
+          {
+            "file": "dir with space/çalışma/dosya.ts",
+            "relevance": 0.5,
+            "matched": true,
+            "symbols": [
+              {
+                "name": "türkçe",
+                "kind": "function",
+                "line": 1,
+                "signature": "export function türkçe()",
+                "seed": true
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 3,
+        "query": "<module> spaced türkçe",
+        "seedCount": 3,
+        "semanticSeedCount": 0,
+        "indexStatus": "ok"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,2336 @@
+{
+  "fixture": "encodings",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 11,
+        "totalFiles": 6,
+        "byLang": {
+          "ts": 11
+        },
+        "byKind": {
+          "const": 5,
+          "function": 6
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:(root)",
+            "label": "(root)",
+            "kind": "package",
+            "package": "(root)",
+            "symbolCount": 11,
+            "fileCount": 6
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "(root)"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/astral.ts",
+            "label": "astral.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/astral.ts",
+            "symbolCount": 3,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          },
+          {
+            "id": "file:<root>/bom.ts",
+            "label": "bom.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/bom.ts",
+            "symbolCount": 2,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          },
+          {
+            "id": "file:<root>/crlf.ts",
+            "label": "crlf.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/crlf.ts",
+            "symbolCount": 2,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          },
+          {
+            "id": "file:<root>/invalid-utf8.ts",
+            "label": "invalid-utf8.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/invalid-utf8.ts",
+            "symbolCount": 2,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          },
+          {
+            "id": "file:<root>/lf.ts",
+            "label": "lf.ts",
+            "kind": "file",
+            "package": "(root)",
+            "file": "<root>/lf.ts",
+            "symbolCount": 2,
+            "lang": "ts",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/astral.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "astral",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "const",
+            "file": "<root>/astral.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "astral = \"😀\"",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          },
+          {
+            "id": "sym:2",
+            "label": "𝔘",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "function",
+            "file": "<root>/astral.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function 𝔘()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          },
+          {
+            "id": "sym:3",
+            "label": "after",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "function",
+            "file": "<root>/astral.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 3,
+            "signature": "export function after()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/bom.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:4",
+            "label": "bom",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "const",
+            "file": "<root>/bom.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "bom = 1",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          },
+          {
+            "id": "sym:5",
+            "label": "c",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "function",
+            "file": "<root>/bom.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function c()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/crlf.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:6",
+            "label": "crlf",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "const",
+            "file": "<root>/crlf.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "crlf = 1",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          },
+          {
+            "id": "sym:7",
+            "label": "b",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "function",
+            "file": "<root>/crlf.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function b()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/empty.ts"
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/invalid-utf8.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:8",
+            "label": "bad",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "const",
+            "file": "<root>/invalid-utf8.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "bad = \"��\"",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          },
+          {
+            "id": "sym:9",
+            "label": "d",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "function",
+            "file": "<root>/invalid-utf8.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function d()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307425
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/lf.ts"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:10",
+            "label": "lf",
+            "kind": "symbol",
+            "symbolId": 10,
+            "symbolKind": "const",
+            "file": "<root>/lf.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 1,
+            "signature": "lf = 1",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          },
+          {
+            "id": "sym:11",
+            "label": "a",
+            "kind": "symbol",
+            "symbolId": 11,
+            "symbolKind": "function",
+            "file": "<root>/lf.ts",
+            "package": "(root)",
+            "lang": "ts",
+            "line": 2,
+            "signature": "export function a()",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307424
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "function",
+            "name": "a",
+            "file": "<root>/lf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function a()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "a a export function a()"
+          },
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "astral astral astral = \"😀\""
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "after after export function after()"
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "after",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 2.672547483196222,
+            "snippet": "after after ex…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "astral",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.922231850138429,
+            "snippet": "astral astral …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "b",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 7,
+            "lang": "ts",
+            "kind": "function",
+            "name": "b",
+            "file": "<root>/crlf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function b()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "b b export function b()"
+          },
+          {
+            "id": 8,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bad",
+            "file": "<root>/invalid-utf8.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "bad = \"��\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "bad bad bad = \"��\""
+          },
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bom",
+            "file": "<root>/bom.ts",
+            "line": 1,
+            "col": 14,
+            "signature": "bom = 1",
+            "docComment": "",
+            "score": 2.0972658404980975,
+            "snippet": "bom bom bom = 1"
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "bad",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 8,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bad",
+            "file": "<root>/invalid-utf8.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "bad = \"��\"",
+            "docComment": "",
+            "score": 3.186886810150966,
+            "snippet": "bad bad bad = …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "bom",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bom",
+            "file": "<root>/bom.ts",
+            "line": 1,
+            "col": 14,
+            "signature": "bom = 1",
+            "docComment": "",
+            "score": 3.2989257995703363,
+            "snippet": "bom bom bom = …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "c",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "ts",
+            "kind": "function",
+            "name": "c",
+            "file": "<root>/bom.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function c()",
+            "docComment": "",
+            "score": 2.522397455941862,
+            "snippet": "c c export function c()"
+          },
+          {
+            "id": 6,
+            "lang": "ts",
+            "kind": "const",
+            "name": "crlf",
+            "file": "<root>/crlf.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "crlf = 1",
+            "docComment": "",
+            "score": 2.669984541129949,
+            "snippet": "crlf crlf crlf = 1"
+          }
+        ],
+        "total": 7
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "crlf",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 6,
+            "lang": "ts",
+            "kind": "const",
+            "name": "crlf",
+            "file": "<root>/crlf.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "crlf = 1",
+            "docComment": "",
+            "score": 3.186886810150966,
+            "snippet": "crlf crlf crlf…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "d",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "function",
+            "name": "d",
+            "file": "<root>/invalid-utf8.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function d()",
+            "docComment": "",
+            "score": 3.3438255946610425,
+            "snippet": "d d export function d()"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "lf",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 10,
+            "lang": "ts",
+            "kind": "const",
+            "name": "lf",
+            "file": "<root>/lf.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "lf = 1",
+            "docComment": "",
+            "score": 3.5394749645614225,
+            "snippet": "lf lf lf = 1"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "𝔘",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 2,
+            "lang": "ts",
+            "kind": "function",
+            "name": "𝔘",
+            "file": "<root>/astral.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function 𝔘()",
+            "docComment": "",
+            "score": 3.3438255946610425,
+            "snippet": "𝔘 𝔘 export function 𝔘()"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 2,
+            "lang": "ts",
+            "kind": "function",
+            "name": "𝔘",
+            "file": "<root>/astral.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function 𝔘()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bom",
+            "file": "<root>/bom.ts",
+            "line": 1,
+            "col": 14,
+            "signature": "bom = 1",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "ts",
+            "kind": "function",
+            "name": "c",
+            "file": "<root>/bom.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function c()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "ts",
+            "kind": "const",
+            "name": "crlf",
+            "file": "<root>/crlf.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "crlf = 1",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "ts",
+            "kind": "function",
+            "name": "b",
+            "file": "<root>/crlf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function b()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 8,
+            "lang": "ts",
+            "kind": "const",
+            "name": "bad",
+            "file": "<root>/invalid-utf8.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "bad = \"��\"",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 9,
+            "lang": "ts",
+            "kind": "function",
+            "name": "d",
+            "file": "<root>/invalid-utf8.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function d()",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 10,
+            "lang": "ts",
+            "kind": "const",
+            "name": "lf",
+            "file": "<root>/lf.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "lf = 1",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 11
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 6,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "function",
+            "name": "a",
+            "file": "<root>/lf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function a()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "a a export function a()"
+          },
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "astral astral astral = \"😀\""
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "after after export function after()"
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "kind": "const",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "astral astral astral = \"😀\""
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "function",
+            "name": "a",
+            "file": "<root>/lf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function a()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "a a export function a()"
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "after after export function after()"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "lang": "ts",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "function",
+            "name": "a",
+            "file": "<root>/lf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function a()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "a a export function a()"
+          },
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "astral astral astral = \"😀\""
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "after after export function after()"
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "file": "<root>/astral.ts",
+        "limit": 5
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "ts",
+            "kind": "const",
+            "name": "astral",
+            "file": "<root>/astral.ts",
+            "line": 1,
+            "col": 13,
+            "signature": "astral = \"😀\"",
+            "docComment": "",
+            "score": 2.2276043955573015,
+            "snippet": "astral astral astral = \"😀\""
+          },
+          {
+            "id": 3,
+            "lang": "ts",
+            "kind": "function",
+            "name": "after",
+            "file": "<root>/astral.ts",
+            "line": 3,
+            "col": 16,
+            "signature": "export function after()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "after after export function after()"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "a",
+        "limit": 1
+      },
+      "result": {
+        "results": [
+          {
+            "id": 11,
+            "lang": "ts",
+            "kind": "function",
+            "name": "a",
+            "file": "<root>/lf.ts",
+            "line": 2,
+            "col": 16,
+            "signature": "export function a()",
+            "docComment": "",
+            "score": 1.9813365729328762,
+            "snippet": "a a export function a()"
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "astral",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "astral",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "astral",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "astral",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "astral",
+        "file": "<root>/astral.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "𝔘",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "𝔘",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "𝔘",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "𝔘",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "𝔘",
+        "file": "<root>/astral.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "after",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "after",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "after",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "after",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "after",
+        "file": "<root>/astral.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bom",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "bom",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bom",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "bom",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bom",
+        "file": "<root>/bom.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "c",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "c",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "c",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "c",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "c",
+        "file": "<root>/bom.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "crlf",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "crlf",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "crlf",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "crlf",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "crlf",
+        "file": "<root>/crlf.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "b",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "b",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "b",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "b",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "b",
+        "file": "<root>/crlf.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bad",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "bad",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bad",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "bad",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "bad",
+        "file": "<root>/invalid-utf8.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "d",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "d",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "d",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "d",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "d",
+        "file": "<root>/invalid-utf8.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "lf",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "lf",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "lf",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "lf",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "lf",
+        "file": "<root>/lf.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "a",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "a",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "a",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "a",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "a",
+        "file": "<root>/lf.ts",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "a after astral",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "astral.ts",
+            "relevance": 1,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "astral",
+                "kind": "const",
+                "line": 1,
+                "signature": "astral = \"😀\"",
+                "seed": false
+              },
+              {
+                "name": "after",
+                "kind": "function",
+                "line": 3,
+                "signature": "export function after()",
+                "seed": false
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 1,
+        "query": "a after astral",
+        "seedCount": 2,
+        "semanticSeedCount": 0,
+        "indexStatus": "unranked"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,2219 @@
+{
+  "fixture": "rs-basic",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "operations": [
+    {
+      "op": "stats",
+      "args": {},
+      "result": {
+        "totalSymbols": 10,
+        "totalFiles": 3,
+        "byLang": {
+          "rs": 9,
+          "toml": 1
+        },
+        "byKind": {
+          "function": 4,
+          "impl": 1,
+          "mod": 2,
+          "namespace": 1,
+          "struct": 1,
+          "trait": 1
+        },
+        "indexPath": "<indexDir>",
+        "lastIndexed": "<volatile>",
+        "sizeBytes": 188416,
+        "version": 5
+      }
+    },
+    {
+      "op": "packageGraph",
+      "args": {},
+      "result": {
+        "nodes": [
+          {
+            "id": "pkg:crate:rs-basic",
+            "label": "crate:rs-basic",
+            "kind": "package",
+            "package": "crate:rs-basic",
+            "symbolCount": 10,
+            "fileCount": 3
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": ""
+      },
+      "result": {
+        "nodes": [],
+        "edges": []
+      }
+    },
+    {
+      "op": "fileGraph",
+      "args": {
+        "packageFilter": "crate:rs-basic"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "file:<root>/Cargo.toml",
+            "label": "Cargo.toml",
+            "kind": "file",
+            "package": "crate:rs-basic",
+            "file": "<root>/Cargo.toml",
+            "symbolCount": 1,
+            "lang": "toml",
+            "external": false,
+            "lastModifiedMs": 1793526307165
+          },
+          {
+            "id": "file:<root>/src/lib.rs",
+            "label": "lib.rs",
+            "kind": "file",
+            "package": "crate:rs-basic",
+            "file": "<root>/src/lib.rs",
+            "symbolCount": 4,
+            "lang": "rs",
+            "external": false,
+            "lastModifiedMs": 1793526307189
+          },
+          {
+            "id": "file:<root>/src/shapes.rs",
+            "label": "shapes.rs",
+            "kind": "file",
+            "package": "crate:rs-basic",
+            "file": "<root>/src/shapes.rs",
+            "symbolCount": 5,
+            "lang": "rs",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          }
+        ],
+        "edges": [
+          {
+            "source": "file:<root>/src/lib.rs",
+            "target": "file:<root>/src/shapes.rs",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/Cargo.toml"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:1",
+            "label": "package",
+            "kind": "symbol",
+            "symbolId": 1,
+            "symbolKind": "namespace",
+            "file": "<root>/Cargo.toml",
+            "package": "crate:rs-basic",
+            "lang": "toml",
+            "line": 1,
+            "signature": "[package]",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307165
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/lib.rs"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:2",
+            "label": "<module>",
+            "kind": "symbol",
+            "symbolId": 2,
+            "symbolKind": "mod",
+            "file": "<root>/src/lib.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 1,
+            "signature": "",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307189
+          },
+          {
+            "id": "sym:5",
+            "label": "shapes",
+            "kind": "symbol",
+            "symbolId": 5,
+            "symbolKind": "mod",
+            "file": "<root>/src/lib.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 1,
+            "signature": "pub mod shapes;",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307189
+          },
+          {
+            "id": "sym:3",
+            "label": "total",
+            "kind": "symbol",
+            "symbolId": 3,
+            "symbolKind": "function",
+            "file": "<root>/src/lib.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 6,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307189
+          },
+          {
+            "id": "sym:4",
+            "label": "demo",
+            "kind": "symbol",
+            "symbolId": 4,
+            "symbolKind": "function",
+            "file": "<root>/src/lib.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 16,
+            "signature": "pub fn demo() -> f64 {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307189
+          }
+        ],
+        "edges": [
+          {
+            "source": "sym:2",
+            "target": "sym:5",
+            "weight": 1,
+            "refType": "import"
+          }
+        ]
+      }
+    },
+    {
+      "op": "symbolGraph",
+      "args": {
+        "fileFilter": "<root>/src/shapes.rs"
+      },
+      "result": {
+        "nodes": [
+          {
+            "id": "sym:9",
+            "label": "Area",
+            "kind": "symbol",
+            "symbolId": 9,
+            "symbolKind": "trait",
+            "file": "<root>/src/shapes.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 1,
+            "signature": "pub trait Area {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          },
+          {
+            "id": "sym:6",
+            "label": "area",
+            "kind": "symbol",
+            "symbolId": 6,
+            "symbolKind": "function",
+            "file": "<root>/src/shapes.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 2,
+            "signature": "fn area(&self) -> f64;",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          },
+          {
+            "id": "sym:8",
+            "label": "Circle",
+            "kind": "symbol",
+            "symbolId": 8,
+            "symbolKind": "struct",
+            "file": "<root>/src/shapes.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 5,
+            "signature": "pub struct Circle {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          },
+          {
+            "id": "sym:10",
+            "label": "Area",
+            "kind": "symbol",
+            "symbolId": 10,
+            "symbolKind": "impl",
+            "file": "<root>/src/shapes.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 9,
+            "signature": "impl Area for Circle {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          },
+          {
+            "id": "sym:7",
+            "label": "area",
+            "kind": "symbol",
+            "symbolId": 7,
+            "symbolKind": "function",
+            "file": "<root>/src/shapes.rs",
+            "package": "crate:rs-basic",
+            "lang": "rs",
+            "line": 10,
+            "signature": "fn area(&self) -> f64 {",
+            "scope": "",
+            "external": false,
+            "lastModifiedMs": 1793526307212
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Area",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "rs",
+            "kind": "trait",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 1,
+            "col": 10,
+            "signature": "pub trait Area {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "Area Area pub …"
+          },
+          {
+            "id": 6,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 2,
+            "col": 7,
+            "signature": "fn area(&self) -> f64;",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "area area fn a…"
+          },
+          {
+            "id": 10,
+            "lang": "rs",
+            "kind": "impl",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 9,
+            "col": 5,
+            "signature": "impl Area for Circle {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "Area Area impl…"
+          },
+          {
+            "id": 7,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 10,
+            "col": 7,
+            "signature": "fn area(&self) -> f64 {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "area area fn a…"
+          },
+          {
+            "id": 3,
+            "lang": "rs",
+            "kind": "function",
+            "name": "total",
+            "file": "<root>/src/lib.rs",
+            "line": 6,
+            "col": 7,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "docComment": "Total area of a slice of shapes.",
+            "score": 0.0001,
+            "snippet": "…l<T: Area>(ite…"
+          }
+        ],
+        "total": 5
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "Circle",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 8,
+            "lang": "rs",
+            "kind": "struct",
+            "name": "Circle",
+            "file": "<root>/src/shapes.rs",
+            "line": 5,
+            "col": 11,
+            "signature": "pub struct Circle {",
+            "docComment": "",
+            "score": 1.9217429854855956,
+            "snippet": "Circle Circle …"
+          },
+          {
+            "id": 10,
+            "lang": "rs",
+            "kind": "impl",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 9,
+            "col": 5,
+            "signature": "impl Area for Circle {",
+            "docComment": "",
+            "score": 1.2385328843482424,
+            "snippet": "…a for Circle {"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "area",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 9,
+            "lang": "rs",
+            "kind": "trait",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 1,
+            "col": 10,
+            "signature": "pub trait Area {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "Area Area pub …"
+          },
+          {
+            "id": 6,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 2,
+            "col": 7,
+            "signature": "fn area(&self) -> f64;",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "area area fn a…"
+          },
+          {
+            "id": 10,
+            "lang": "rs",
+            "kind": "impl",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 9,
+            "col": 5,
+            "signature": "impl Area for Circle {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "Area Area impl…"
+          },
+          {
+            "id": 7,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 10,
+            "col": 7,
+            "signature": "fn area(&self) -> f64 {",
+            "docComment": "",
+            "score": 0.0001,
+            "snippet": "area area fn a…"
+          },
+          {
+            "id": 3,
+            "lang": "rs",
+            "kind": "function",
+            "name": "total",
+            "file": "<root>/src/lib.rs",
+            "line": 6,
+            "col": 7,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "docComment": "Total area of a slice of shapes.",
+            "score": 0.0001,
+            "snippet": "…l<T: Area>(ite…"
+          }
+        ],
+        "total": 5
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "demo",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 4,
+            "lang": "rs",
+            "kind": "function",
+            "name": "demo",
+            "file": "<root>/src/lib.rs",
+            "line": 16,
+            "col": 7,
+            "signature": "pub fn demo() -> f64 {",
+            "docComment": "",
+            "score": 2.939313619584833,
+            "snippet": "demo demo pub …"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "package",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "toml",
+            "kind": "namespace",
+            "name": "package",
+            "file": "<root>/Cargo.toml",
+            "line": 1,
+            "col": 0,
+            "signature": "[package]",
+            "docComment": "",
+            "score": 3.0687038009311944,
+            "snippet": "package packag…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "shapes",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 5,
+            "lang": "rs",
+            "kind": "mod",
+            "name": "shapes",
+            "file": "<root>/src/lib.rs",
+            "line": 1,
+            "col": 8,
+            "signature": "pub mod shapes;",
+            "docComment": "",
+            "score": 1.9765325217788412,
+            "snippet": "shapes shapes …"
+          },
+          {
+            "id": 3,
+            "lang": "rs",
+            "kind": "function",
+            "name": "total",
+            "file": "<root>/src/lib.rs",
+            "line": 6,
+            "col": 7,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "docComment": "Total area of a slice of shapes.",
+            "score": 0.7130560884689418,
+            "snippet": "…ice of shapes."
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "total",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 3,
+            "lang": "rs",
+            "kind": "function",
+            "name": "total",
+            "file": "<root>/src/lib.rs",
+            "line": 6,
+            "col": 7,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "docComment": "Total area of a slice of shapes.",
+            "score": 2.3972736957553904,
+            "snippet": "total total pu…"
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "",
+        "limit": 10
+      },
+      "result": {
+        "results": [
+          {
+            "id": 1,
+            "lang": "toml",
+            "kind": "namespace",
+            "name": "package",
+            "file": "<root>/Cargo.toml",
+            "line": 1,
+            "col": 0,
+            "signature": "[package]",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 3,
+            "lang": "rs",
+            "kind": "function",
+            "name": "total",
+            "file": "<root>/src/lib.rs",
+            "line": 6,
+            "col": 7,
+            "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+            "docComment": "Total area of a slice of shapes.",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 4,
+            "lang": "rs",
+            "kind": "function",
+            "name": "demo",
+            "file": "<root>/src/lib.rs",
+            "line": 16,
+            "col": 7,
+            "signature": "pub fn demo() -> f64 {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 5,
+            "lang": "rs",
+            "kind": "mod",
+            "name": "shapes",
+            "file": "<root>/src/lib.rs",
+            "line": 1,
+            "col": 8,
+            "signature": "pub mod shapes;",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 6,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 2,
+            "col": 7,
+            "signature": "fn area(&self) -> f64;",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 7,
+            "lang": "rs",
+            "kind": "function",
+            "name": "area",
+            "file": "<root>/src/shapes.rs",
+            "line": 10,
+            "col": 7,
+            "signature": "fn area(&self) -> f64 {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 8,
+            "lang": "rs",
+            "kind": "struct",
+            "name": "Circle",
+            "file": "<root>/src/shapes.rs",
+            "line": 5,
+            "col": 11,
+            "signature": "pub struct Circle {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 9,
+            "lang": "rs",
+            "kind": "trait",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 1,
+            "col": 10,
+            "signature": "pub trait Area {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          },
+          {
+            "id": 10,
+            "lang": "rs",
+            "kind": "impl",
+            "name": "Area",
+            "file": "<root>/src/shapes.rs",
+            "line": 9,
+            "col": 5,
+            "signature": "impl Area for Circle {",
+            "docComment": "",
+            "score": 0,
+            "snippet": ""
+          }
+        ],
+        "total": 9
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "ru",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 1
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<mo",
+        "limit": 10
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "function",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "impl",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "mod",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "namespace",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "struct",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "kind": "trait",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "rs",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "lang": "toml",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "file": "<root>/Cargo.toml",
+        "limit": 5
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "search",
+      "args": {
+        "query": "<module>",
+        "limit": 1
+      },
+      "result": {
+        "results": [],
+        "total": 0,
+        "indexSummary": {
+          "totalFiles": 3,
+          "lastIndexed": "<volatile>"
+        }
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "package",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "package",
+        "file": "<root>/Cargo.toml",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "shapes",
+              "kind": "mod",
+              "lang": "rs",
+              "file": "<root>/src/lib.rs",
+              "line": 1,
+              "signature": "pub mod shapes;"
+            },
+            "callType": "import",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "<module>",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 5,
+              "name": "shapes",
+              "kind": "mod",
+              "lang": "rs",
+              "file": "<root>/src/lib.rs",
+              "line": 1,
+              "signature": "pub mod shapes;"
+            },
+            "callType": "import",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "<module>",
+        "file": "<root>/src/lib.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "total",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "total",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "total",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "total",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "total",
+        "file": "<root>/src/lib.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "demo",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "demo",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "demo",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "demo",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "demo",
+        "file": "<root>/src/lib.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "shapes",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 2,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "rs",
+              "file": "<root>/src/lib.rs",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "shapes",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "shapes",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 2,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "rs",
+              "file": "<root>/src/lib.rs",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "shapes",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "shapes",
+        "file": "<root>/src/lib.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [
+          {
+            "symbol": {
+              "id": 2,
+              "name": "<module>",
+              "kind": "mod",
+              "lang": "rs",
+              "file": "<root>/src/lib.rs",
+              "line": 1,
+              "signature": ""
+            },
+            "callType": "import",
+            "line": 3
+          }
+        ],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 1
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "file": "<root>/src/shapes.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "area",
+        "file": "<root>/src/shapes.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Circle",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Circle",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Circle",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Circle",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Circle",
+        "file": "<root>/src/shapes.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "file": "<root>/src/shapes.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": false,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "outgoingCalls",
+      "args": {
+        "symbol": "Area",
+        "transitive": true,
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "unresolvedCount": 0,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "incomingCalls",
+      "args": {
+        "symbol": "Area",
+        "file": "<root>/src/shapes.rs",
+        "limit": 50
+      },
+      "result": {
+        "calls": [],
+        "symbolFound": true,
+        "ambiguous": false,
+        "totalMatches": 0
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "<module> Area Circle",
+        "limit": 5
+      },
+      "result": {
+        "entries": [
+          {
+            "file": "src/shapes.rs",
+            "relevance": 1,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "Circle",
+                "kind": "struct",
+                "line": 5,
+                "signature": "pub struct Circle {",
+                "seed": false
+              },
+              {
+                "name": "Area",
+                "kind": "impl",
+                "line": 9,
+                "signature": "impl Area for Circle {",
+                "seed": false
+              },
+              {
+                "name": "Area",
+                "kind": "trait",
+                "line": 1,
+                "signature": "pub trait Area {",
+                "seed": false
+              },
+              {
+                "name": "area",
+                "kind": "function",
+                "line": 2,
+                "signature": "fn area(&self) -> f64;",
+                "seed": false
+              }
+            ]
+          },
+          {
+            "file": "src/lib.rs",
+            "relevance": 0.000052036094709476204,
+            "matched": false,
+            "symbols": [
+              {
+                "name": "total",
+                "kind": "function",
+                "line": 6,
+                "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+                "seed": false
+              }
+            ]
+          }
+        ],
+        "totalCandidates": 2,
+        "query": "<module> Area Circle",
+        "seedCount": 6,
+        "semanticSeedCount": 0,
+        "indexStatus": "unranked"
+      }
+    },
+    {
+      "op": "context",
+      "args": {
+        "query": "zzzz_no_match",
+        "limit": 5
+      },
+      "result": {
+        "query": "zzzz_no_match",
+        "entries": [],
+        "seedCount": 0,
+        "semanticSeedCount": 0,
+        "totalCandidates": 0,
+        "indexStatus": "no-matches"
+      }
+    },
+    {
+      "op": "vectorSearch",
+      "args": {
+        "vector": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "limit": 5
+      },
+      "result": {
+        "hits": [],
+        "total": 0
+      }
+    }
+  ]
+}

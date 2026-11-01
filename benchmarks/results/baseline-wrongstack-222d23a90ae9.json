@@ -1,0 +1,136 @@
+{
+  "schema": "wrongindex.bench-baseline/1",
+  "subject": "WrongStack indexer (clean oracle), in-process runIndexerWithStore",
+  "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+  "measuredAt": "2026-11-01T10:11:21.323Z",
+  "corpus": {
+    "description": "src/ of 8 WrongStack workspace packages at the baseline commit, as a Git repository",
+    "files": 1556,
+    "bytes": 38515719,
+    "filesIndexed": 1542,
+    "symbolsIndexed": 18253
+  },
+  "machine": {
+    "platform": "win32 10.0.26300",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+    "logicalCpus": 32,
+    "totalMemGiB": 126,
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "note": "Developer workstation with normal background load and antivirus; not the M0 reference machine."
+  },
+  "iterations": 5,
+  "wallMs": {
+    "cold_full": {
+      "min": 4830,
+      "median": 4980,
+      "max": 4999,
+      "samples": [
+        4830,
+        4857,
+        4980,
+        4983,
+        4999
+      ]
+    },
+    "noop_full": {
+      "min": 309,
+      "median": 405,
+      "max": 537,
+      "samples": [
+        309,
+        319,
+        405,
+        471,
+        537
+      ]
+    },
+    "noop_targeted": {
+      "min": 2,
+      "median": 3,
+      "max": 5,
+      "samples": [
+        2,
+        2,
+        3,
+        3,
+        5
+      ]
+    },
+    "edit_1": {
+      "min": 26,
+      "median": 32,
+      "max": 36,
+      "samples": [
+        26,
+        31,
+        32,
+        33,
+        36
+      ]
+    },
+    "edit_10": {
+      "min": 57,
+      "median": 57,
+      "max": 67,
+      "samples": [
+        57,
+        57,
+        57,
+        62,
+        67
+      ]
+    }
+  },
+  "peakRssMiB": {
+    "min": 363,
+    "median": 376,
+    "max": 378,
+    "samples": [
+      363,
+      366,
+      376,
+      377,
+      378
+    ]
+  },
+  "indexBytes": 39636992,
+  "errorsPerRun": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ]
+}
