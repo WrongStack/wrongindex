@@ -206,6 +206,9 @@ pub mod method {
     pub const INDEX_CHECK: &str = "index.check";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
+    pub const OWNERSHIP_ACQUIRE: &str = "ownership.acquire";
+    pub const OWNERSHIP_RELEASE: &str = "ownership.release";
+    pub const OWNERSHIP_STATUS: &str = "ownership.status";
 
     pub const ALL: &[&str] = &[
         DAEMON_HELLO,
@@ -219,6 +222,9 @@ pub mod method {
         INDEX_CHECK,
         JOB_GET,
         JOB_LIST,
+        OWNERSHIP_ACQUIRE,
+        OWNERSHIP_RELEASE,
+        OWNERSHIP_STATUS,
     ];
 }
 
@@ -299,6 +305,51 @@ pub enum Ownership {
     Owned,
     Conflict,
     Releasing,
+    /// The previous owner stopped without a recorded release; must be
+    /// re-negotiated before any write.
+    RecoveryRequired,
+}
+
+impl Ownership {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Ownership::Unowned => "unowned",
+            Ownership::Negotiating => "negotiating",
+            Ownership::Owned => "owned",
+            Ownership::Conflict => "conflict",
+            Ownership::Releasing => "releasing",
+            Ownership::RecoveryRequired => "recovery_required",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "unowned" => Ownership::Unowned,
+            "negotiating" => Ownership::Negotiating,
+            "owned" => Ownership::Owned,
+            "conflict" => Ownership::Conflict,
+            "releasing" => Ownership::Releasing,
+            "recovery_required" => Ownership::RecoveryRequired,
+            _ => return None,
+        })
+    }
+}
+
+/// Write fence (INV-14): a mutation commits only if the project's owner epoch
+/// and configuration revision are unchanged since the work was admitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnerFence {
+    pub owner_epoch: i64,
+    pub configuration_revision: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnershipStatus {
+    pub state: Ownership,
+    pub owner_epoch: i64,
+    pub desired: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

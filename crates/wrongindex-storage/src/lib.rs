@@ -6,6 +6,7 @@
 
 pub mod content_hash;
 pub mod inspect;
+pub mod owner_lock;
 pub mod profile;
 pub mod runtime;
 pub mod wrongstack_paths;

@@ -13,21 +13,22 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use serde_json::Value;
 use wrongindex_contracts::{
-    BASELINE_PROFILE_ID, Backend, ErrorBody, ErrorCode, JobKind, JobRecord, JobState,
-    ProjectRecord, RegisterProjectParams, WatchPolicy,
+    BASELINE_PROFILE_ID, Backend, ErrorBody, ErrorCode, JobKind, JobRecord, JobState, OwnerFence,
+    Ownership, OwnershipStatus, ProjectRecord, RegisterProjectParams, WatchPolicy,
 };
 
 pub use identity::{PathIdentity, resolve_identity};
 
-pub const REGISTRY_SCHEMA_VERSION: i64 = 1;
+pub const REGISTRY_SCHEMA_VERSION: i64 = 2;
 
 /// Idempotency receipts expire after this long.
 pub const RECEIPT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
-const MIGRATIONS: &[(i64, &str, &str)] = &[(
-    1,
-    "initial registry schema",
-    r#"
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (
+        1,
+        "initial registry schema",
+        r#"
     CREATE TABLE registry_metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -101,7 +102,17 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[(
       at_ms INTEGER NOT NULL
     );
     "#,
-)];
+    ),
+    (
+        2,
+        "ownership state and desired ownership",
+        r#"
+    ALTER TABLE project_runtime ADD COLUMN ownership_state TEXT NOT NULL DEFAULT 'unowned';
+    ALTER TABLE project_runtime ADD COLUMN desired_ownership INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX idx_ownership_transitions_project ON ownership_transitions(project_id, id);
+    "#,
+    ),
+];
 
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -599,6 +610,304 @@ impl Registry {
         tx.commit().map_err(db_err)?;
         Ok(recovery)
     }
+
+    // ─── Ownership (WI-109) ─────────────────────────────────────────────────
+
+    fn record_transition(tx: &Connection, t: Transition<'_>) -> Result<(), ErrorBody> {
+        tx.execute(
+            "INSERT INTO ownership_transitions(project_id, old_owner, new_owner, epoch, phase,
+               compatibility_profile, evidence_json, at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                t.project_id,
+                t.old_owner,
+                t.new_owner,
+                t.epoch,
+                t.phase,
+                BASELINE_PROFILE_ID,
+                t.evidence.map(Value::to_string),
+                now_ms()
+            ],
+        )
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    pub fn ownership_status(&self, project_id: &str) -> Result<OwnershipStatus, ErrorBody> {
+        self.conn
+            .query_row(
+                "SELECT ownership_state, owner_epoch, desired_ownership FROM project_runtime WHERE project_id = ?1",
+                params![project_id],
+                |r| {
+                    let s: String = r.get(0)?;
+                    Ok(OwnershipStatus {
+                        state: Ownership::parse(&s).unwrap_or(Ownership::RecoveryRequired),
+                        owner_epoch: r.get(1)?,
+                        desired: r.get::<_, i64>(2)? != 0,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db_err)?
+            .ok_or_else(|| ErrorBody::new(ErrorCode::ProjectNotFound, format!("no project '{project_id}'")))
+    }
+
+    /// Start an acquisition: bump the owner epoch (fencing every earlier
+    /// epoch's queued work) and journal the intent before touching the OS lock.
+    pub fn begin_acquire(&mut self, project_id: &str, owner: &str) -> Result<i64, ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        let n = tx
+            .execute(
+                "UPDATE project_runtime SET owner_epoch = owner_epoch + 1, ownership_state = 'negotiating',
+                   updated_at_ms = ?2 WHERE project_id = ?1",
+                params![project_id, now_ms()],
+            )
+            .map_err(db_err)?;
+        if n == 0 {
+            return Err(ErrorBody::new(
+                ErrorCode::ProjectNotFound,
+                format!("no project '{project_id}'"),
+            ));
+        }
+        let epoch: i64 = tx
+            .query_row(
+                "SELECT owner_epoch FROM project_runtime WHERE project_id = ?1",
+                params![project_id],
+                |r| r.get(0),
+            )
+            .map_err(db_err)?;
+        Self::record_transition(
+            &tx,
+            Transition {
+                project_id,
+                old_owner: None,
+                new_owner: Some(owner),
+                epoch,
+                phase: "negotiating",
+                evidence: None,
+            },
+        )?;
+        tx.commit().map_err(db_err)?;
+        Ok(epoch)
+    }
+
+    /// Conclude an acquisition for `epoch`. `Ok(evidence)` marks the project
+    /// owned and desired; `Err(evidence)` records a conflict.
+    pub fn finish_acquire(
+        &mut self,
+        project_id: &str,
+        owner: &str,
+        epoch: i64,
+        outcome: Result<Value, Value>,
+    ) -> Result<OwnershipStatus, ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        let current: i64 = tx
+            .query_row(
+                "SELECT owner_epoch FROM project_runtime WHERE project_id = ?1",
+                params![project_id],
+                |r| r.get(0),
+            )
+            .map_err(db_err)?;
+        if current != epoch {
+            return Err(ErrorBody::new(
+                ErrorCode::OwnerConflict,
+                format!("acquisition epoch {epoch} was superseded by {current}"),
+            ));
+        }
+        let (state, desired, evidence) = match &outcome {
+            Ok(e) => ("owned", 1, e),
+            Err(e) => ("conflict", 0, e),
+        };
+        tx.execute(
+            "UPDATE project_runtime SET ownership_state = ?2, desired_ownership = ?3, updated_at_ms = ?4
+             WHERE project_id = ?1",
+            params![project_id, state, desired, now_ms()],
+        )
+        .map_err(db_err)?;
+        Self::record_transition(
+            &tx,
+            Transition {
+                project_id,
+                old_owner: None,
+                new_owner: Some(owner),
+                epoch,
+                phase: state,
+                evidence: Some(evidence),
+            },
+        )?;
+        tx.commit().map_err(db_err)?;
+        self.ownership_status(project_id)
+    }
+
+    /// Record a release. `keep_desired` is true for a daemon shutdown (the next
+    /// instance re-acquires) and false for an explicit user release.
+    pub fn record_release(
+        &mut self,
+        project_id: &str,
+        owner: &str,
+        epoch: i64,
+        keep_desired: bool,
+    ) -> Result<OwnershipStatus, ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        tx.execute(
+            "UPDATE project_runtime SET ownership_state = 'unowned', desired_ownership = ?2, updated_at_ms = ?3
+             WHERE project_id = ?1 AND owner_epoch = ?4",
+            params![project_id, keep_desired as i64, now_ms(), epoch],
+        )
+        .map_err(db_err)?;
+        let phase = if keep_desired {
+            "released_for_shutdown"
+        } else {
+            "released"
+        };
+        Self::record_transition(
+            &tx,
+            Transition {
+                project_id,
+                old_owner: Some(owner),
+                new_owner: None,
+                epoch,
+                phase,
+                evidence: None,
+            },
+        )?;
+        tx.commit().map_err(db_err)?;
+        self.ownership_status(project_id)
+    }
+
+    /// The fence for work admitted now. Only an owned project has one.
+    pub fn fence(&self, project_id: &str) -> Result<OwnerFence, ErrorBody> {
+        let status = self.ownership_status(project_id)?;
+        if status.state != Ownership::Owned {
+            return Err(ErrorBody::new(
+                ErrorCode::OwnerConflict,
+                format!(
+                    "project '{project_id}' is {}, not owned by this service",
+                    status.state.as_str()
+                ),
+            ));
+        }
+        let project = self.get_project(project_id)?;
+        Ok(OwnerFence {
+            owner_epoch: status.owner_epoch,
+            configuration_revision: project.configuration_revision,
+        })
+    }
+
+    /// Validate a fence at commit time (INV-14): epoch and configuration
+    /// revision unchanged and the project still owned.
+    pub fn validate_fence(&self, project_id: &str, fence: &OwnerFence) -> Result<(), ErrorBody> {
+        let current = self.fence(project_id)?;
+        if current != *fence {
+            return Err(ErrorBody::new(
+                ErrorCode::OwnerConflict,
+                format!(
+                    "stale work: admitted at epoch {} / revision {}, now epoch {} / revision {}",
+                    fence.owner_epoch,
+                    fence.configuration_revision,
+                    current.owner_epoch,
+                    current.configuration_revision
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Startup: ownership recorded as held by a previous instance is not
+    /// trusted (its OS lock died with it). Mark it recovery-required and
+    /// return the projects whose ownership is still desired.
+    pub fn recover_ownership(&mut self) -> Result<Vec<String>, ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        let stale: Vec<(String, i64)> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT project_id, owner_epoch FROM project_runtime
+                     WHERE ownership_state IN ('negotiating','owned','releasing')",
+                )
+                .map_err(db_err)?;
+            let rows = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(db_err)?;
+            rows.collect::<Result<_, _>>().map_err(db_err)?
+        };
+        for (pid, epoch) in &stale {
+            tx.execute(
+                "UPDATE project_runtime SET ownership_state = 'recovery_required', updated_at_ms = ?2 WHERE project_id = ?1",
+                params![pid, now_ms()],
+            )
+            .map_err(db_err)?;
+            Self::record_transition(
+                &tx,
+                Transition {
+                    project_id: pid,
+                    old_owner: None,
+                    new_owner: None,
+                    epoch: *epoch,
+                    phase: "recovery_required",
+                    evidence: None,
+                },
+            )?;
+        }
+        let desired: Vec<String> = {
+            let mut stmt = tx
+                .prepare("SELECT project_id FROM project_runtime WHERE desired_ownership = 1 ORDER BY project_id")
+                .map_err(db_err)?;
+            let rows = stmt.query_map([], |r| r.get(0)).map_err(db_err)?;
+            rows.collect::<Result<_, _>>().map_err(db_err)?
+        };
+        tx.commit().map_err(db_err)?;
+        Ok(desired)
+    }
+
+    /// Ownership journal for diagnostics (most recent first).
+    pub fn ownership_journal(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> Result<Vec<Value>, ErrorBody> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT epoch, phase, old_owner, new_owner, evidence_json, at_ms FROM ownership_transitions
+                 WHERE project_id = ?1 ORDER BY id DESC LIMIT ?2",
+            )
+            .map_err(db_err)?;
+        let rows = stmt
+            .query_map(params![project_id, limit as i64], |r| {
+                let evidence: Option<String> = r.get(4)?;
+                Ok(serde_json::json!({
+                    "epoch": r.get::<_, i64>(0)?,
+                    "phase": r.get::<_, String>(1)?,
+                    "oldOwner": r.get::<_, Option<String>>(2)?,
+                    "newOwner": r.get::<_, Option<String>>(3)?,
+                    "evidence": evidence.and_then(|e| serde_json::from_str::<Value>(&e).ok()),
+                    "atMs": r.get::<_, i64>(5)?,
+                }))
+            })
+            .map_err(db_err)?;
+        rows.collect::<Result<_, _>>().map_err(db_err)
+    }
+}
+
+struct Transition<'a> {
+    project_id: &'a str,
+    old_owner: Option<&'a str>,
+    new_owner: Option<&'a str>,
+    epoch: i64,
+    phase: &'a str,
+    evidence: Option<&'a Value>,
 }
 
 const PROJECT_COLUMNS: &str = "project_id, display_name, checkout_root, canonical_checkout_key, \
@@ -812,6 +1121,99 @@ mod tests {
         assert_eq!(done.state, JobState::Succeeded);
         assert_eq!(done.attempt, 1);
         assert_eq!(done.result.unwrap()["verdict"], "compatible");
+    }
+
+    #[test]
+    fn ownership_epochs_fence_stale_work_and_recover() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("registry.db");
+        let pid;
+        {
+            let mut reg = Registry::open(&db).unwrap();
+            let (p, _) = reg
+                .register_project(&params(tmp.path(), &tmp.path().join("idx")))
+                .unwrap();
+            pid = p.project_id;
+            assert_eq!(
+                reg.ownership_status(&pid).unwrap().state,
+                Ownership::Unowned
+            );
+            assert_eq!(reg.fence(&pid).unwrap_err().code, ErrorCode::OwnerConflict);
+
+            let e1 = reg.begin_acquire(&pid, "d1").unwrap();
+            assert_eq!(e1, 1);
+            let st = reg
+                .finish_acquire(&pid, "d1", e1, Ok(json!({"lock": "held"})))
+                .unwrap();
+            assert_eq!(st.state, Ownership::Owned);
+            let fence = reg.fence(&pid).unwrap();
+            reg.validate_fence(&pid, &fence).unwrap();
+
+            // A new acquisition supersedes the old epoch: old work is stale.
+            let e2 = reg.begin_acquire(&pid, "d2").unwrap();
+            assert_eq!(e2, 2);
+            assert_eq!(
+                reg.finish_acquire(&pid, "d1", e1, Ok(json!({})))
+                    .unwrap_err()
+                    .code,
+                ErrorCode::OwnerConflict
+            );
+            reg.finish_acquire(&pid, "d2", e2, Ok(json!({}))).unwrap();
+            assert_eq!(
+                reg.validate_fence(&pid, &fence).unwrap_err().code,
+                ErrorCode::OwnerConflict
+            );
+            // Simulated crash: no release recorded.
+        }
+        let mut reg = Registry::open(&db).unwrap();
+        assert_eq!(reg.schema_version().unwrap(), 2);
+        let desired = reg.recover_ownership().unwrap();
+        assert_eq!(desired, vec![pid.clone()]);
+        assert_eq!(
+            reg.ownership_status(&pid).unwrap().state,
+            Ownership::RecoveryRequired
+        );
+        assert!(reg.fence(&pid).is_err(), "recovery-required is not owned");
+
+        let e3 = reg.begin_acquire(&pid, "d3").unwrap();
+        reg.finish_acquire(&pid, "d3", e3, Ok(json!({}))).unwrap();
+        let st = reg.record_release(&pid, "d3", e3, false).unwrap();
+        assert_eq!(st.state, Ownership::Unowned);
+        assert!(!st.desired);
+        let phases: Vec<String> = reg
+            .ownership_journal(&pid, 20)
+            .unwrap()
+            .iter()
+            .map(|t| t["phase"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            phases,
+            [
+                "released",
+                "owned",
+                "negotiating",
+                "recovery_required",
+                "owned",
+                "negotiating",
+                "owned",
+                "negotiating"
+            ]
+        );
+    }
+
+    #[test]
+    fn conflict_is_recorded_without_ownership() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut reg = Registry::open_in_memory().unwrap();
+        let (p, _) = reg
+            .register_project(&params(tmp.path(), &tmp.path().join("idx")))
+            .unwrap();
+        let e = reg.begin_acquire(&p.project_id, "d").unwrap();
+        let st = reg
+            .finish_acquire(&p.project_id, "d", e, Err(json!({"holder": "other"})))
+            .unwrap();
+        assert_eq!(st.state, Ownership::Conflict);
+        assert!(!st.desired);
     }
 
     #[test]

@@ -106,6 +106,18 @@ enum ProjectAction {
     Remove {
         id: String,
     },
+    /// Take exclusive ownership of the project's index for this service.
+    Claim {
+        id: String,
+    },
+    /// Release ownership of the project's index.
+    Release {
+        id: String,
+    },
+    /// Ownership state and recent transitions.
+    Owner {
+        id: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -155,6 +167,7 @@ impl From<CallError> for Failure {
                 | ErrorCode::ProjectUnavailable
                 | ErrorCode::MethodNotFound
                 | ErrorCode::NotImplemented => exit_code::INVALID_INPUT,
+                ErrorCode::OwnerConflict => exit_code::INCOMPATIBLE_PROFILE,
                 ErrorCode::ProfileUnsupported | ErrorCode::ProtocolUnsupported => {
                     exit_code::INCOMPATIBLE_PROFILE
                 }
@@ -390,7 +403,18 @@ fn spawn_daemon(root: &DataRoot) -> Result<std::process::Child, Failure> {
 
 // ─── project ────────────────────────────────────────────────────────────────
 
+enum OwnerVerb {
+    Claim,
+    Release,
+    Status,
+}
+
 async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome {
+    let action_kind = match &action {
+        ProjectAction::Claim { .. } => OwnerVerb::Claim,
+        ProjectAction::Release { .. } => OwnerVerb::Release,
+        _ => OwnerVerb::Status,
+    };
     let mut c = connect(root).await?;
     match action {
         ProjectAction::Add {
@@ -502,6 +526,41 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                         j.state.as_str()
                     );
                 }
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        ProjectAction::Claim { id }
+        | ProjectAction::Release { id }
+        | ProjectAction::Owner { id } => {
+            let (m, verb) = match &action_kind {
+                OwnerVerb::Claim => (method::OWNERSHIP_ACQUIRE, "claimed"),
+                OwnerVerb::Release => (method::OWNERSHIP_RELEASE, "released"),
+                OwnerVerb::Status => (method::OWNERSHIP_STATUS, ""),
+            };
+            let v = c.call_raw(m, Some(&id), json!({}), None).await?;
+            if json {
+                print_json(&v);
+            } else if verb.is_empty() {
+                println!(
+                    "{id}: {} (epoch {}, desired {}, guard held {})",
+                    v["status"]["state"].as_str().unwrap_or("?"),
+                    v["status"]["ownerEpoch"],
+                    v["status"]["desired"],
+                    v["guardHeld"]
+                );
+                for t in v["journal"].as_array().into_iter().flatten().take(10) {
+                    println!(
+                        "  epoch {:<3} {}",
+                        t["epoch"],
+                        t["phase"].as_str().unwrap_or("?")
+                    );
+                }
+            } else {
+                println!(
+                    "{verb} {id}: {} (epoch {})",
+                    v["state"].as_str().unwrap_or("?"),
+                    v["ownerEpoch"]
+                );
             }
             Ok(exit_code::SUCCESS)
         }

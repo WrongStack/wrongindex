@@ -5,6 +5,7 @@
 //! and discovery publication -> accept authenticated clients.
 
 mod log;
+mod ownership;
 mod server;
 mod worker;
 

@@ -835,6 +835,7 @@ dependencies = [
  "anyhow",
  "clap",
  "hex",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

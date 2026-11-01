@@ -13,8 +13,8 @@ use tokio::sync::{Notify, watch};
 use wrongindex_contracts::{
     AuthRequest, AuthResponse, BASELINE_PROFILE_ID, EndpointInfo, ErrorBody, ErrorCode, Freshness,
     Health, Hello, IndexRequestParams, JobAdmission, JobKind, JobState, Limits, MAX_FRAME_BYTES,
-    Ownership, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectStatus, RegisterProjectParams,
-    RegisterProjectResult, Request, Response, method,
+    PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectStatus, RegisterProjectParams, RegisterProjectResult,
+    Request, Response, method,
 };
 use wrongindex_ipc::endpoint::{generate_token, token_eq};
 use wrongindex_ipc::frame::{FrameError, read_body, read_header, write_frame};
@@ -58,6 +58,7 @@ pub struct Shared {
     pub draining: AtomicBool,
     pub shutdown: watch::Sender<bool>,
     pub wake_worker: Notify,
+    pub owners: crate::ownership::Owners,
     connections: AtomicUsize,
     sqlite_version: String,
 }
@@ -141,6 +142,11 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     let recovery = registry
         .recover_interrupted()
         .map_err(|e| anyhow::anyhow!("recovering registry: {e}"))?;
+    // Ownership recorded by a previous instance is never trusted: its OS
+    // guard died with it. Desired ownership is re-negotiated below.
+    let desired_ownership = registry
+        .recover_ownership()
+        .map_err(|e| anyhow::anyhow!("recovering ownership: {e}"))?;
 
     // 3. Credential + discovery.
     let instance_id = format!("d_{}", uuid::Uuid::new_v4().simple());
@@ -155,6 +161,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         draining: AtomicBool::new(false),
         shutdown: shutdown_tx,
         wake_worker: Notify::new(),
+        owners: crate::ownership::Owners::default(),
         connections: AtomicUsize::new(0),
         sqlite_version: wrongindex_storage::sqlite_runtime().version,
     });
@@ -175,6 +182,11 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         "requeued": recovery.requeued,
         "failedInterrupted": recovery.failed,
     });
+
+    if !desired_ownership.is_empty() {
+        let restored = crate::ownership::restore(&shared, desired_ownership).await;
+        info!("ownership_restored", {"results": restored});
+    }
 
     let worker = tokio::spawn(crate::worker::run(shared.clone(), shutdown_rx.clone()));
 
@@ -210,6 +222,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     if tokio::time::timeout(cfg.drain, worker).await.is_err() {
         warn!("drain_budget_exceeded", {"seconds": cfg.drain.as_secs()});
     }
+    crate::ownership::release_all_for_shutdown(&shared).await;
     let retracted = Discovery::retract(&cfg.root, &instance_id).unwrap_or(false);
     info!("stopped", {"instanceId": instance_id, "discoveryRetracted": retracted});
     Ok(())
@@ -497,14 +510,20 @@ async fn dispatch_inner(
         }
         method::PROJECT_GET => {
             let pid = require_project(&req)?;
-            let (project, last_job) = shared
-                .registry(move |r| Ok((r.get_project(&pid)?, r.latest_job(&pid)?)))
+            let (project, last_job, ownership) = shared
+                .registry(move |r| {
+                    Ok((
+                        r.get_project(&pid)?,
+                        r.latest_job(&pid)?,
+                        r.ownership_status(&pid)?,
+                    ))
+                })
                 .await?;
             // M1 has no watcher or writer: report only what is observable.
             to_value(ProjectStatus {
                 project,
                 freshness: Freshness::Unknown,
-                ownership: Ownership::Unowned,
+                ownership: ownership.state,
                 activity: if last_job
                     .as_ref()
                     .is_some_and(|j| j.state == JobState::Running)
@@ -519,6 +538,10 @@ async fn dispatch_inner(
         }
         method::PROJECT_DETACH => {
             let pid = require_project(&req)?;
+            // Never leave a guard or an "owned" record behind a removed project.
+            if shared.owners.holds(&pid) {
+                crate::ownership::release(shared, &pid, false).await?;
+            }
             let project = shared.registry(move |r| r.detach_project(&pid)).await?;
             info!("project_detached", {"projectId": project.project_id, "client": client});
             Ok(json!({
@@ -575,6 +598,22 @@ async fn dispatch_inner(
             let p: JobGetParams = parse(req.params)?;
             let job = shared.registry(move |r| r.get_job(&p.job_id)).await?;
             to_value(job)
+        }
+        method::OWNERSHIP_ACQUIRE => {
+            let pid = require_project(&req)?;
+            to_value(crate::ownership::acquire(shared, &pid).await?)
+        }
+        method::OWNERSHIP_RELEASE => {
+            let pid = require_project(&req)?;
+            to_value(crate::ownership::release(shared, &pid, false).await?)
+        }
+        method::OWNERSHIP_STATUS => {
+            let pid = require_project(&req)?;
+            let held = shared.owners.holds(&pid);
+            let (status, journal) = shared
+                .registry(move |r| Ok((r.ownership_status(&pid)?, r.ownership_journal(&pid, 20)?)))
+                .await?;
+            Ok(json!({ "status": status, "guardHeld": held, "journal": journal }))
         }
         method::JOB_LIST => {
             let p: JobListParams = parse(req.params)?;

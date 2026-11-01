@@ -50,7 +50,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 | WI-106 | Done | `registry.db` migrations (newer schema refused), durable admission, per-client idempotency receipts with TTL, interrupted-job recovery (read-only `check` requeued, mutating kinds failed explicitly). |
 | WI-107 | Done | Read-only inspector (`SQLITE_OPEN_READ_ONLY` + `query_only`): verdicts compatible / unknown-data / repair-required / older / divergent / newer / not-an-index / unreadable / missing. Byte-for-byte unchanged `index.db` asserted. |
 | WI-108 | Partial | Content hash parity done. Write primitives, FTS writes, ID allocation, vectors: not started (blocked on ownership gate by design). |
-| WI-109 | Not started | Ownership guard/epochs. |
+| WI-109 | Done | OS guard `<indexDir>/.wrongindex-owner.lock` held with share mode 0 (flock on Unix) for the owner's lifetime; descriptive `.wrongindex-owner.json` beside it is never trusted as the lock. Acquisition order: read-only inspection (only compatible / unknown-data / missing admitted; otherwise `PROFILE_UNSUPPORTED` and no file created) -> epoch bump + `ownership_transitions` journal (registry migration v2) -> guard -> journal outcome. `OwnerFence {ownerEpoch, configurationRevision}` + `validate_fence` for commit-time checks (INV-14). Startup marks a previous instance's ownership `recovery_required` and re-acquires desired projects at a new epoch; shutdown releases guards keeping intent; detach releases first. IPC `ownership.acquire|release|status`; CLI `project claim|release|owner`. Evidence: guard exclusivity incl. a foreign process holding it; two daemons with different data roots -> `OWNER_CONFLICT` naming the holder; graceful restart epoch 2, kill -9 epoch 3 with `recovery_required` journaled; release -> other daemon acquires; unsupported schema refused with no lock/owner file; `index.db` bytes unchanged throughout. Not enforced: unmodified legacy WrongStack writers (needs the adapter floor, WI-305). |
 | WI-110 | Done | `wrongindex daemon start|status|stop`, `project add|list|status|remove`, `index --check --wait`, `job status|list`, `doctor` (read-only), `inspect` (offline, read-only). |
 
 **M1 exit gate** ("a real named-pipe client connects, authenticates, admits a fixture job, and obtains a durable result; no GUI or parser mocking"): **met locally** by `crates/wrongindexd/tests/vertical_slice.rs::vertical_slice_admits_and_completes_a_durable_check_job`, which spawns the real daemon binary, registers a project pointing at a WrongStack-produced `index.db`, admits an idempotent check job, reads the result, restarts the daemon, and re-reads the same durable job. Hosted CI: NOT RUN.
@@ -61,7 +61,7 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 54 tests (contracts 4, storage 21, registry 11, ipc 14, daemon integration 4); storage includes oracle-hash parity over all fixture files and resolver KATs |
+| `cargo test --workspace` | PASS — 63 tests (contracts 4, storage 25, registry 13, ipc 14, daemon integration 6 incl. ownership); storage includes oracle-hash parity over all fixture files and resolver KATs |
 | `bun scripts/oracle/resolver-diff.ts` | PASS — 15/15 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |
@@ -85,5 +85,4 @@ CI on the security fix (run 41294030531) FAILED, exposing a real environment cas
 ## Next tasks
 
 1. WI-005 remainder (non-blocking for M1/M2 work).
-2. WI-109 ownership guard and epochs.
-3. M2 (WI-200..209): session leases, Windows watcher, dirty sets/debounce, fair scheduler, discovery port (with git isolation), reconciliation.
+2. M2 (WI-200..209): session leases, Windows watcher, dirty sets/debounce, fair scheduler, discovery port (with git isolation), reconciliation.
