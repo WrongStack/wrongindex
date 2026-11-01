@@ -3,3 +3,6 @@
 *.db binary
 *.png binary
 *.ico binary
+
+# Fixture sources are stored byte-exact (CRLF, BOM, invalid UTF-8 are the point).
+tests/fixtures/projects/** -text
