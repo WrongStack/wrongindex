@@ -174,6 +174,16 @@ async function buildFixture(name: string, env: Record<string, string>) {
 
 const sha256 = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 
+function probe(cmd: string[]): string | null {
+  try {
+    const r = Bun.spawnSync(cmd, { stdout: 'pipe', stderr: 'pipe' });
+    if (r.exitCode !== 0) return null;
+    return (r.stdout.toString() || r.stderr.toString()).trim().split('\n')[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Contract-file evidence: the dist actually imported by the oracle.
 const coreDist = join(resolve(wrongstack), 'packages/core/dist/utils/index.js');
 const provenance = {
@@ -184,6 +194,14 @@ const provenance = {
   coreUtilsDistSha256: existsSync(coreDist) ? sha256(readFileSync(coreDist)) : null,
   bun: Bun.version,
   sqlite: (new DatabaseSync(':memory:').prepare('select sqlite_version() v').get() as { v: string }).v,
+  // Go/Python parse output depends on these helper toolchains (WI-002).
+  toolchains: {
+    go: probe(['go', 'version']),
+    python3: probe(['python3', '--version']),
+    python: probe(['python', '--version']),
+    py: probe(['py', '--version']),
+  },
+  platform: process.platform,
   provisional: !clean,
   ...(clean
     ? {}

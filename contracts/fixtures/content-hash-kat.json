@@ -18,6 +18,13 @@
     "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
     "bun": "1.4.4",
     "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
     "provisional": false
   },
   "note": "fileHash = xxhash64String(Buffer.from(bytes).toString(\"utf8\")) as used by indexer-batch-read; rawHash = xxhash64Hex(bytes).",

@@ -1,0 +1,3 @@
+FROM alpine:3.20 AS base
+ENV APP=1
+EXPOSE 8080

@@ -10,10 +10,10 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 |---|---|---|
 | WI-000 | Done | `scripts/baseline/export.ts`: 275 contract files hashed from `HEAD` blobs. 5 `packages/core/src/utils/*` files are dirty in the inspected working tree and are listed in the manifest. |
 | WI-001 | Partial | DDL, `table_xinfo` columns, index SQL, and metadata keys exported from a real oracle database (`schema.sql`, `manifest.json`). Repair/drop behavior encoded from `writer-init.ts`. Not yet: full metadata-key audit of every writer path, SQLite compile-option capture at release. |
-| WI-002 | Not started | Language/extension/helper inventory. |
+| WI-002 | Done (generated) | `scripts/inventory/languages.ts` -> `contracts/inventory/languages.json`, generated from the clean oracle's sources with per-file hashes: 65 extensions, 10 special filenames, 35 languages, 8 dispatch routes (fallback order recovered from `dispatch()`), 16 languages with no dedicated route (generic regex), 17 `WRONGSTACK_*` env switches, 4 real child-process spawn sites (git discovery, project-server daemon, Python probe, Go/Python helper runner). Helper toolchains on the capture machine recorded. |
 | WI-003 | Not started | Writer/mutable-constructor inventory. |
 | WI-004 | Not started | Query/API request-response fixtures. |
-| WI-005 | Started | Two fixture projects (`basic-ts`: TS/TSX, non-ASCII identifier, import alias, default export; `config-only`: JSON/YAML/empty JSON). Go/Python/Rust/tree-sitter/encoding/path fixtures missing. |
+| WI-005 | Partial | 8 fixture projects through the clean oracle: `basic-ts`, `config-only`, `go-basic` (module, receiver method, import alias), `py-basic` (package re-export, decorator, nested function, non-ASCII identifier, aliased import), `rs-basic` (trait/impl, `macro_rules!` not executed, aliased use), `treesitter-mix` (Java, C, Ruby, shell, SQL, Dockerfile), `encodings` (LF, CRLF, BOM, invalid UTF-8, empty, astral identifier), `paths-unicode` (spaces, Turkish characters). Missing: remaining tree-sitter routes (C++, C#, PHP, Swift, Kotlin, Elixir), resolution/rename/delete edit sequences, optional-table and storage-history fixtures, long/UNC/junction paths. |
 | WI-006 | Done (seed corpus) | `scripts/oracle/prepare-clean-wrongstack.ts` `git archive`s the baseline commit (root manifests, `scripts/`, 8 workspace packages), junctions third-party `node_modules` (pinned by the archived `bun.lock`, hash recorded), redirects every `@wrongstack/*` into the archive, and rebuilds 6 workspace dists from archived source (~14 s). `build-fixtures.ts` detects `.wrongindex-oracle.json` and records archive/lock/dist hashes; fixtures are no longer provisional. The clean oracle reproduced the earlier working-tree fixtures exactly (metadata, files, symbols, refs, ranks, 17 KATs, profile manifest). Remaining: oracle covers only two fixture projects (see WI-005). |
 | WI-007 | Started | Storage profile manifest exists; semantic (parser/ranking/query) profile does not. |
 | WI-008 | Not started | Baseline performance/process tree. |
@@ -22,6 +22,12 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 Finding recorded during M0: `files.content_hash` is xxHash64 of `utf8(readFile(file, 'utf8'))`, not of the raw bytes. For invalid UTF-8 the stored hash differs from the raw-byte hash. The Rust port uses `String::from_utf8_lossy`, which matches all 17 known answers including five invalid-UTF-8 cases.
 
 Finding: the oracle shows an import alias (`import { greet as hello }`) whose call ref stays unresolved (`to_id = NULL`). This is baseline behavior to preserve, not a WrongIndex bug.
+
+Finding (WI-002): `.go` and `.py` parse output depends on helper toolchains at index time (`go run` of a WrongStack-owned helper; `python3`/`python`/`py`). Without them WrongStack silently falls back to the regex extractor, so baseline output is machine-dependent. Oracle provenance now records the toolchains (capture machine: go 1.27.0, Python 3.14.8; `python3` is the Windows Store stub). The native replacement must either match the helper output or declare the difference.
+
+Finding (WI-002): Git discovery runs `git` with an isolation environment that disables repository-configured programs (fsmonitor, `.gitattributes` filters) and refuses to run git when isolation cannot be established. WI-205 must port this; it is a security property, not an optimization.
+
+Finding (WI-005): columns are UTF-16 code-unit offsets of the decoded text, and a UTF-8 BOM occupies column 0 (`const bom` is at column 14 vs 13 without a BOM). The native parser must reproduce both.
 
 Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) is 3.54.1. Both support FTS5 trigram. Record in the release SQLite compatibility check.
 
@@ -71,7 +77,7 @@ CI on the security fix (run 41294030531) FAILED, exposing a real environment cas
 
 ## Next tasks
 
-1. WI-002/003/004: language/helper inventory, writer inventory, query fixtures.
-2. WI-005: Go/Python/Rust/tree-sitter/encoding/path fixtures.
+1. WI-003 writer/mutable-constructor inventory; WI-004 query/API fixtures (search, stats, graphs, calls, context) captured through the clean oracle.
+2. WI-005 remainder (see table) and WI-008 baseline timings/process tree.
 3. Port WrongStack's index-path resolver (`wstack-paths.ts`) behind shared fixtures so `--index-dir` becomes optional.
 4. WI-109 ownership guard, then M2 (WI-200..209): leases, watcher, scheduler.

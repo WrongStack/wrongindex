@@ -1,0 +1,332 @@
+{
+  "schema": "wrongindex.language-inventory/1",
+  "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+  "sources": {
+    "languages.ts": "badcae9d6fb2cbd3bc6c23d60417afbcfde3eab384bba579f94b1b1618c93e08",
+    "parser-dispatch.ts": "de5ddfb6c9a67c97694b5982a9b421808dcaf10d5ef79d018b977cc476003662",
+    "parser-batch.ts": "d5e9a0c2fae5a1adf44c3c392e6adcca6a0bb5c20fbf9a256895e6dd47310230",
+    "go-parser.ts": "d4761fca1f827249f10ee44d82df0442bb6e4176679ce910e315f32a74f3ab3a",
+    "py-parser.ts": "55269cdc86daebb2dd31ece2f9f915ec0dbea0f2b42fd2a62d15b79c2103f9c1",
+    "rs-parser.ts": "4fab6bb37f3bc29866b92d59ba59763dcf11db22408de721ccddbb26c4909a6a",
+    "ts-parser.ts": "c7cc9a334980b4370e98a06af6d6a92915e6d997c43c9a090ead7eb21e967286",
+    "tree-sitter-parser.ts": "ff8c16791428e4d642d9a764fa01ae28a7d09cf8e6e5ca1dfd7944e4eba5a8f8",
+    "generic-parser.ts": "706a6d97ee89fc30523a381719ae242b86af4b822805038c6bafb611817c4512",
+    "json-parser.ts": "32a2c08f5a2943126dfab7e18e04d17ff4851a4c15c293e02891d80154da4f7f",
+    "yaml-parser.ts": "8f60d0481278da46b14304eacf055d2abc2e88a3010305b4b03ff8a378b6a660",
+    "import-extractor.ts": "7f4fee0c65c218dce2d96c5bed3ffaf37d54ac705eb32531698a9b29ae5a4e1c"
+  },
+  "extensions": {
+    ".bash": "shell",
+    ".c": "c",
+    ".cc": "cpp",
+    ".cjs": "js",
+    ".cpp": "cpp",
+    ".cs": "csharp",
+    ".css": "css",
+    ".cts": "ts",
+    ".cxx": "cpp",
+    ".dart": "dart",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".go": "go",
+    ".gql": "graphql",
+    ".graphql": "graphql",
+    ".h": "c",
+    ".hh": "cpp",
+    ".hpp": "cpp",
+    ".hs": "haskell",
+    ".htm": "html",
+    ".html": "html",
+    ".hxx": "cpp",
+    ".java": "java",
+    ".js": "js",
+    ".json": "json",
+    ".jsonc": "json",
+    ".jsx": "jsx",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".less": "css",
+    ".lhs": "haskell",
+    ".lua": "lua",
+    ".md": "md",
+    ".mdx": "md",
+    ".mjs": "js",
+    ".mts": "ts",
+    ".php": "php",
+    ".pl": "other",
+    ".pm": "other",
+    ".proto": "proto",
+    ".ps1": "shell",
+    ".py": "py",
+    ".pyi": "py",
+    ".pyw": "py",
+    ".r": "r",
+    ".R": "r",
+    ".rb": "ruby",
+    ".rs": "rs",
+    ".sc": "scala",
+    ".scala": "scala",
+    ".scss": "css",
+    ".sh": "shell",
+    ".sql": "sql",
+    ".svelte": "svelte",
+    ".swift": "swift",
+    ".tf": "other",
+    ".tfvars": "other",
+    ".toml": "toml",
+    ".ts": "ts",
+    ".tsx": "tsx",
+    ".vue": "vue",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".zig": "zig",
+    ".zsh": "shell"
+  },
+  "declarationExtensions": {
+    ".d.ts": "ts",
+    ".d.mts": "ts",
+    ".d.cts": "ts"
+  },
+  "specialFilenames": {
+    "makefile": "other",
+    "gnumakefile": "other",
+    "dockerfile": "other",
+    "docker-compose.yml": "yaml",
+    "docker-compose.yaml": "yaml",
+    "cmakelists.txt": "other",
+    "gemfile": "ruby",
+    "rakefile": "ruby",
+    "procfile": "other",
+    "justfile": "other"
+  },
+  "families": {
+    "ts": "js",
+    "tsx": "js",
+    "js": "js",
+    "jsx": "js",
+    "vue": "js",
+    "svelte": "js",
+    "go": "go",
+    "py": "py",
+    "rs": "rs",
+    "java": "jvm",
+    "kotlin": "jvm",
+    "scala": "jvm",
+    "csharp": "dotnet",
+    "c": "c",
+    "cpp": "c",
+    "ruby": "ruby",
+    "php": "php",
+    "swift": "swift",
+    "dart": "dart",
+    "elixir": "elixir",
+    "haskell": "haskell",
+    "zig": "zig",
+    "lua": "lua",
+    "r": "r",
+    "shell": "shell",
+    "sql": "sql",
+    "json": "data",
+    "yaml": "data",
+    "toml": "data",
+    "html": "web",
+    "css": "web",
+    "proto": "proto",
+    "graphql": "graphql",
+    "md": "other",
+    "other": "other"
+  },
+  "routes": [
+    {
+      "langs": [
+        "ts",
+        "tsx",
+        "js",
+        "jsx"
+      ],
+      "modules": [
+        "ts-parser"
+      ]
+    },
+    {
+      "langs": [
+        "go"
+      ],
+      "modules": [
+        "go-parser"
+      ]
+    },
+    {
+      "langs": [
+        "py"
+      ],
+      "modules": [
+        "py-parser"
+      ]
+    },
+    {
+      "langs": [
+        "rs"
+      ],
+      "modules": [
+        "rs-parser"
+      ]
+    },
+    {
+      "langs": [
+        "json"
+      ],
+      "modules": [
+        "json-parser"
+      ]
+    },
+    {
+      "langs": [
+        "yaml"
+      ],
+      "modules": [
+        "yaml-parser"
+      ]
+    },
+    {
+      "langs": [
+        "c",
+        "cpp",
+        "java",
+        "csharp",
+        "php",
+        "ruby",
+        "swift",
+        "kotlin",
+        "shell",
+        "elixir"
+      ],
+      "modules": [
+        "tree-sitter-parser",
+        "generic-parser"
+      ]
+    },
+    {
+      "langs": [],
+      "modules": [
+        "generic-parser"
+      ],
+      "default": true
+    }
+  ],
+  "languagesWithoutDedicatedRoute": [
+    "css",
+    "dart",
+    "graphql",
+    "haskell",
+    "html",
+    "lua",
+    "md",
+    "other",
+    "proto",
+    "r",
+    "scala",
+    "sql",
+    "svelte",
+    "toml",
+    "vue",
+    "zig"
+  ],
+  "helperBackends": {
+    "go-parser": "child process: `go run` of WrongStack-owned helper source (batched via parser-batch); regex fallback when unavailable",
+    "py-parser": "child process: python3 -> python -> py (Windows) running WrongStack-owned helper; regex fallback when unavailable",
+    "ts-parser": "in-process TypeScript compiler API",
+    "rs-parser": "in-process (no cargo subprocess at this commit)",
+    "tree-sitter-parser": "in-process WASM grammars; regex fallback on load failure or zero symbols",
+    "generic-parser": "in-process regex extractor",
+    "json-parser": "in-process",
+    "yaml-parser": "in-process"
+  },
+  "envSwitches": {
+    "WRONGSTACK_INDEX_BENCH_NO_HOST_MUTEX": [
+      "background-indexer.ts"
+    ],
+    "WRONGSTACK_INDEX_BENCH_WRITE_HOLD_MS": [
+      "project-server.ts"
+    ],
+    "WRONGSTACK_INDEX_BINARY": [
+      "project-server-frames.ts"
+    ],
+    "WRONGSTACK_INDEX_INLINE": [
+      "index-worker-rpc.ts",
+      "project-server-client-state.ts"
+    ],
+    "WRONGSTACK_INDEX_SERVER": [
+      "project-server-client-state.ts"
+    ],
+    "WRONGSTACK_INDEX_SERVER_BUILD_ID": [
+      "project-server-client-state.ts"
+    ],
+    "WRONGSTACK_INDEX_SERVER_CLIENT_LEASE_MS": [
+      "project-server.ts"
+    ],
+    "WRONGSTACK_INDEX_SERVER_FAULT": [
+      "project-server.ts"
+    ],
+    "WRONGSTACK_INDEX_SERVER_IDLE_MS": [
+      "project-server.ts"
+    ],
+    "WRONGSTACK_INDEX_VECTORS": [
+      "vector-search.ts"
+    ],
+    "WRONGSTACK_INDEX_WAL_IDLE_MS": [
+      "wal-maintenance.ts"
+    ],
+    "WRONGSTACK_INDEX_WORKER_THRESHOLD": [
+      "parser-worker-pool.ts"
+    ],
+    "WRONGSTACK_PARSER_WORKER_SCRIPT": [
+      "parser-worker-pool.ts"
+    ],
+    "WRONGSTACK_TOOLCHAIN_BATCH": [
+      "parser-dispatch.ts"
+    ],
+    "WRONGSTACK_USE_TS_GO": [
+      "tree-sitter-parser.ts"
+    ],
+    "WRONGSTACK_USE_TS_PY": [
+      "tree-sitter-parser.ts"
+    ],
+    "WRONGSTACK_USE_TS_RS": [
+      "tree-sitter-parser.ts"
+    ]
+  },
+  "spawnSites": [
+    {
+      "file": "index-source-files.ts",
+      "line": 90,
+      "text": "execFile("
+    },
+    {
+      "file": "project-server-launch.ts",
+      "line": 68,
+      "text": "const child = spawn(process.execPath, daemonSpawnArgs(url, args), {"
+    },
+    {
+      "file": "py-parser.ts",
+      "line": 91,
+      "text": "proc = spawn(command, ['--version'], {"
+    },
+    {
+      "file": "toolchain-scripts.ts",
+      "line": 343,
+      "text": "proc = spawn(binary, args, {"
+    }
+  ],
+  "environment": {
+    "platform": "win32",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null,
+      "git": "git version 2.55.0.windows.5"
+    }
+  },
+  "note": "Baseline output for go/py depends on the helper toolchains; fixtures record which were present."
+}

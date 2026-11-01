@@ -1,0 +1,517 @@
+{
+  "fixture": "treesitter-mix",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "result": {
+    "filesIndexed": 6,
+    "symbolsIndexed": 17,
+    "errors": []
+  },
+  "metadata": {
+    "fts_churn_since_maintain": "17",
+    "graph_stamp": "<volatile>",
+    "last_indexed": "<volatile>",
+    "module_owner_version": "2",
+    "module_resolution_version": "1",
+    "next_symbol_id": "18",
+    "rank_stale_files": "0",
+    "rank_version": "1",
+    "ref_binding_version": "2",
+    "ref_resolution_version": "2",
+    "relation_epoch": "<volatile>",
+    "relation_graph_version": "2",
+    "relation_structure": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "symbols_text_dropped": "1",
+    "version": "5"
+  },
+  "files": [
+    {
+      "file": "<root>/Dockerfile",
+      "lang": "other",
+      "mtime_ms": "<volatile>",
+      "content_hash": "6f70bd2dcf4dc62a",
+      "symbol_count": 4,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/App.java",
+      "lang": "java",
+      "mtime_ms": "<volatile>",
+      "content_hash": "8764b5df66fa7a71",
+      "symbol_count": 3,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/build.sh",
+      "lang": "shell",
+      "mtime_ms": "<volatile>",
+      "content_hash": "cb8fa33ff14fa803",
+      "symbol_count": 1,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/schema.sql",
+      "lang": "sql",
+      "mtime_ms": "<volatile>",
+      "content_hash": "b56ee073aa03b847",
+      "symbol_count": 2,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/tool.rb",
+      "lang": "ruby",
+      "mtime_ms": "<volatile>",
+      "content_hash": "51d2bef862d1b1ef",
+      "symbol_count": 4,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/util.c",
+      "lang": "c",
+      "mtime_ms": "<volatile>",
+      "content_hash": "6a75aab807fbf3fe",
+      "symbol_count": 3,
+      "last_indexed": "<volatile>",
+      "package": "(root)",
+      "git_blob": ""
+    }
+  ],
+  "symbols": [
+    {
+      "lang": "other",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/Dockerfile",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/Dockerfile#mod:<module>@1:0"
+    },
+    {
+      "lang": "other",
+      "kind": "namespace",
+      "name": "base",
+      "file": "<root>/Dockerfile",
+      "line": 1,
+      "col": 0,
+      "signature": "FROM alpine:3.20 AS base",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "0638fe72e54ac1c9",
+      "key": "<root>/Dockerfile#namespace:base@1:0"
+    },
+    {
+      "lang": "other",
+      "kind": "const",
+      "name": "APP",
+      "file": "<root>/Dockerfile",
+      "line": 2,
+      "col": 0,
+      "signature": "ENV APP=1",
+      "doc_comment": "",
+      "scope": "base",
+      "end_line": 2,
+      "is_exported": 0,
+      "signature_hash": "a24209b2b6c3fc40",
+      "key": "<root>/Dockerfile#const:base.APP@2:0"
+    },
+    {
+      "lang": "other",
+      "kind": "property",
+      "name": "EXPOSE:8080",
+      "file": "<root>/Dockerfile",
+      "line": 3,
+      "col": 0,
+      "signature": "EXPOSE 8080",
+      "doc_comment": "",
+      "scope": "base",
+      "end_line": 3,
+      "is_exported": 0,
+      "signature_hash": "ffd156640376b93d",
+      "key": "<root>/Dockerfile#property:base.EXPOSE:8080@3:0"
+    },
+    {
+      "lang": "java",
+      "kind": "class",
+      "name": "App",
+      "file": "<root>/src/App.java",
+      "line": 3,
+      "col": 0,
+      "signature": "public class App { public static void main(String[] args) { new App().run(); } void run() { System.out.println(\"x\"); } }",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 8,
+      "is_exported": 1,
+      "signature_hash": "40ec7c3b460205df",
+      "key": "<root>/src/App.java#class:App@3:0"
+    },
+    {
+      "lang": "java",
+      "kind": "method",
+      "name": "main",
+      "file": "<root>/src/App.java",
+      "line": 4,
+      "col": 4,
+      "signature": "public static void main(String[] args) { new App().run(); }",
+      "doc_comment": "",
+      "scope": "App",
+      "end_line": 6,
+      "is_exported": 1,
+      "signature_hash": "26957675abee0ff8",
+      "key": "<root>/src/App.java#method:App.main@4:4"
+    },
+    {
+      "lang": "java",
+      "kind": "method",
+      "name": "run",
+      "file": "<root>/src/App.java",
+      "line": 7,
+      "col": 4,
+      "signature": "void run() { System.out.println(\"x\"); }",
+      "doc_comment": "",
+      "scope": "App",
+      "end_line": 7,
+      "is_exported": 0,
+      "signature_hash": "0c33296e732aff8b",
+      "key": "<root>/src/App.java#method:App.run@7:4"
+    },
+    {
+      "lang": "shell",
+      "kind": "function",
+      "name": "build",
+      "file": "<root>/src/build.sh",
+      "line": 2,
+      "col": 0,
+      "signature": "build() { echo building }",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 4,
+      "is_exported": 0,
+      "signature_hash": "35b20d7e8d4fbf20",
+      "key": "<root>/src/build.sh#function:build@2:0"
+    },
+    {
+      "lang": "sql",
+      "kind": "type",
+      "name": "users",
+      "file": "<root>/src/schema.sql",
+      "line": 1,
+      "col": 0,
+      "signature": "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "1d8708942552d872",
+      "key": "<root>/src/schema.sql#type:users@1:0"
+    },
+    {
+      "lang": "sql",
+      "kind": "type",
+      "name": "idx_users_name",
+      "file": "<root>/src/schema.sql",
+      "line": 2,
+      "col": 0,
+      "signature": "CREATE INDEX idx_users_name ON users(name);",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 2,
+      "is_exported": 0,
+      "signature_hash": "acf97fbca4a1ca81",
+      "key": "<root>/src/schema.sql#type:idx_users_name@2:0"
+    },
+    {
+      "lang": "ruby",
+      "kind": "namespace",
+      "name": "Tools",
+      "file": "<root>/src/tool.rb",
+      "line": 1,
+      "col": 0,
+      "signature": "module Tools class Runner def call(x) helper(x) end private def helper(x) = x * 2 end end",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 11,
+      "is_exported": 0,
+      "signature_hash": "69efbbae1d3491db",
+      "key": "<root>/src/tool.rb#namespace:Tools@1:0"
+    },
+    {
+      "lang": "ruby",
+      "kind": "class",
+      "name": "Runner",
+      "file": "<root>/src/tool.rb",
+      "line": 2,
+      "col": 2,
+      "signature": "class Runner def call(x) helper(x) end private def helper(x) = x * 2 end",
+      "doc_comment": "",
+      "scope": "Tools",
+      "end_line": 10,
+      "is_exported": 0,
+      "signature_hash": "f22080fea51d50fe",
+      "key": "<root>/src/tool.rb#class:Tools.Runner@2:2"
+    },
+    {
+      "lang": "ruby",
+      "kind": "method",
+      "name": "call",
+      "file": "<root>/src/tool.rb",
+      "line": 3,
+      "col": 4,
+      "signature": "def call(x) helper(x) end",
+      "doc_comment": "",
+      "scope": "Tools.Runner",
+      "end_line": 5,
+      "is_exported": 0,
+      "signature_hash": "1ef0e55e1fa781b9",
+      "key": "<root>/src/tool.rb#method:Tools.Runner.call@3:4"
+    },
+    {
+      "lang": "ruby",
+      "kind": "method",
+      "name": "helper",
+      "file": "<root>/src/tool.rb",
+      "line": 9,
+      "col": 4,
+      "signature": "def helper(x) = x * 2",
+      "doc_comment": "",
+      "scope": "Tools.Runner",
+      "end_line": 9,
+      "is_exported": 0,
+      "signature_hash": "ae8dc52059ba4e2d",
+      "key": "<root>/src/tool.rb#method:Tools.Runner.helper@9:4"
+    },
+    {
+      "lang": "c",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/src/util.c",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 2,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/src/util.c#mod:<module>@1:0"
+    },
+    {
+      "lang": "c",
+      "kind": "function",
+      "name": "add",
+      "file": "<root>/src/util.c",
+      "line": 3,
+      "col": 0,
+      "signature": "static int add(int a, int b) { return a + b; }",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 3,
+      "is_exported": 0,
+      "signature_hash": "c3409feae1451683",
+      "key": "<root>/src/util.c#function:add@3:0"
+    },
+    {
+      "lang": "c",
+      "kind": "function",
+      "name": "main",
+      "file": "<root>/src/util.c",
+      "line": 5,
+      "col": 0,
+      "signature": "int main(void) { printf(\"%d\\n\", add(1, 2)); return 0; }",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 5,
+      "is_exported": 0,
+      "signature_hash": "762e1394a5db3990",
+      "key": "<root>/src/util.c#function:main@5:0"
+    }
+  ],
+  "refs": [
+    {
+      "from": "<root>/Dockerfile#mod:<module>@1:0",
+      "to_name": "alpine:3.20",
+      "to": null,
+      "call_type": "import",
+      "line": 1,
+      "lang": "other",
+      "module": "alpine:3.20",
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/App.java#method:App.main@4:4",
+      "to_name": "run",
+      "to": "<root>/src/App.java#method:App.run@7:4",
+      "call_type": "call",
+      "line": 5,
+      "lang": "java",
+      "module": null,
+      "to_file": "<root>/src/App.java"
+    },
+    {
+      "from": "<root>/src/App.java#method:App.main@4:4",
+      "to_name": "App",
+      "to": "<root>/src/App.java#class:App@3:0",
+      "call_type": "call",
+      "line": 5,
+      "lang": "java",
+      "module": null,
+      "to_file": "<root>/src/App.java"
+    },
+    {
+      "from": "<root>/src/App.java#method:App.run@7:4",
+      "to_name": "println",
+      "to": null,
+      "call_type": "call",
+      "line": 7,
+      "lang": "java",
+      "module": null,
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/tool.rb#method:Tools.Runner.call@3:4",
+      "to_name": "helper",
+      "to": "<root>/src/tool.rb#method:Tools.Runner.helper@9:4",
+      "call_type": "call",
+      "line": 4,
+      "lang": "ruby",
+      "module": null,
+      "to_file": "<root>/src/tool.rb"
+    },
+    {
+      "from": "<root>/src/util.c#mod:<module>@1:0",
+      "to_name": "stdio",
+      "to": null,
+      "call_type": "import",
+      "line": 1,
+      "lang": "c",
+      "module": "stdio.h",
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/util.c#function:main@5:0",
+      "to_name": "printf",
+      "to": null,
+      "call_type": "call",
+      "line": 5,
+      "lang": "c",
+      "module": null,
+      "to_file": null
+    },
+    {
+      "from": "<root>/src/util.c#function:main@5:0",
+      "to_name": "add",
+      "to": "<root>/src/util.c#function:add@3:0",
+      "call_type": "call",
+      "line": 5,
+      "lang": "c",
+      "module": null,
+      "to_file": "<root>/src/util.c"
+    }
+  ],
+  "file_rank": [
+    {
+      "file": "<root>/src/App.java",
+      "rank": 1,
+      "in_deg": 2,
+      "out_deg": 2
+    },
+    {
+      "file": "<root>/src/tool.rb",
+      "rank": 0.666666666666667,
+      "in_deg": 1,
+      "out_deg": 1
+    },
+    {
+      "file": "<root>/src/util.c",
+      "rank": 0.666666666666667,
+      "in_deg": 1,
+      "out_deg": 1
+    }
+  ],
+  "symbol_rank": [
+    {
+      "symbol": "<root>/src/App.java#class:App@3:0",
+      "rank": 0.5497630023159951,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/App.java#method:App.main@4:4",
+      "rank": 1,
+      "in_deg": 0,
+      "out_deg": 2
+    },
+    {
+      "symbol": "<root>/src/App.java#method:App.run@7:4",
+      "rank": 0.5497630023159951,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/tool.rb#method:Tools.Runner.call@3:4",
+      "rank": 0.6998420015439969,
+      "in_deg": 0,
+      "out_deg": 1
+    },
+    {
+      "symbol": "<root>/src/tool.rb#method:Tools.Runner.helper@9:4",
+      "rank": 0.6998420015439969,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/util.c#function:add@3:0",
+      "rank": 0.6998420015439969,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/src/util.c#function:main@5:0",
+      "rank": 0.6998420015439969,
+      "in_deg": 0,
+      "out_deg": 1
+    }
+  ]
+}

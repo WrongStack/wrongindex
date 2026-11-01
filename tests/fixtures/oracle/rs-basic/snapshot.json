@@ -1,0 +1,250 @@
+{
+  "fixture": "rs-basic",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "result": {
+    "filesIndexed": 3,
+    "symbolsIndexed": 10,
+    "errors": []
+  },
+  "metadata": {
+    "fts_churn_since_maintain": "10",
+    "graph_stamp": "<volatile>",
+    "last_indexed": "<volatile>",
+    "module_owner_version": "2",
+    "module_resolution_version": "1",
+    "next_symbol_id": "11",
+    "rank_stale_files": "0",
+    "rank_version": "1",
+    "ref_binding_version": "2",
+    "ref_resolution_version": "2",
+    "relation_epoch": "<volatile>",
+    "relation_graph_version": "2",
+    "relation_structure": "047864c0a6cb4721f64bdbb28adec3df3de028422e080f6f79b3b1aca558dd91",
+    "symbols_text_dropped": "1",
+    "version": "5"
+  },
+  "files": [
+    {
+      "file": "<root>/Cargo.toml",
+      "lang": "toml",
+      "mtime_ms": "<volatile>",
+      "content_hash": "80f95eccc3ee2bdd",
+      "symbol_count": 1,
+      "last_indexed": "<volatile>",
+      "package": "crate:rs-basic",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/lib.rs",
+      "lang": "rs",
+      "mtime_ms": "<volatile>",
+      "content_hash": "89c6cebd0e1f61d5",
+      "symbol_count": 4,
+      "last_indexed": "<volatile>",
+      "package": "crate:rs-basic",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/src/shapes.rs",
+      "lang": "rs",
+      "mtime_ms": "<volatile>",
+      "content_hash": "e5379cd2a4de28bd",
+      "symbol_count": 5,
+      "last_indexed": "<volatile>",
+      "package": "crate:rs-basic",
+      "git_blob": ""
+    }
+  ],
+  "symbols": [
+    {
+      "lang": "toml",
+      "kind": "namespace",
+      "name": "package",
+      "file": "<root>/Cargo.toml",
+      "line": 1,
+      "col": 0,
+      "signature": "[package]",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "4facdb7761526d2e",
+      "key": "<root>/Cargo.toml#namespace:package@1:0"
+    },
+    {
+      "lang": "rs",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/src/lib.rs",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/src/lib.rs#mod:<module>@1:0"
+    },
+    {
+      "lang": "rs",
+      "kind": "function",
+      "name": "total",
+      "file": "<root>/src/lib.rs",
+      "line": 6,
+      "col": 7,
+      "signature": "pub fn total<T: Area>(items: &[T]) -> f64 {",
+      "doc_comment": "Total area of a slice of shapes.",
+      "scope": "",
+      "end_line": 15,
+      "is_exported": 1,
+      "signature_hash": "2163a05821b493a0",
+      "key": "<root>/src/lib.rs#function:total@6:7"
+    },
+    {
+      "lang": "rs",
+      "kind": "function",
+      "name": "demo",
+      "file": "<root>/src/lib.rs",
+      "line": 16,
+      "col": 7,
+      "signature": "pub fn demo() -> f64 {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 16,
+      "is_exported": 1,
+      "signature_hash": "125e04bad524c9c1",
+      "key": "<root>/src/lib.rs#function:demo@16:7"
+    },
+    {
+      "lang": "rs",
+      "kind": "mod",
+      "name": "shapes",
+      "file": "<root>/src/lib.rs",
+      "line": 1,
+      "col": 8,
+      "signature": "pub mod shapes;",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 5,
+      "is_exported": 1,
+      "signature_hash": "d5ea74cff7d3ee14",
+      "key": "<root>/src/lib.rs#mod:shapes@1:8"
+    },
+    {
+      "lang": "rs",
+      "kind": "function",
+      "name": "area",
+      "file": "<root>/src/shapes.rs",
+      "line": 2,
+      "col": 7,
+      "signature": "fn area(&self) -> f64;",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 4,
+      "is_exported": 0,
+      "signature_hash": "2665db17dc6adc2d",
+      "key": "<root>/src/shapes.rs#function:area@2:7"
+    },
+    {
+      "lang": "rs",
+      "kind": "function",
+      "name": "area",
+      "file": "<root>/src/shapes.rs",
+      "line": 10,
+      "col": 7,
+      "signature": "fn area(&self) -> f64 {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 10,
+      "is_exported": 0,
+      "signature_hash": "bd67fc6d1ea71880",
+      "key": "<root>/src/shapes.rs#function:area@10:7"
+    },
+    {
+      "lang": "rs",
+      "kind": "struct",
+      "name": "Circle",
+      "file": "<root>/src/shapes.rs",
+      "line": 5,
+      "col": 11,
+      "signature": "pub struct Circle {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 8,
+      "is_exported": 1,
+      "signature_hash": "116f67fb5ed9fa2b",
+      "key": "<root>/src/shapes.rs#struct:Circle@5:11"
+    },
+    {
+      "lang": "rs",
+      "kind": "trait",
+      "name": "Area",
+      "file": "<root>/src/shapes.rs",
+      "line": 1,
+      "col": 10,
+      "signature": "pub trait Area {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 1,
+      "is_exported": 1,
+      "signature_hash": "8e2b83f74fc6249d",
+      "key": "<root>/src/shapes.rs#trait:Area@1:10"
+    },
+    {
+      "lang": "rs",
+      "kind": "impl",
+      "name": "Area",
+      "file": "<root>/src/shapes.rs",
+      "line": 9,
+      "col": 5,
+      "signature": "impl Area for Circle {",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 9,
+      "is_exported": 0,
+      "signature_hash": "64a42f4370f86bfe",
+      "key": "<root>/src/shapes.rs#impl:Area@9:5"
+    }
+  ],
+  "refs": [
+    {
+      "from": "<root>/src/lib.rs#mod:<module>@1:0",
+      "to_name": "shapes",
+      "to": "<root>/src/lib.rs#mod:shapes@1:8",
+      "call_type": "import",
+      "line": 3,
+      "lang": "rs",
+      "module": "shapes",
+      "to_file": "<root>/src/shapes.rs"
+    }
+  ],
+  "file_rank": [],
+  "symbol_rank": []
+}

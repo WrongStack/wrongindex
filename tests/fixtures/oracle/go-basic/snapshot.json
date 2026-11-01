@@ -1,0 +1,252 @@
+{
+  "fixture": "go-basic",
+  "provenance": {
+    "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+    "oracle": {
+      "kind": "clean-archive",
+      "archiveSha256": "dc7fc1633e4c05e2617845362a5cc5714447009aacfb66abe39943755852025a",
+      "bunLockSha256": "3ef4accd50bb3a3923b41b5121fce060abee7035e6ffd438a6f5925d9517c7d5",
+      "distSha256": {
+        "primitives": "252d64d809a1e0f0f0639177a3ae3e4056d79527221091f43973dd4a5b92a73b",
+        "persistence": "7543d00d1b280af1646e22156226b6c77c6acb2fa6ce024188d9be04a2e22d21",
+        "kanban": "e667d845da2a728df62b84112b8748b1e99caed192c7f1e7074f8be9de879bca",
+        "contracts": "11793450d427b638ce036011ce12a7a643acdda125af4ee05c800a1f00b822d9",
+        "agent-catalog": "567b0934fad5111d7b10d2ee9b718e28eef06bb6f51efccdb79718f9675f756d",
+        "core": "a2fecfdb03fa418930bf2b835d000b94d4386eaa06a43513f979ef68c55720c0"
+      }
+    },
+    "coreUtilsDistSha256": "4b7af6441583f603ebcb13dd769a45a2d2e9d75477a352a2b328267ad870d21e",
+    "bun": "1.4.4",
+    "sqlite": "3.53.4",
+    "toolchains": {
+      "go": "go version go1.27.0 windows/amd64",
+      "python3": null,
+      "python": "Python 3.14.8",
+      "py": null
+    },
+    "platform": "win32",
+    "provisional": false
+  },
+  "result": {
+    "filesIndexed": 2,
+    "symbolsIndexed": 6,
+    "errors": []
+  },
+  "metadata": {
+    "fts_churn_since_maintain": "6",
+    "graph_stamp": "<volatile>",
+    "last_indexed": "<volatile>",
+    "module_owner_version": "2",
+    "module_resolution_version": "1",
+    "next_symbol_id": "7",
+    "rank_stale_files": "0",
+    "rank_version": "1",
+    "ref_binding_version": "2",
+    "ref_resolution_version": "2",
+    "relation_epoch": "<volatile>",
+    "relation_graph_version": "2",
+    "relation_structure": "acc9408bd2d4543efb674530385b2720f07dc6d7147d1af6c78cc614a1008de8",
+    "symbols_text_dropped": "1",
+    "version": "5"
+  },
+  "files": [
+    {
+      "file": "<root>/internal/util/util.go",
+      "lang": "go",
+      "mtime_ms": "<volatile>",
+      "content_hash": "22d8f15efa6596a6",
+      "symbol_count": 2,
+      "last_indexed": "<volatile>",
+      "package": "example.com/gobasic/internal/util",
+      "git_blob": ""
+    },
+    {
+      "file": "<root>/main.go",
+      "lang": "go",
+      "mtime_ms": "<volatile>",
+      "content_hash": "a2a1f80f5350f7fe",
+      "symbol_count": 4,
+      "last_indexed": "<volatile>",
+      "package": "example.com/gobasic",
+      "git_blob": ""
+    }
+  ],
+  "symbols": [
+    {
+      "lang": "go",
+      "kind": "function",
+      "name": "Greet",
+      "file": "<root>/internal/util/util.go",
+      "line": 4,
+      "col": 0,
+      "signature": "func Greet(name string) string",
+      "doc_comment": "Greet returns a greeting.",
+      "scope": "util.Greet",
+      "end_line": 5,
+      "is_exported": 0,
+      "signature_hash": "f662aa3f4ab47ec8",
+      "key": "<root>/internal/util/util.go#function:util.Greet.Greet@4:0"
+    },
+    {
+      "lang": "go",
+      "kind": "function",
+      "name": "helper",
+      "file": "<root>/internal/util/util.go",
+      "line": 6,
+      "col": 0,
+      "signature": "func helper() int",
+      "doc_comment": "",
+      "scope": "util.helper",
+      "end_line": 6,
+      "is_exported": 0,
+      "signature_hash": "99ff963d14870bdc",
+      "key": "<root>/internal/util/util.go#function:util.helper.helper@6:0"
+    },
+    {
+      "lang": "go",
+      "kind": "mod",
+      "name": "<module>",
+      "file": "<root>/main.go",
+      "line": 1,
+      "col": 0,
+      "signature": "",
+      "doc_comment": "",
+      "scope": "",
+      "end_line": 8,
+      "is_exported": 0,
+      "signature_hash": "a9f603a717bbbd32",
+      "key": "<root>/main.go#mod:<module>@1:0"
+    },
+    {
+      "lang": "go",
+      "kind": "type",
+      "name": "Server",
+      "file": "<root>/main.go",
+      "line": 9,
+      "col": 5,
+      "signature": "type Server struct{ port int }",
+      "doc_comment": "Server holds config.",
+      "scope": "main",
+      "end_line": 11,
+      "is_exported": 0,
+      "signature_hash": "6991d1777165a258",
+      "key": "<root>/main.go#type:main.Server@9:5"
+    },
+    {
+      "lang": "go",
+      "kind": "method",
+      "name": "Start",
+      "file": "<root>/main.go",
+      "line": 12,
+      "col": 0,
+      "signature": "func (s *Server) Start() error",
+      "doc_comment": "Start runs the server.",
+      "scope": "main.Server.Start",
+      "end_line": 16,
+      "is_exported": 0,
+      "signature_hash": "c99b619c93153796",
+      "key": "<root>/main.go#method:main.Server.Start.Start@12:0"
+    },
+    {
+      "lang": "go",
+      "kind": "function",
+      "name": "main",
+      "file": "<root>/main.go",
+      "line": 17,
+      "col": 0,
+      "signature": "func main()",
+      "doc_comment": "",
+      "scope": "main.main",
+      "end_line": 17,
+      "is_exported": 0,
+      "signature_hash": "02a49753b5dc5d8b",
+      "key": "<root>/main.go#function:main.main.main@17:0"
+    }
+  ],
+  "refs": [
+    {
+      "from": "<root>/main.go#mod:<module>@1:0",
+      "to_name": "fmt",
+      "to": null,
+      "call_type": "import",
+      "line": 4,
+      "lang": "go",
+      "module": "fmt",
+      "to_file": null
+    },
+    {
+      "from": "<root>/main.go#mod:<module>@1:0",
+      "to_name": "util",
+      "to": null,
+      "call_type": "import",
+      "line": 5,
+      "lang": "go",
+      "module": "example.com/gobasic/internal/util",
+      "to_file": "<root>/internal/util/util.go"
+    },
+    {
+      "from": "<root>/main.go#method:main.Server.Start.Start@12:0",
+      "to_name": "Println",
+      "to": null,
+      "call_type": "call",
+      "line": 13,
+      "lang": "go",
+      "module": null,
+      "to_file": null
+    },
+    {
+      "from": "<root>/main.go#method:main.Server.Start.Start@12:0",
+      "to_name": "Greet",
+      "to": "<root>/internal/util/util.go#function:util.Greet.Greet@4:0",
+      "call_type": "call",
+      "line": 13,
+      "lang": "go",
+      "module": null,
+      "to_file": "<root>/internal/util/util.go"
+    },
+    {
+      "from": "<root>/main.go#function:main.main.main@17:0",
+      "to_name": "Start",
+      "to": "<root>/main.go#method:main.Server.Start.Start@12:0",
+      "call_type": "call",
+      "line": 19,
+      "lang": "go",
+      "module": null,
+      "to_file": "<root>/main.go"
+    }
+  ],
+  "file_rank": [
+    {
+      "file": "<root>/internal/util/util.go",
+      "rank": 0.354740048313464,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "file": "<root>/main.go",
+      "rank": 1,
+      "in_deg": 1,
+      "out_deg": 2
+    }
+  ],
+  "symbol_rank": [
+    {
+      "symbol": "<root>/internal/util/util.go#function:util.Greet.Greet@4:0",
+      "rank": 0.5497630023159951,
+      "in_deg": 1,
+      "out_deg": 0
+    },
+    {
+      "symbol": "<root>/main.go#method:main.Server.Start.Start@12:0",
+      "rank": 1,
+      "in_deg": 1,
+      "out_deg": 1
+    },
+    {
+      "symbol": "<root>/main.go#function:main.main.main@17:0",
+      "rank": 0.5497630023159951,
+      "in_deg": 0,
+      "out_deg": 1
+    }
+  ]
+}

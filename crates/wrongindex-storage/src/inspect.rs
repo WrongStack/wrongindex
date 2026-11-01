@@ -628,7 +628,20 @@ mod tests {
 
     #[test]
     fn oracle_fixtures_are_compatible_and_untouched() {
-        for name in ["basic-ts", "config-only"] {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/oracle");
+        let mut names: Vec<String> = std::fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().join("index.db").is_file())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        // A run that discovers no fixtures must not pass silently.
+        assert!(
+            names.len() >= 8,
+            "expected the oracle corpus, found {names:?}"
+        );
+        for name in &names {
             let (_dir, db) = copy_fixture(name);
             let before = sha(&db);
             let r = inspect_index(&db);
