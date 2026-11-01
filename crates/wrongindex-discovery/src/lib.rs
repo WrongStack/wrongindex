@@ -369,7 +369,10 @@ mod tests {
             .to_string_lossy()
             .into_owned();
         assert!(d.outside_root.contains(&link_s), "{:?}", d.outside_root);
-        assert!(!d.dirty_hashes.contains_key(&link_s), "outside target was read");
+        assert!(
+            !d.dirty_hashes.contains_key(&link_s),
+            "outside target was read"
+        );
     }
 
     #[test]

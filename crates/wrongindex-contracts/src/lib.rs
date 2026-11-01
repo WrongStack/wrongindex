@@ -204,6 +204,7 @@ pub mod method {
     pub const PROJECT_DETACH: &str = "project.detach";
     pub const INDEX_REQUEST: &str = "index.request";
     pub const INDEX_CHECK: &str = "index.check";
+    pub const INDEX_QUERY: &str = "index.query";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
     pub const OWNERSHIP_ACQUIRE: &str = "ownership.acquire";
@@ -220,6 +221,7 @@ pub mod method {
         PROJECT_DETACH,
         INDEX_REQUEST,
         INDEX_CHECK,
+        INDEX_QUERY,
         JOB_GET,
         JOB_LIST,
         OWNERSHIP_ACQUIRE,
@@ -491,6 +493,9 @@ pub struct JobRecord {
     pub completed_at_ms: Option<i64>,
     pub result: Option<Value>,
     pub error: Option<ErrorBody>,
+    /// Admission parameters (paths, write fence).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

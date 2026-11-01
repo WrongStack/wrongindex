@@ -8,8 +8,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::json;
 use tokio::sync::watch;
-use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind};
+use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, OwnerFence};
 
 use crate::server::Shared;
 use crate::{info, warn};
@@ -54,7 +55,7 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
                     continue;
                 }
             }
-            let outcome = execute(&shared, &job.project_id, job.kind).await;
+            let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
             let ok = outcome.is_ok();
             let id = job_id.clone();
             match shared.registry(move |r| r.complete_job(&id, outcome)).await {
@@ -74,6 +75,7 @@ async fn execute(
     shared: &Arc<Shared>,
     project_id: &str,
     kind: JobKind,
+    params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, ErrorBody> {
     let pid = project_id.to_string();
     let project = shared.registry(move |r| r.get_project(&pid)).await?;
@@ -89,9 +91,54 @@ async fn execute(
             serde_json::to_value(inspection)
                 .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))
         }
-        other => Err(ErrorBody::new(
-            ErrorCode::NotImplemented,
-            format!("'{}' jobs are not executable in this build", other.as_str()),
-        )),
+        JobKind::Full | JobKind::Incremental | JobKind::Reconcile => {
+            let params = params.unwrap_or_default();
+            let fence: OwnerFence =
+                serde_json::from_value(params["fence"].clone()).map_err(|_| {
+                    ErrorBody::new(ErrorCode::OwnerConflict, "job carries no ownership fence")
+                })?;
+            // INV-14: stale work (owner epoch or configuration changed since
+            // admission, or ownership lost) never runs.
+            let pid = project_id.to_string();
+            shared
+                .registry(move |r| r.validate_fence(&pid, &fence))
+                .await?;
+            if !shared.owners.holds(project_id) {
+                return Err(ErrorBody::new(
+                    ErrorCode::OwnerConflict,
+                    "ownership guard not held by this instance",
+                ));
+            }
+            let mut args = json!({
+                "projectRoot": project.checkout_root,
+                "indexDir": project.index_dir,
+            });
+            if kind == JobKind::Incremental {
+                args["files"] = params["paths"].clone();
+            }
+            let run = shared
+                .engine
+                .call("index", args, Duration::from_secs(30 * 60))
+                .await;
+            let pid = project_id.to_string();
+            match run {
+                Ok(result) => {
+                    let stamp = result["graphStamp"].as_str().map(str::to_string);
+                    let publication = shared
+                        .registry(move |r| r.record_publication(&pid, stamp.as_deref(), None))
+                        .await?;
+                    let mut out = result;
+                    out["generation"] = json!(publication.generation);
+                    Ok(out)
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    let _ = shared
+                        .registry(move |r| r.record_publication(&pid, None, Some(&msg)))
+                        .await;
+                    Err(e)
+                }
+            }
+        }
     }
 }

@@ -51,6 +51,21 @@ enum Command {
         #[command(subcommand)]
         action: JobAction,
     },
+    /// Search a project's index through the service (requires ownership).
+    Search {
+        id: String,
+        query: String,
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
+    /// Run any read operation (stats, packageGraph, fileGraph, symbolGraph,
+    /// incomingCalls, outgoingCalls, context, vectorSearch) with JSON args.
+    Query {
+        id: String,
+        op: String,
+        #[arg(long, default_value = "{}")]
+        args: String,
+    },
     /// Read-only installation and service diagnosis.
     Doctor,
     /// Read-only offline inspection of an index.db (no service required).
@@ -145,6 +160,12 @@ struct IndexArgs {
     reconcile: bool,
     #[arg(long, conflicts_with_all = ["check", "reconcile"])]
     rebuild: bool,
+    /// Full run through the indexing engine (unchanged files are skipped).
+    #[arg(long, conflicts_with_all = ["check", "reconcile", "rebuild"])]
+    full: bool,
+    /// Targeted run for these project paths (repeatable).
+    #[arg(long = "path", conflicts_with_all = ["check", "reconcile", "rebuild", "full"])]
+    paths: Vec<String>,
     /// Wait until the job reaches a terminal state.
     #[arg(long)]
     wait: bool,
@@ -242,6 +263,56 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        Command::Search { id, query, limit } => {
+            let mut c = connect(&root).await?;
+            let v = c
+                .call_raw(
+                    method::INDEX_QUERY,
+                    Some(&id),
+                    json!({"op": "search", "args": {"query": query, "limit": limit}}),
+                    None,
+                )
+                .await?;
+            if json {
+                print_json(&v);
+            } else {
+                let results = v["result"]["results"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                println!(
+                    "{} of {} result(s), generation {}",
+                    results.len(),
+                    v["result"]["total"],
+                    v["generation"]
+                );
+                for r in results {
+                    println!(
+                        "  {:<10} {:<28} {}:{}",
+                        r["kind"].as_str().unwrap_or(""),
+                        r["name"].as_str().unwrap_or(""),
+                        r["file"].as_str().unwrap_or(""),
+                        r["line"]
+                    );
+                }
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        Command::Query { id, op, args } => {
+            let args: Value = serde_json::from_str(&args)
+                .map_err(|e| fail(exit_code::INVALID_INPUT, format!("--args: {e}")))?;
+            let mut c = connect(&root).await?;
+            let v = c
+                .call_raw(
+                    method::INDEX_QUERY,
+                    Some(&id),
+                    json!({"op": op, "args": args}),
+                    None,
+                )
+                .await?;
+            print_json(&v);
+            Ok(exit_code::SUCCESS)
+        }
         Command::Inspect { path } => inspect(&path, json),
         Command::Debug { action } => debug(action),
         Command::ResolveIndexDir {
@@ -601,8 +672,10 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
 // ─── index / job ────────────────────────────────────────────────────────────
 
 async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
-    let kind = if args.rebuild {
+    let kind = if args.rebuild || args.full {
         "full"
+    } else if !args.paths.is_empty() {
+        "incremental"
     } else if args.reconcile {
         "reconcile"
     } else if args.check {
@@ -610,7 +683,7 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
     } else {
         return Err(fail(
             exit_code::INVALID_INPUT,
-            "choose one of --check, --reconcile, --rebuild",
+            "choose one of --check, --full, --path <p>, --reconcile, --rebuild",
         ));
     };
     let mut c = connect(root).await?;
@@ -618,7 +691,7 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
         c.call_raw(
             method::INDEX_REQUEST,
             Some(&args.id),
-            json!({"kind": kind}),
+            json!({"kind": kind, "paths": args.paths}),
             None,
         )
         .await?,

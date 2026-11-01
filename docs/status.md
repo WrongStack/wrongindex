@@ -61,13 +61,23 @@ Finding: Bun's SQLite is 3.53.4; WrongIndex's bundled SQLite (rusqlite 0.41.1) i
 
 **M1 exit gate** ("a real named-pipe client connects, authenticates, admits a fixture job, and obtains a durable result; no GUI or parser mocking"): **met locally** by `crates/wrongindexd/tests/vertical_slice.rs::vertical_slice_admits_and_completes_a_durable_check_job`, which spawns the real daemon binary, registers a project pointing at a WrongStack-produced `index.db`, admits an idempotent check job, reads the result, restarts the daemon, and re-reads the same durable job. Hosted CI: NOT RUN.
 
+## M3 - compatible hybrid preview (started)
+
+| ID | State | Evidence / gap |
+|---|---|---|
+| WI-300 | Done | `packages/legacy-worker/worker.ts`: long-lived Bun process running WrongStack's in-process `runIndexerWithStore` and `callInline` read services from an explicitly configured engine directory (`--engine`, `WRONGINDEX_ENGINE`). Forces `WRONGSTACK_INDEX_INLINE=1`; never starts or elects a project server; holds no ownership. JSON-lines protocol, strictly sequential requests. |
+| WI-301 | Done (preview) | `crates/wrongindexd/src/engine.rs`: lazy spawn with hello handshake, per-request deadlines (index 30 min, query 60 s), kill + restart on timeout/transport failure, start/failure counters in `daemon.health` together with the engine identity (`native: false`). Memory/CPU limits for the worker: NOT DONE. |
+| WI-302 | Partial | Write jobs `full` / `incremental` / `reconcile` admitted only with a valid ownership fence (fence stored with the job, re-validated before the run; paths confined to the checkout). Reads via `index.query` (`search`, `stats`, graphs, calls, context, vector search) - project root and index dir always come from the registration, never the client; reads also require ownership because opening a WrongStack store runs its schema initializer. Responses carry `daemonInstanceId`, `generation`, `graphStamp`, `observedAt`. Registry v3 tracks generation: it advances only when WrongStack's `graph_stamp` moves, so unchanged runs publish nothing (INV-11). CLI: `index --full`, `index --path`, `search`, `query`. Query-fixture differential through the daemon: not yet. |
+
+Engine acceptance test (`crates/wrongindexd/tests/engine.rs`, ignored by default; needs `WRONGINDEX_TEST_ENGINE` + bun): ownership required for writes and reads; claim of a missing index; full run 4 files / 14 symbols, generation 1; written index inspects `compatible`; search finds `greet`; unchanged full run keeps generation 1; targeted edit -> generation 2 and the new `farewell` symbol is searchable; `../../outside.ts` rejected; a client-supplied `indexDir` is ignored; health shows `legacy-bun-worker`, `native: false`; writes refused after release. 5/5 local runs PASS. Hosted CI: NOT RUN (no engine in CI).
+
 ## Verification run (2026-11-01, Windows 11, local)
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | PASS |
 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS |
-| `cargo test --workspace` | PASS — 63 tests (contracts 4, storage 25, registry 13, ipc 14, daemon integration 6 incl. ownership); storage includes oracle-hash parity over all fixture files and resolver KATs |
+| `cargo test --workspace` | PASS — 76 tests + 1 engine test ignored without an engine (contracts 4, storage 25, registry 13, discovery 13, ipc 14, daemon integration 6); storage includes oracle-hash parity over all fixture files and resolver KATs |
 | `bun scripts/oracle/resolver-diff.ts` | PASS — 15/15 live scenarios match WrongStack |
 | `cargo test -p wrongindexd --test vertical_slice` ×5 | PASS 5/5 (~5.2 s each) |
 | Regression-guard proof: hash raw bytes instead of lossy-decoded text | `matches_wrongstack_known_answers` FAILS as intended; passes after revert |

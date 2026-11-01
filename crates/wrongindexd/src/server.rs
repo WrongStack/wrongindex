@@ -36,6 +36,7 @@ const MAX_PAGE_SIZE: usize = 500;
 pub struct Config {
     pub root: DataRoot,
     pub drain: Duration,
+    pub engine: Option<crate::engine::EngineConfig>,
 }
 
 #[derive(Debug)]
@@ -61,6 +62,7 @@ pub struct Shared {
     pub owners: crate::ownership::Owners,
     connections: AtomicUsize,
     sqlite_version: String,
+    pub engine: crate::engine::Engine,
 }
 
 impl Shared {
@@ -164,6 +166,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         owners: crate::ownership::Owners::default(),
         connections: AtomicUsize::new(0),
         sqlite_version: wrongindex_storage::sqlite_runtime().version,
+        engine: crate::engine::Engine::new(cfg.engine.clone()),
     });
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
@@ -222,6 +225,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     if tokio::time::timeout(cfg.drain, worker).await.is_err() {
         warn!("drain_budget_exceeded", {"seconds": cfg.drain.as_secs()});
     }
+    shared.engine.shutdown().await;
     crate::ownership::release_all_for_shutdown(&shared).await;
     let retracted = Discovery::retract(&cfg.root, &instance_id).unwrap_or(false);
     info!("stopped", {"instanceId": instance_id, "discoveryRetracted": retracted});
@@ -492,7 +496,11 @@ async fn dispatch_inner(
                 queued_jobs: queued,
                 running_jobs: running,
                 sqlite_version: shared.sqlite_version.clone(),
-                backend_inventory: vec!["inspector:read-only (in-process)".into()],
+                backend_inventory: vec![
+                    "inspector:read-only (in-process)".into(),
+                    shared.engine.describe().to_string(),
+                    json!({"engineHello": shared.engine.hello().await}).to_string(),
+                ],
             })
         }
         method::DAEMON_SHUTDOWN => {
@@ -559,18 +567,50 @@ async fn dispatch_inner(
             } else {
                 parse(req.params.clone())?
             };
+            let mut params_json = to_value(&params)?;
             if params.kind != JobKind::Check {
-                return Err(ErrorBody::new(
-                    ErrorCode::NotImplemented,
-                    format!(
-                        "'{}' jobs need an indexing backend; this preview build only performs read-only checks",
-                        params.kind.as_str()
-                    ),
-                ));
+                // Write work needs the engine and a valid ownership fence;
+                // the fence travels with the job and is re-validated at run.
+                if !shared.engine.configured() {
+                    return Err(ErrorBody::new(
+                        ErrorCode::NotImplemented,
+                        format!(
+                            "'{}' jobs need an indexing engine; start wrongindexd with --engine <WrongStack dir>",
+                            params.kind.as_str()
+                        ),
+                    ));
+                }
+                let p2 = pid.clone();
+                let (project, fence) = shared
+                    .registry(move |r| Ok((r.get_project(&p2)?, r.fence(&p2)?)))
+                    .await
+                    .map_err(|e| {
+                        if e.code == ErrorCode::OwnerConflict {
+                            ErrorBody::new(
+                                ErrorCode::OwnerConflict,
+                                format!("{}; claim ownership first (ownership.acquire)", e.message),
+                            )
+                        } else {
+                            e
+                        }
+                    })?;
+                if params.kind == JobKind::Incremental && params.paths.is_empty() {
+                    return Err(ErrorBody::new(
+                        ErrorCode::InvalidRequest,
+                        "incremental jobs need at least one path",
+                    ));
+                }
+                let root = std::path::Path::new(&project.checkout_root);
+                let paths = params
+                    .paths
+                    .iter()
+                    .map(|p| crate::engine::contained_path(root, p))
+                    .collect::<Result<Vec<_>, _>>()?;
+                params_json["paths"] = json!(paths);
+                params_json["fence"] = to_value(fence)?;
             }
             let key = req.idempotency_key.clone();
             let client_name = client.to_string();
-            let params_json = to_value(&params)?;
             let admission = shared
                 .registry(move |r| {
                     if r.count_jobs(JobState::Queued)? >= MAX_QUEUED_JOBS {
@@ -593,6 +633,60 @@ async fn dispatch_inner(
                 job: admission.job,
                 deduplicated: admission.deduplicated,
             })
+        }
+        method::INDEX_QUERY => {
+            let pid = require_project(&req)?;
+            #[derive(Deserialize)]
+            struct QueryParams {
+                op: String,
+                #[serde(default)]
+                args: Value,
+            }
+            let q: QueryParams = parse(req.params)?;
+            let p2 = pid.clone();
+            let (project, ownership, publication) = shared
+                .registry(move |r| {
+                    Ok((
+                        r.get_project(&p2)?,
+                        r.ownership_status(&p2)?,
+                        r.publication_state(&p2)?,
+                    ))
+                })
+                .await?;
+            // Opening the index through the WrongStack engine runs its schema
+            // initializer (a potential write), so reads also require ownership.
+            if ownership.state != wrongindex_contracts::Ownership::Owned
+                || !shared.owners.holds(&pid)
+            {
+                return Err(ErrorBody::new(
+                    ErrorCode::OwnerConflict,
+                    "queries through the preview engine require ownership; claim the project first",
+                ));
+            }
+            let mut args = if q.args.is_object() {
+                q.args
+            } else {
+                json!({})
+            };
+            // The daemon, never the client, decides which index is read.
+            args["projectRoot"] = json!(project.checkout_root);
+            args["indexDir"] = json!(project.index_dir);
+            let result = shared
+                .engine
+                .call(
+                    "query",
+                    json!({"op": q.op, "args": args}),
+                    Duration::from_secs(60),
+                )
+                .await?;
+            Ok(json!({
+                "projectId": pid,
+                "daemonInstanceId": shared.instance_id,
+                "generation": publication.generation,
+                "graphStamp": publication.graph_stamp,
+                "observedAt": now_ms(),
+                "result": result,
+            }))
         }
         method::JOB_GET => {
             let p: JobGetParams = parse(req.params)?;

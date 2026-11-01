@@ -19,7 +19,7 @@ use wrongindex_contracts::{
 
 pub use identity::{PathIdentity, resolve_identity};
 
-pub const REGISTRY_SCHEMA_VERSION: i64 = 2;
+pub const REGISTRY_SCHEMA_VERSION: i64 = 3;
 
 /// Idempotency receipts expire after this long.
 pub const RECEIPT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -110,6 +110,15 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
     ALTER TABLE project_runtime ADD COLUMN ownership_state TEXT NOT NULL DEFAULT 'unowned';
     ALTER TABLE project_runtime ADD COLUMN desired_ownership INTEGER NOT NULL DEFAULT 0;
     CREATE INDEX idx_ownership_transitions_project ON ownership_transitions(project_id, id);
+    "#,
+    ),
+    (
+        3,
+        "publication bookkeeping",
+        r#"
+    ALTER TABLE project_runtime ADD COLUMN last_graph_stamp TEXT;
+    ALTER TABLE project_runtime ADD COLUMN last_index_ms INTEGER;
+    ALTER TABLE project_runtime ADD COLUMN last_index_error TEXT;
     "#,
     ),
 ];
@@ -871,6 +880,65 @@ impl Registry {
         Ok(desired)
     }
 
+    /// Record a committed index run. The registry generation advances only
+    /// when WrongStack's own graph stamp moved (a real content generation);
+    /// an unchanged run leaves it alone (INV-11). The index's own metadata
+    /// stays authoritative; this is replayable bookkeeping.
+    pub fn record_publication(
+        &mut self,
+        project_id: &str,
+        graph_stamp: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<PublicationState, ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        let previous: Option<String> = tx
+            .query_row(
+                "SELECT last_graph_stamp FROM project_runtime WHERE project_id = ?1",
+                params![project_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db_err)?
+            .flatten();
+        let moved = graph_stamp.is_some() && graph_stamp != previous.as_deref();
+        tx.execute(
+            "UPDATE project_runtime SET
+               last_published_generation = COALESCE(last_published_generation, 0) + ?2,
+               last_graph_stamp = COALESCE(?3, last_graph_stamp),
+               last_index_ms = ?4,
+               last_index_error = ?5,
+               updated_at_ms = ?4
+             WHERE project_id = ?1",
+            params![project_id, moved as i64, graph_stamp, now_ms(), error],
+        )
+        .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+        self.publication_state(project_id)
+    }
+
+    pub fn publication_state(&self, project_id: &str) -> Result<PublicationState, ErrorBody> {
+        self.conn
+            .query_row(
+                "SELECT COALESCE(last_published_generation, 0), last_graph_stamp, last_index_ms, last_index_error
+                 FROM project_runtime WHERE project_id = ?1",
+                params![project_id],
+                |r| {
+                    Ok(PublicationState {
+                        generation: r.get(0)?,
+                        graph_stamp: r.get(1)?,
+                        last_index_ms: r.get(2)?,
+                        last_error: r.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db_err)?
+            .ok_or_else(|| ErrorBody::new(ErrorCode::ProjectNotFound, format!("no project '{project_id}'")))
+    }
+
     /// Ownership journal for diagnostics (most recent first).
     pub fn ownership_journal(
         &self,
@@ -899,6 +967,15 @@ impl Registry {
             .map_err(db_err)?;
         rows.collect::<Result<_, _>>().map_err(db_err)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationState {
+    pub generation: i64,
+    pub graph_stamp: Option<String>,
+    pub last_index_ms: Option<i64>,
+    pub last_error: Option<String>,
 }
 
 struct Transition<'a> {
@@ -934,7 +1011,7 @@ fn project_from_row(r: &Row<'_>) -> rusqlite::Result<ProjectRecord> {
 }
 
 const JOB_COLUMNS: &str = "job_id, project_id, kind, state, attempt, admitted_at_ms, \
-    started_at_ms, completed_at_ms, result_json, error_json";
+    started_at_ms, completed_at_ms, result_json, error_json, params_json";
 
 fn job_from_row(r: &Row<'_>) -> rusqlite::Result<JobRecord> {
     let kind: String = r.get(2)?;
@@ -952,6 +1029,9 @@ fn job_from_row(r: &Row<'_>) -> rusqlite::Result<JobRecord> {
         completed_at_ms: r.get(7)?,
         result: result.and_then(|s| serde_json::from_str(&s).ok()),
         error: error.and_then(|s| serde_json::from_str(&s).ok()),
+        params: r
+            .get::<_, Option<String>>(10)?
+            .and_then(|s| serde_json::from_str(&s).ok()),
     })
 }
 
@@ -1166,7 +1246,7 @@ mod tests {
             // Simulated crash: no release recorded.
         }
         let mut reg = Registry::open(&db).unwrap();
-        assert_eq!(reg.schema_version().unwrap(), 2);
+        assert_eq!(reg.schema_version().unwrap(), REGISTRY_SCHEMA_VERSION);
         let desired = reg.recover_ownership().unwrap();
         assert_eq!(desired, vec![pid.clone()]);
         assert_eq!(

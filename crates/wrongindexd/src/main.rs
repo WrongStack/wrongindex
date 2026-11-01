@@ -4,6 +4,7 @@
 //! (first named-pipe instance) -> registry open/migrate/recover -> credential
 //! and discovery publication -> accept authenticated clients.
 
+mod engine;
 mod log;
 mod ownership;
 mod server;
@@ -29,6 +30,16 @@ struct Args {
     /// Maximum time to drain running work on graceful shutdown.
     #[arg(long, default_value_t = 15)]
     drain_seconds: u64,
+    /// WrongStack engine directory for the preview compatibility backend
+    /// (default: WRONGINDEX_ENGINE). Without it only read-only checks run.
+    #[arg(long)]
+    engine: Option<PathBuf>,
+    /// Compatibility worker script (default: shipped legacy-worker/worker.ts).
+    #[arg(long)]
+    engine_worker: Option<PathBuf>,
+    /// Bun executable for the compatibility worker (default: `bun` on PATH).
+    #[arg(long)]
+    bun: Option<PathBuf>,
 }
 
 /// Exit code when another daemon already owns this data root's endpoint.
@@ -58,6 +69,7 @@ fn main() -> ExitCode {
     let config = server::Config {
         root,
         drain: Duration::from_secs(args.drain_seconds),
+        engine: engine::EngineConfig::resolve(args.engine, args.engine_worker, args.bun),
     };
     match runtime.block_on(server::run(config)) {
         Ok(()) => ExitCode::SUCCESS,
