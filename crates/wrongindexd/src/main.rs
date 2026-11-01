@@ -52,7 +52,42 @@ struct Args {
 /// Exit code when another daemon already owns this data root's endpoint.
 pub const EXIT_ALREADY_RUNNING: u8 = 3;
 
+/// `wrongindexd --native-rebuild <root> <index-dir>`: one isolated native run
+/// for the daemon (see `worker::rebuild_in_child`). Prints a single JSON reply.
+fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
+    use wrongindex_engine::native::{NativeError, Rebuild, rebuild};
+    let reply = match rebuild(std::path::Path::new(root), std::path::Path::new(index_dir)) {
+        Ok(Rebuild::Unchanged { graph_stamp }) => serde_json::json!({
+            "ok": true,
+            "result": {"outcome": "unchanged", "graphStamp": graph_stamp},
+        }),
+        Ok(Rebuild::Written(report)) => {
+            let mut r = serde_json::to_value(&report).unwrap_or_default();
+            r["outcome"] = serde_json::json!("written");
+            serde_json::json!({"ok": true, "result": r})
+        }
+        Err(e) => {
+            let kind = match &e {
+                NativeError::Unsupported(_) => "unsupported",
+                NativeError::Busy(_) => "busy",
+                _ => "error",
+            };
+            let message = match &e {
+                NativeError::Unsupported(m) | NativeError::Busy(m) => m.clone(),
+                other => other.to_string(),
+            };
+            serde_json::json!({"ok": false, "kind": kind, "message": message})
+        }
+    };
+    println!("{reply}");
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
+    let raw: Vec<String> = std::env::args().collect();
+    if raw.get(1).map(String::as_str) == Some("--native-rebuild") && raw.len() == 4 {
+        return native_rebuild_child(&raw[2], &raw[3]);
+    }
     let args = Args::parse();
     let root = match DataRoot::resolve(args.data_root.as_deref()) {
         Ok(r) => r,

@@ -233,4 +233,37 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
         "{job}"
     );
     assert!(!go_index.join("index.db").exists());
+
+    // 6. A hostile source that overflows a recursive parser (a unary chain
+    //    escapes any bracket pre-scan) only ends the isolated child: the job
+    //    fails as unsupported and the daemon keeps serving.
+    let evil = base.join("evil");
+    std::fs::create_dir_all(&evil).unwrap();
+    std::fs::write(
+        evil.join("a.ts"),
+        format!(
+            "export const x = {}y;
+",
+            "!".repeat(2_000_000)
+        ),
+    )
+    .unwrap();
+    let evil_pid = register(&mut c, &evil, &base.join("evil-index")).await;
+    let job = run_job(&mut c, &evil_pid, json!({"kind": "full"})).await;
+    assert_eq!(job["state"], "failed", "{job}");
+    assert_eq!(job["error"]["code"], "NOT_IMPLEMENTED", "{job}");
+    assert!(
+        job["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("crashed"),
+        "the isolated child must have crashed, not the daemon: {job}"
+    );
+    let health = c
+        .call_raw(method::DAEMON_HEALTH, None, json!({}), None)
+        .await
+        .unwrap();
+    assert_eq!(health["draining"], false);
+    let s = status(&mut c, &pid).await;
+    assert!(s["generation"].as_i64().unwrap() >= 2, "{s}");
 }

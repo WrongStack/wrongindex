@@ -193,44 +193,98 @@ async fn run_native(
     shared: &Arc<Shared>,
     project: &wrongindex_contracts::ProjectRecord,
 ) -> Result<(Option<String>, serde_json::Value), NativeOutcome> {
-    use wrongindex_engine::native::{NativeError, Rebuild, rebuild};
     // The compatibility worker may hold a pooled handle on this index; close
     // it so the native swap is not refused for our own reader.
     shared
         .engine
         .release_store(&project.checkout_root, &project.index_dir)
         .await;
-    let root = std::path::PathBuf::from(&project.checkout_root);
-    let dir = std::path::PathBuf::from(&project.index_dir);
     let started = std::time::Instant::now();
-    let r = tokio::task::spawn_blocking(move || rebuild(&root, &dir))
-        .await
-        .map_err(|e| {
-            NativeOutcome::Failed(ErrorBody::new(
-                ErrorCode::Internal,
-                format!("native task failed: {e}"),
-            ))
-        })?;
+    let r = rebuild_in_child(&project.checkout_root, &project.index_dir).await;
     let ms = started.elapsed().as_millis() as u64;
     match r {
         Ok(outcome) => {
-            let stamp = match &outcome {
-                Rebuild::Unchanged { graph_stamp } => graph_stamp.clone(),
-                Rebuild::Written(report) => Some(report.graph_stamp.clone()),
-            };
-            let mut detail = serde_json::to_value(&outcome).unwrap_or_default();
+            let stamp = outcome["graphStamp"].as_str().map(str::to_string);
+            let mut detail = outcome;
             detail["durationMs"] = json!(ms);
             Ok((stamp, detail))
         }
-        Err(NativeError::Unsupported(why)) => Err(NativeOutcome::Unsupported(why)),
-        Err(NativeError::Busy(why)) => Err(NativeOutcome::Failed(ErrorBody::new(
-            ErrorCode::DatabaseBusy,
-            format!("native engine: {why}"),
-        ))),
-        Err(e) => Err(NativeOutcome::Failed(ErrorBody::new(
+        Err(e) => Err(e),
+    }
+}
+
+/// Deadline for one isolated native run.
+const NATIVE_RUN_DEADLINE: Duration = Duration::from_secs(30 * 60);
+
+/// Run `native::rebuild` in a child process (`wrongindexd --native-rebuild`).
+///
+/// Parsers recurse on source structure and oxc has no recursion limit: a
+/// hostile file can overflow the stack, which aborts a process and cannot be
+/// caught. Isolation confines that to the child; the project is then treated
+/// as unsupported (the compatibility worker can still take it in `auto`).
+async fn rebuild_in_child(root: &str, index_dir: &str) -> Result<serde_json::Value, NativeOutcome> {
+    let exe = std::env::current_exe()
+        .map_err(|e| NativeOutcome::Failed(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
+    let mut cmd = tokio::process::Command::new(exe);
+    cmd.arg("--native-rebuild")
+        .arg(root)
+        .arg(index_dir)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    let child = cmd.spawn().map_err(|e| {
+        NativeOutcome::Failed(ErrorBody::new(
             ErrorCode::Internal,
-            format!("native engine: {e}"),
-        ))),
+            format!("cannot start the native indexer: {e}"),
+        ))
+    })?;
+    let out = match tokio::time::timeout(NATIVE_RUN_DEADLINE, child.wait_with_output()).await {
+        Ok(Ok(o)) => o,
+        Ok(Err(e)) => {
+            return Err(NativeOutcome::Failed(ErrorBody::new(
+                ErrorCode::Internal,
+                format!("native indexer: {e}"),
+            )));
+        }
+        Err(_) => {
+            return Err(NativeOutcome::Failed(ErrorBody::new(
+                ErrorCode::DeadlineExceeded,
+                "native indexer exceeded its deadline",
+            )));
+        }
+    };
+    let reply: Option<serde_json::Value> = serde_json::from_slice(&out.stdout).ok();
+    match reply {
+        Some(v) if v["ok"] == true => Ok(v["result"].clone()),
+        Some(v) => {
+            let msg = v["message"]
+                .as_str()
+                .unwrap_or("native engine error")
+                .to_string();
+            Err(match v["kind"].as_str() {
+                Some("unsupported") => NativeOutcome::Unsupported(msg),
+                Some("busy") => NativeOutcome::Failed(ErrorBody::new(
+                    ErrorCode::DatabaseBusy,
+                    format!("native engine: {msg}"),
+                )),
+                _ => NativeOutcome::Failed(ErrorBody::new(
+                    ErrorCode::Internal,
+                    format!("native engine: {msg}"),
+                )),
+            })
+        }
+        // Crashed (e.g. stack overflow) or produced no reply: the staging
+        // directory it may have left is private and is ignored by readers.
+        None => {
+            warn!("native_indexer_crashed", {"status": out.status.to_string()});
+            Err(NativeOutcome::Unsupported(format!(
+                "native indexer crashed ({}); a source file may be too deeply nested",
+                out.status
+            )))
+        }
     }
 }
 

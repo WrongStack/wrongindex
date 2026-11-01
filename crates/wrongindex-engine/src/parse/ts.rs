@@ -91,11 +91,12 @@ fn source_type(file: &str) -> SourceType {
     st.with_module(true)
 }
 
-/// Deepest bracket nesting accepted before parsing. oxc's parser and the
-/// symbol walk recurse per nesting level; a pathological file (e.g. 100k
-/// `(`) must be refused, never allowed to overflow the stack. Real code
-/// stays far below this (strings and comments are counted too, which only
-/// makes the scan more conservative).
+/// Deepest bracket nesting accepted before parsing: a cheap early refusal of
+/// obviously pathological files. It is a heuristic, not a guarantee (unary
+/// chains, ternaries or arrows nest without brackets, and oxc has no
+/// recursion limit): the daemon therefore runs native indexing in a child
+/// process (`wrongindexd --native-rebuild`) so a stack overflow can only end
+/// that child.
 pub const MAX_NESTING: usize = 512;
 
 /// Maximum depth of `([{` nesting plus `<`-free template/JSX approximations:
