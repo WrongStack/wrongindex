@@ -118,6 +118,45 @@ impl Glob {
         }
     }
 
+    /// Smallest index `k` with `input[k] == '/'` at which some span starting
+    /// at an `is_start` index fully matches the glob. One linear NFA pass.
+    pub fn first_slash_end(
+        &self,
+        input: &[char],
+        is_start: &dyn Fn(usize, &[char]) -> bool,
+    ) -> Option<usize> {
+        let n = self.tokens.len();
+        let mut cur = vec![false; n + 1];
+        for i in 0..=input.len() {
+            if is_start(i, input) {
+                cur[0] = true;
+            }
+            self.close(&mut cur);
+            if i == input.len() {
+                return None;
+            }
+            if cur[n] && input[i] == '/' {
+                return Some(i);
+            }
+            let c = input[i];
+            let mut next = vec![false; n + 1];
+            for s in 0..n {
+                if cur[s] && Self::step_ok(&self.tokens[s], c) {
+                    match self.tokens[s] {
+                        Token::Star | Token::Globstar => next[s] = true,
+                        _ => next[s + 1] = true,
+                    }
+                }
+            }
+            cur = next;
+        }
+        None
+    }
+
+    pub fn token_count(&self) -> usize {
+        self.tokens.len()
+    }
+
     /// `testSpan`: some start index accepted by `is_start` and end index
     /// accepted by `is_end` bound a full match of the glob.
     pub fn test_span(
@@ -200,17 +239,15 @@ fn match_parts(
         return false;
     };
     let mut prev_end: Option<usize> = None;
-    for (j, part) in init.iter().enumerate() {
-        let next = (0..p.len()).filter(|&k| p[k] == '/').find(|&k| {
-            let end = move |i: usize, _: &[char]| i == k;
-            if j == 0 {
-                part.test_span(p, is_start, &end)
-            } else {
-                let after = prev_end.unwrap_or(0);
+    for part in init {
+        // One linear pass per part: the first '/' where the part can end.
+        let next = match prev_end {
+            None => part.first_slash_end(p, is_start),
+            Some(after) => {
                 let start = move |i: usize, input: &[char]| i > after && input[i - 1] == '/';
-                part.test_span(p, &start, &end)
+                part.first_slash_end(p, &start)
             }
-        });
+        };
         match next {
             Some(k) => prev_end = Some(k),
             None => return false,
@@ -231,6 +268,8 @@ fn match_parts(
 const MAX_RULES: usize = 10_000;
 const MAX_PARTS_PER_RULE: usize = 64;
 const MAX_PART_CHARS: usize = 1024;
+/// Total compiled glob tokens across all rules (bounds per-path work).
+const MAX_TOTAL_TOKENS: usize = 200_000;
 
 /// Compiled root `.gitignore` (WrongStack only reads the project root file).
 pub struct Gitignore {
@@ -249,6 +288,7 @@ impl Gitignore {
     /// `compileGitignore(raw.split('\n'))`.
     pub fn compile(raw: &str) -> Self {
         let mut rules = Vec::new();
+        let mut total_tokens = 0usize;
         for raw_line in raw.split('\n') {
             let mut line = raw_line.strip_suffix('\r').unwrap_or(raw_line).to_string();
             if line.trim().is_empty() || line.starts_with('#') {
@@ -294,7 +334,11 @@ impl Gitignore {
             if rules.len() >= MAX_RULES {
                 break;
             }
-            let parts = raw_parts.into_iter().map(Glob::compile).collect();
+            let parts: Vec<Glob> = raw_parts.into_iter().map(Glob::compile).collect();
+            total_tokens += parts.iter().map(Glob::token_count).sum::<usize>();
+            if total_tokens > MAX_TOTAL_TOKENS {
+                break;
+            }
             rules.push(Rule {
                 parts,
                 anchored,
