@@ -5,6 +5,7 @@ members = [
   "crates/wrongindex-storage",
   "crates/wrongindex-registry",
   "crates/wrongindex-discovery",
+  "crates/wrongindex-engine",
   "crates/wrongindex-ipc",
   "crates/wrongindexd",
   "crates/wrongindex-cli",
@@ -25,6 +26,7 @@ wrongindex-storage = { path = "crates/wrongindex-storage" }
 wrongindex-registry = { path = "crates/wrongindex-registry" }
 wrongindex-ipc = { path = "crates/wrongindex-ipc" }
 wrongindex-discovery = { path = "crates/wrongindex-discovery" }
+wrongindex-engine = { path = "crates/wrongindex-engine" }
 
 anyhow = "=1.0.104"
 clap = { version = "=4.6.7", features = ["derive"] }

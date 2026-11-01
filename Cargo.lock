@@ -4587,6 +4587,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wrongindex-engine"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "wrongindex-ipc"
 version = "0.1.0"
 dependencies = [
