@@ -1597,6 +1597,63 @@ fn incremental_scenario(
     failures
 }
 
+/// WI-515 on real projects: each Git checkout in `WRONGINDEX_DIFF_PROJECTS`
+/// (separated by `;`) is cloned (the original is never touched) and taken
+/// through the generic edit rounds, each followed by a commit.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE and WRONGINDEX_DIFF_PROJECTS"]
+fn native_incremental_matches_wrongstack_on_listed_projects() {
+    let Ok(list) = std::env::var("WRONGINDEX_DIFF_PROJECTS") else {
+        eprintln!("NOT RUN: set WRONGINDEX_DIFF_PROJECTS to compare real projects");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    for (i, dir) in list.split(';').filter(|s| !s.is_empty()).enumerate() {
+        let name = Path::new(dir)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let clone = |root: &Path| {
+            std::fs::create_dir_all(root.parent().unwrap()).unwrap();
+            let ok = Command::new("git")
+                .args(["clone", "-q", "--no-hardlinks", dir])
+                .arg(root)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "{name}: git clone failed");
+        };
+        let s = base.join(format!("p{i}"));
+        let root = s.join("project");
+        clone(&root);
+        let ws = s.join("idx-wrongstack");
+        let native = s.join("idx-native");
+        wrongstack_index(&root, &ws);
+        copy_index(&ws, &native);
+        for (round, edit) in generic_rounds() {
+            edit(&root);
+            failures.extend(incremental_round(
+                &format!("{name}/{round}"),
+                &root,
+                &ws,
+                &native,
+            ));
+            git(&root, &["add", "-A"]);
+            git(&root, &["commit", "-q", "--allow-empty", "-m", round]);
+            failures.extend(incremental_round(
+                &format!("{name}/{round}+commit"),
+                &root,
+                &ws,
+                &native,
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// WI-515 across languages and edit shapes (structure markers, the rank
 /// refresh threshold, Git trust).
 #[test]
