@@ -12,12 +12,16 @@
 //! symbolic link or junction inside the Git directory.
 //!
 //! Everything here is vetted *without* opening a path that is not yet known
-//! to be local: links are resolved by reading their targets
-//! ([`resolve_links_locally`]), never by following them.
+//! to be local:
+//! - links are resolved by reading their targets ([`resolve_links_locally`]),
+//!   with `..` collapsed lexically as Windows does, never by following them;
+//! - every file is read only through its link-free local path;
+//! - config files are parsed by Git itself (`git config --no-includes
+//!   --file`), so there is no parser differential; a file Git cannot parse
+//!   fails the vet.
+//!
 //! A checkout that the user placed on a share themselves is out of scope.
 
-use std::collections::VecDeque;
-use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 use crate::wrongstack_paths::node_resolve;
@@ -52,74 +56,82 @@ pub fn local_form(raw: &str) -> Result<String, String> {
     if is_double_slash(&s) { Err(s) } else { Ok(s) }
 }
 
-/// Resolve every symbolic link and junction in the absolute path `p` by
-/// reading link targets, never by opening one. `Err(target)` when a link
-/// (or `p` itself) leads to a share or device, or after too many hops.
-/// Components that do not exist are kept as given.
-pub fn resolve_links_locally(p: &Path) -> Result<PathBuf, String> {
-    let start = local_form(&p.to_string_lossy())?;
-    let mut cur = PathBuf::new();
-    let mut rest: VecDeque<OsString> = VecDeque::new();
-    push_front(&mut cur, &mut rest, Path::new(&start), true);
-    let mut hops = 0;
-    while let Some(c) = rest.pop_front() {
-        if c == "." {
-            continue;
-        }
-        if c == ".." {
-            cur.pop();
-            continue;
-        }
-        let cand = cur.join(&c);
-        match std::fs::symlink_metadata(&cand) {
-            Ok(m) if m.file_type().is_symlink() => {
-                hops += 1;
-                if hops > MAX_LINK_HOPS {
-                    return Err(format!("{} (too many links)", cand.display()));
-                }
-                let target = std::fs::read_link(&cand)
-                    .map_err(|e| format!("{} (unreadable link: {e})", cand.display()))?;
-                let target = local_form(&target.to_string_lossy())?;
-                let t = Path::new(&target);
-                let absolute = t.is_absolute() || t.has_root();
-                push_front(&mut cur, &mut rest, t, absolute);
-            }
-            _ => cur = cand,
-        }
+/// A link target as read back from a reparse point. Only drive-absolute
+/// (`C:\x`, also in verbatim/NT spelling) and purely relative targets are
+/// accepted: anything else that starts with a separator may be an NT
+/// namespace path (`\Device\Mup\host\share`, `\GLOBAL??\UNC\...`,
+/// `\DosDevices\...`), and drive-relative `C:x` depends on per-drive state.
+fn link_target_form(raw: &str) -> Result<String, String> {
+    let s = local_form(raw)?;
+    let b = s.as_bytes();
+    if b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/') {
+        return Ok(s);
     }
-    Ok(cur)
+    if b.first().is_some_and(|c| matches!(c, b'\\' | b'/')) || (b.len() >= 2 && b[1] == b':') {
+        return Err(raw.to_string());
+    }
+    Ok(s)
 }
 
-/// Queue the components of `t` before `rest`; an absolute `t` restarts from
-/// its root (a rooted path without a drive keeps the current drive).
-fn push_front(cur: &mut PathBuf, rest: &mut VecDeque<OsString>, t: &Path, absolute: bool) {
-    let mut names = Vec::new();
-    let mut root = PathBuf::new();
-    for comp in t.components() {
-        match comp {
-            Component::Prefix(p) => root.push(p.as_os_str()),
-            Component::RootDir => root.push(std::path::MAIN_SEPARATOR_STR),
-            Component::CurDir => names.push(OsString::from(".")),
-            Component::ParentDir => names.push(OsString::from("..")),
-            Component::Normal(n) => names.push(n.to_os_string()),
-        }
-    }
-    if absolute {
-        if root.as_os_str().len() <= 1 {
-            // `\x` on Windows: same drive as the current path.
-            let drive = cur.components().next().and_then(|c| match c {
-                Component::Prefix(p) => Some(PathBuf::from(p.as_os_str())),
-                _ => None,
-            });
-            if let Some(d) = drive {
-                root = d.join(std::path::MAIN_SEPARATOR_STR);
+/// Resolve every symbolic link and junction in `p` by reading link targets,
+/// never by opening one. As Win32 does, `..` is collapsed lexically before
+/// any lookup and again after each substitution (the new name is the link's
+/// directory joined with its target, then the rest of the path). `Err`
+/// names the target when a link (or `p` itself) leads to a share, a device
+/// or an NT namespace path, or after too many hops. The part of the path
+/// below the first missing component is returned as given.
+pub fn resolve_links_locally(p: &Path) -> Result<PathBuf, String> {
+    let start = local_form(&p.to_string_lossy())?;
+    let mut path = node_resolve(Path::new(&start));
+    let mut hops = 0;
+    'reparse: loop {
+        let comps: Vec<Component> = path.components().collect();
+        let mut cur = PathBuf::new();
+        for (i, c) in comps.iter().enumerate() {
+            cur.push(c.as_os_str());
+            if !matches!(c, Component::Normal(_)) {
+                continue;
+            }
+            match std::fs::symlink_metadata(&cur) {
+                Ok(m) if m.file_type().is_symlink() => {
+                    hops += 1;
+                    if hops > MAX_LINK_HOPS {
+                        return Err(format!("{} (too many links)", cur.display()));
+                    }
+                    let target = std::fs::read_link(&cur)
+                        .map_err(|e| format!("{} (unreadable link: {e})", cur.display()))?;
+                    let t = link_target_form(&target.to_string_lossy())?;
+                    let t = Path::new(&t);
+                    let mut next = if t.is_absolute() {
+                        t.to_path_buf()
+                    } else {
+                        cur.parent().unwrap_or(&cur).join(t)
+                    };
+                    for r in &comps[i + 1..] {
+                        next.push(r.as_os_str());
+                    }
+                    path = node_resolve(&next);
+                    local_form(&path.to_string_lossy())?;
+                    continue 'reparse;
+                }
+                Ok(_) => {}
+                Err(_) => {
+                    for r in &comps[i + 1..] {
+                        cur.push(r.as_os_str());
+                    }
+                    return Ok(cur);
+                }
             }
         }
-        *cur = root;
+        return Ok(cur);
     }
-    for n in names.into_iter().rev() {
-        rest.push_front(n);
-    }
+}
+
+/// Read a file through its link-free local path; `Ok(None)` when it does
+/// not exist or is not readable as text.
+fn read_local(p: &Path) -> Result<Option<String>, String> {
+    let real = resolve_links_locally(p)?;
+    Ok(std::fs::read_to_string(real).ok())
 }
 
 /// A path value from Git metadata, relative to `base`: its local, link-free
@@ -196,12 +208,14 @@ fn vet_git_dir(gd: &Path, deep: bool, depth: usize) -> Result<(), String> {
     if depth > MAX_CHAIN {
         return Err(format!("{} (commondir chain too long)", gd.display()));
     }
-    if let Ok(text) = std::fs::read_to_string(gd.join("commondir")) {
+    if deep {
+        vet_tree_links(gd)?;
+    }
+    if let Some(text) = read_local(&gd.join("commondir"))? {
         let common = vet_value(text.trim(), gd)?;
         vet_git_dir(&common, deep, depth + 1)?;
     }
     if deep {
-        vet_tree_links(gd)?;
         vet_alternates(&gd.join("objects"), 0)?;
         for f in ["config", "config.worktree"] {
             vet_config(&gd.join(f), 0)?;
@@ -235,22 +249,24 @@ fn vet_tree_links(gd: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Git's C-style unquoting of an alternates line.
 fn unquote(v: &str) -> String {
+    let Some(inner) = v.strip_prefix('"').and_then(|s| s.strip_suffix('"')) else {
+        return v.to_string();
+    };
     let mut out = String::new();
-    let mut chars = v.chars();
+    let mut chars = inner.chars();
     while let Some(c) = chars.next() {
-        match c {
-            '"' => {}
-            '\\' => {
-                if let Some(n) = chars.next() {
-                    out.push(match n {
-                        'n' => '\n',
-                        't' => '\t',
-                        other => other,
-                    });
-                }
+        if c == '\\' {
+            if let Some(n) = chars.next() {
+                out.push(match n {
+                    'n' => '\n',
+                    't' => '\t',
+                    other => other,
+                });
             }
-            other => out.push(other),
+        } else {
+            out.push(c);
         }
     }
     out
@@ -258,7 +274,7 @@ fn unquote(v: &str) -> String {
 
 /// `objects/info/alternates`, recursively (Git follows chains too).
 fn vet_alternates(objects: &Path, depth: usize) -> Result<(), String> {
-    let Ok(text) = std::fs::read_to_string(objects.join("info").join("alternates")) else {
+    let Some(text) = read_local(&objects.join("info").join("alternates"))? else {
         return Ok(());
     };
     for line in text.lines() {
@@ -267,68 +283,89 @@ fn vet_alternates(objects: &Path, depth: usize) -> Result<(), String> {
             continue;
         }
         let alt = vet_value(&unquote(line), objects)?;
-        if depth < MAX_CHAIN {
-            vet_alternates(&alt, depth + 1)?;
-        } else {
+        if depth >= MAX_CHAIN {
             return Err(format!("{} (alternates chain too long)", alt.display()));
         }
+        vet_alternates(&alt, depth + 1)?;
     }
     Ok(())
+}
+
+/// The entries of one config file exactly as Git parses it, includes not
+/// followed. `Ok(None)` when Git is not available (then nothing reads the
+/// file either); `Err` when Git cannot parse it.
+fn config_entries(file: &Path) -> Result<Option<Vec<(String, String)>>, String> {
+    let mut c = std::process::Command::new("git");
+    // Outside any repository, so Git discovers nothing on its own.
+    c.current_dir(std::env::temp_dir())
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_CONFIG")
+        .args(["config", "--no-includes", "--null", "--list", "--file"])
+        .arg(file)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let out = match c.output() {
+        Ok(o) => o,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{} (cannot run git: {e})", file.display())),
+    };
+    if !out.status.success() {
+        return Err(format!("{} (Git cannot parse it)", file.display()));
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(Some(
+        text.split('\0')
+            .filter(|e| !e.is_empty())
+            .map(|e| match e.split_once('\n') {
+                Some((k, v)) => (k.to_string(), v.to_string()),
+                None => (e.to_string(), String::new()),
+            })
+            .collect(),
+    ))
 }
 
 /// Config keys whose values are paths Git opens during the commands
 /// WrongIndex or WrongStack run.
 fn vet_config(file: &Path, depth: usize) -> Result<(), String> {
-    let Ok(text) = std::fs::read_to_string(file) else {
+    let real = resolve_links_locally(file)?;
+    if !real.is_file() {
+        return Ok(());
+    }
+    let Some(entries) = config_entries(&real)? else {
         return Ok(());
     };
-    let base = file.parent().unwrap_or(Path::new("."));
-    let mut section = String::new();
-    for raw in text.lines() {
-        let mut line = raw.trim();
-        if line.starts_with('[') {
-            let end = line.find(']').unwrap_or(line.len());
-            let header = &line[1..end];
-            section = header
-                .split(|c: char| c.is_whitespace() || c == '.' || c == '"')
-                .next()
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            line = line[(end + 1).min(line.len())..].trim();
-            if line.is_empty() {
-                continue;
+    let base = real.parent().unwrap_or(Path::new("."));
+    for (key, value) in entries {
+        // Git lower-cases section and key names; subsections keep case.
+        let include =
+            key == "include.path" || (key.starts_with("includeif.") && key.ends_with(".path"));
+        if include {
+            let target = match value.strip_prefix("~/").or(value.strip_prefix("~\\")) {
+                Some(r) => match home() {
+                    Some(h) => h.join(r).to_string_lossy().into_owned(),
+                    None => continue,
+                },
+                None => value.clone(),
+            };
+            let p = vet_value(&target, base)?;
+            if depth >= MAX_INCLUDE_DEPTH {
+                return Err(format!("{} (include chain too long)", p.display()));
             }
-        }
-        if line.starts_with('#') || line.starts_with(';') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let key = key.trim().to_ascii_lowercase();
-        let value = unquote(value.trim());
-        match (section.as_str(), key.as_str()) {
-            ("include" | "includeif", "path") => {
-                let target = match value.strip_prefix("~/").or(value.strip_prefix("~\\")) {
-                    Some(r) => match home() {
-                        Some(h) => h.join(r).to_string_lossy().into_owned(),
-                        None => continue,
-                    },
-                    None => value.clone(),
-                };
-                let p = vet_value(&target, base)?;
-                if depth < MAX_INCLUDE_DEPTH {
-                    vet_config(&p, depth + 1)?;
-                }
+            vet_config(&p, depth + 1)?;
+        } else if matches!(
+            key.as_str(),
+            "core.worktree" | "core.excludesfile" | "core.attributesfile" | "core.hookspath"
+        ) {
+            if value.starts_with('~') {
+                local_form(&value)?;
+            } else if !value.is_empty() {
+                vet_value(&value, base)?;
             }
-            ("core", "worktree" | "excludesfile" | "attributesfile" | "hookspath") => {
-                if !value.is_empty() && !value.starts_with('~') {
-                    vet_value(&value, base)?;
-                } else {
-                    local_form(&value)?;
-                }
-            }
-            _ => {}
         }
     }
     Ok(())
@@ -356,6 +393,25 @@ mod tests {
         assert_eq!(local_form(r"\??\C:\x").unwrap(), r"C:\x");
         assert_eq!(local_form(r"C:\x").unwrap(), r"C:\x");
         assert_eq!(local_form("../x").unwrap(), "../x");
+    }
+
+    #[test]
+    fn link_targets_accept_only_drive_absolute_or_relative() {
+        for bad in [
+            r"\Device\Mup\attacker.invalid\s",
+            r"\GLOBAL??\UNC\attacker.invalid\s",
+            r"\DosDevices\UNC\attacker.invalid\s",
+            r"\??\UNC\attacker.invalid\s",
+            r"\rooted\elsewhere",
+            "/rooted",
+            "C:drive-relative",
+            r"\\attacker.invalid\s",
+        ] {
+            assert!(link_target_form(bad).is_err(), "{bad}");
+        }
+        assert_eq!(link_target_form(r"\??\C:\x").unwrap(), r"C:\x");
+        assert_eq!(link_target_form(r"C:\x").unwrap(), r"C:\x");
+        assert_eq!(link_target_form(r"..\x").unwrap(), r"..\x");
     }
 
     fn checkout() -> (tempfile::TempDir, PathBuf, PathBuf) {
@@ -393,7 +449,21 @@ mod tests {
                 "config.worktree",
                 "[core]\n\thooksPath = //attacker.invalid/h\n",
             ),
+            // Parser differentials of a hand-written parser: a value on a
+            // continuation line, a `]` inside a quoted subsection, a
+            // dotted section header.
+            ("config", "[include]\n\tpath = \\\n//attacker.invalid/s\n"),
+            (
+                "config",
+                "[includeIf \"gitdir:x]y\"]\n\tpath = //attacker.invalid/s\n",
+            ),
+            ("config", "[include]path=//attacker.invalid/s\n"),
+            ("config", "[INCLUDE]\n\tPATH = //attacker.invalid/s\n"),
             ("objects/info/alternates", "//attacker.invalid/objects\n"),
+            (
+                "objects/info/alternates",
+                "\"\\\\\\\\attacker.invalid\\\\objects\"\n",
+            ),
             ("commondir", "//attacker.invalid/common\n"),
         ];
         for (file, body) in cases {
@@ -402,9 +472,17 @@ mod tests {
             let r = vet_checkout(&root, true);
             assert!(
                 matches!(&r, Err(t) if t.contains("attacker.invalid")),
-                "{file}: {r:?}"
+                "{file} {body:?}: {r:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_config_git_cannot_parse_fails_the_vet() {
+        let (_t, root, gd) = checkout();
+        std::fs::write(gd.join("config"), "[include\n\tpath = x\n").unwrap();
+        let r = vet_checkout(&root, true);
+        assert!(matches!(&r, Err(t) if t.contains("cannot parse")), "{r:?}");
     }
 
     #[test]
@@ -475,6 +553,19 @@ mod tests {
             Ok(()),
             "shallow ignores the tree"
         );
+        // `commondir` itself a link to a share: caught before it is read,
+        // shallow too.
+        let (_t2, root2, gd2) = checkout();
+        assert!(made(
+            &gd2.join("commondir"),
+            r"\\attacker.invalid\s\commondir",
+            false
+        ));
+        let r = vet_checkout(&root2, false);
+        assert!(
+            matches!(&r, Err(t) if t.contains("attacker.invalid")),
+            "{r:?}"
+        );
         // `.git` itself a link.
         let other = root.parent().unwrap().join("q");
         std::fs::create_dir_all(&other).unwrap();
@@ -499,5 +590,28 @@ mod tests {
             resolve_links_locally(&local.join("HEAD")).unwrap(),
             gd.join("HEAD")
         );
+    }
+
+    /// Windows collapses `..` in a relative link target lexically (against
+    /// the link's own directory) before following any link inside it.
+    #[cfg(windows)]
+    #[test]
+    fn dot_dot_in_link_targets_is_lexical_like_windows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("outer");
+        let root = base.join("root");
+        let deep = root.join("a").join("b").join("c");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(base.join("secret.txt"), "outside").unwrap();
+        if std::os::windows::fs::symlink_dir(&deep, root.join("sub")).is_err() {
+            eprintln!("SKIPPED: cannot create symbolic links here");
+            return;
+        }
+        let link = root.join("l.txt");
+        std::os::windows::fs::symlink_file(r"sub\..\..\secret.txt", &link).unwrap();
+        // What Windows itself opens through the link.
+        assert_eq!(std::fs::read_to_string(&link).unwrap(), "outside");
+        let resolved = resolve_links_locally(&link).unwrap();
+        assert_eq!(resolved, node_resolve(&base.join("secret.txt")));
     }
 }
