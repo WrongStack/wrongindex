@@ -1605,7 +1605,7 @@ fn native_incremental_matches_wrongstack_across_languages() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
     let mut failures = Vec::new();
-    let scenarios: Vec<(&str, Box<dyn Fn(&Path)>)> = vec![
+    let scenarios: Vec<EditRound> = vec![
         ("cargo", Box::new(scenario_cargo_workspace)),
         ("modules", Box::new(|r: &Path| scenario_many_modules(r, 40))),
         ("python", Box::new(scenario_python)),
