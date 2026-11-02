@@ -806,6 +806,8 @@ fn index_once(
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "busy_timeout", 15000)?;
     conn.pragma_update(None, "temp_store", "MEMORY")?;
+    // The ladder-chunked inserts reuse a few statement shapes per table.
+    conn.set_prepared_statement_cache_capacity(128);
 
     // Store open: schema, version, symbols_text_dropped, next_symbol_id.
     for stmt in schema_statements() {
@@ -961,6 +963,7 @@ fn index_once(
     set_meta(&tx, "rank_stale_files", "0")?;
     // Git trust pass: every file Git reports clean gets `blob:contentHash`;
     // a new stamp is only written if the checkout did not move meanwhile.
+    let t = std::time::Instant::now();
     if let Some(git) = &git {
         let stamps: Vec<(String, &str)> = files
             .iter()
@@ -979,13 +982,12 @@ fn index_once(
                 return Err(NativeError::SourceChanged);
             }
         }
+        let mut update = tx.prepare_cached("UPDATE files SET git_blob = ?1 WHERE file = ?2")?;
         for (stamp, file) in stamps {
-            tx.execute(
-                "UPDATE files SET git_blob = ?1 WHERE file = ?2",
-                [stamp.as_str(), file],
-            )?;
+            update.execute([stamp.as_str(), file])?;
         }
     }
+    timing("write: git trust", t);
     let t = std::time::Instant::now();
     write_stat1(&tx)?;
     timing("write: stat1", t);
@@ -994,8 +996,10 @@ fn index_once(
     let graph_stamp = format!("{}:{changed}", now_ms());
     set_meta(&tx, "graph_stamp", &graph_stamp)?;
     set_meta(&tx, "last_indexed", &now_ms().to_string())?;
+    let t = std::time::Instant::now();
     tx.commit()?;
     conn.close().map_err(|(_, e)| e)?;
+    timing("write: commit", t);
 
     timing("write", t_write);
     Ok(Report {
@@ -1056,7 +1060,7 @@ fn insert_refs(tx: &Connection, rows: &[RefRow]) -> rusqlite::Result<()> {
                 ]
             })
             .collect();
-        tx.execute(&sql, params_from_iter(flat))?;
+        tx.prepare_cached(&sql)?.execute(params_from_iter(flat))?;
         at += n;
     }
     Ok(())
@@ -1070,7 +1074,8 @@ fn insert_symbols(tx: &Connection, rows: &[Vec<rusqlite::types::Value>]) -> rusq
             "INSERT INTO symbols(id, lang, kind, name, file, line, col, signature, doc_comment, scope, end_line, is_exported, signature_hash) VALUES {}",
             vec![one; n].join(", ")
         );
-        tx.execute(&sql, params_from_iter(rows[at..at + n].iter().flatten()))?;
+        tx.prepare_cached(&sql)?
+            .execute(params_from_iter(rows[at..at + n].iter().flatten()))?;
         at += n;
     }
     Ok(())
@@ -1092,7 +1097,7 @@ fn insert_fts(tx: &Connection, rows: &[(i64, String)]) -> rusqlite::Result<()> {
                 ]
             })
             .collect();
-        tx.execute(&sql, params_from_iter(flat))?;
+        tx.prepare_cached(&sql)?.execute(params_from_iter(flat))?;
         at += n;
     }
     Ok(())
