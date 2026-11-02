@@ -490,6 +490,12 @@ async fn settle_finished(shared: &Arc<Shared>) {
             && let Some((_, batch)) = w.inflight.take()
         {
             w.dirty.settle(&batch, ok, Instant::now());
+            if !ok {
+                warn!("watch_batch_failed", {
+                    "projectId": pid,
+                    "consecutiveFailures": w.dirty.failures(),
+                });
+            }
             if batch.reconcile.is_some() && ok {
                 w.initial_done = true;
             }

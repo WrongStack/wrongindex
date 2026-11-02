@@ -9,7 +9,10 @@
 //!   marker remains (bounded memory).
 //! * Taking a batch does not clear it. Settling a successful batch removes
 //!   only entries whose revision the batch covered; edits that arrived during
-//!   the run stay dirty. A failed batch leaves everything dirty.
+//!   the run stay dirty. A failed batch leaves everything dirty and backs
+//!   off: the next attempt waits 2 s, doubling per consecutive failure up to
+//!   60 s, so a project that keeps failing cannot occupy the worker in a
+//!   tight loop. A success resets the backoff.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -49,7 +52,16 @@ pub struct DirtySet {
     first_at: Option<Instant>,
     last_at: Option<Instant>,
     overflows: u64,
+    /// Consecutive failed batches.
+    failures: u32,
+    /// No batch is ready before this instant (after a failure).
+    retry_at: Option<Instant>,
 }
+
+/// First retry delay after a failed batch; doubles per consecutive failure.
+pub const RETRY_BASE: Duration = Duration::from_secs(2);
+/// Longest retry delay.
+pub const RETRY_MAX: Duration = Duration::from_secs(60);
 
 impl DirtySet {
     pub fn is_empty(&self) -> bool {
@@ -62,6 +74,10 @@ impl DirtySet {
 
     pub fn overflows(&self) -> u64 {
         self.overflows
+    }
+
+    pub fn failures(&self) -> u32 {
+        self.failures
     }
 
     pub fn reconcile_reason(&self) -> Option<&str> {
@@ -99,7 +115,7 @@ impl DirtySet {
     }
 
     pub fn ready(&self, now: Instant, cfg: &DebounceConfig) -> bool {
-        if self.is_empty() {
+        if self.is_empty() || self.retry_at.is_some_and(|t| now < t) {
             return false;
         }
         let quiet = self
@@ -133,8 +149,15 @@ impl DirtySet {
     /// newer survives. Failure keeps everything.
     pub fn settle(&mut self, batch: &Batch, success: bool, now: Instant) {
         if !success {
+            self.failures = self.failures.saturating_add(1);
+            let delay = RETRY_BASE
+                .saturating_mul(1u32 << (self.failures - 1).min(16))
+                .min(RETRY_MAX);
+            self.retry_at = Some(now + delay);
             return;
         }
+        self.failures = 0;
+        self.retry_at = None;
         if batch.reconcile.is_some() {
             if self
                 .reconcile
@@ -220,6 +243,39 @@ mod tests {
         let batch = d.take().unwrap();
         d.settle(&batch, false, t0);
         assert_eq!(d.len(), 1);
+    }
+
+    #[test]
+    fn failures_back_off_and_success_resets() {
+        let t0 = Instant::now();
+        let mut d = DirtySet::default();
+        d.mark("a.ts".into(), t0, &cfg());
+        let mut now = t0 + Duration::from_secs(1);
+        let mut waits = Vec::new();
+        for _ in 0..8 {
+            assert!(d.ready(now, &cfg()));
+            let batch = d.take().unwrap();
+            d.settle(&batch, false, now);
+            let mut t = now;
+            while !d.ready(t, &cfg()) {
+                t += Duration::from_millis(500);
+            }
+            waits.push((t - now).as_secs());
+            now = t;
+        }
+        assert_eq!(waits, vec![2, 4, 8, 16, 32, 60, 60, 60]);
+        assert_eq!(d.failures(), 8);
+        // A new edit does not bypass the backoff.
+        let batch = d.take().unwrap();
+        d.settle(&batch, false, now);
+        d.mark("b.ts".into(), now, &cfg());
+        assert!(!d.ready(now + Duration::from_secs(1), &cfg()));
+        let later = now + RETRY_MAX;
+        let batch = d.take().unwrap();
+        d.settle(&batch, true, later);
+        assert_eq!(d.failures(), 0);
+        d.mark("c.ts".into(), later, &cfg());
+        assert!(d.ready(later + Duration::from_millis(500), &cfg()));
     }
 
     #[test]
