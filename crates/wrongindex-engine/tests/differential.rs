@@ -1290,3 +1290,45 @@ fn native_matches_wrongstack_on_polyglot_projects() {
     failures.extend(compare("polyglot-git", &root, &s));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Experiment (WI-515 design input, prints instead of asserting): how far is
+/// WrongStack's own incremental run from its own fresh run over the same
+/// final files?
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+fn experiment_wrongstack_incremental_vs_fresh() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("project");
+    scenario_npm_monorepo(&root);
+    let inc = base.join("idx-incremental");
+    wrongstack_index(&root, &inc);
+    // Edit: change an exported function, add a file, delete a file.
+    write(
+        &root,
+        "packages/core/src/util/strings.ts",
+        "export function capitalize(s: string): string {\n  return s.toUpperCase();\n}\nexport function pad(s: string): string {\n  return s;\n}\n",
+    );
+    write(
+        &root,
+        "packages/core/src/extra.ts",
+        "export { pad as padLeft } from './util/strings';\nimport { capitalize } from './util/strings';\nexport const big = capitalize('x');\n",
+    );
+    let victim = root.join("packages/core/src/model/team.ts");
+    std::fs::remove_file(&victim).unwrap();
+    let r = wrongstack_index(&root, &inc);
+    eprintln!("incremental run: {r}");
+    let fresh = base.join("idx-fresh");
+    wrongstack_index(&root, &fresh);
+    let v = Volatile::logical();
+    let a = dump(&inc.join("index.db"), &v).unwrap();
+    let b = dump(&fresh.join("index.db"), &v).unwrap();
+    let d = diff(&b, &a, 40);
+    eprintln!(
+        "deleted {victim:?}; {} differences (fresh -> incremental):",
+        d.len()
+    );
+    for l in &d {
+        eprintln!("  {l}");
+    }
+}
