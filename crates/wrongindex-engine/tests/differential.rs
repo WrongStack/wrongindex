@@ -1332,3 +1332,295 @@ fn experiment_wrongstack_incremental_vs_fresh() {
         eprintln!("  {l}");
     }
 }
+
+fn copy_index(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let name = e.file_name();
+        if name.to_string_lossy().starts_with("index.db") {
+            std::fs::copy(e.path(), to.join(name)).unwrap();
+        }
+    }
+}
+
+/// One incremental round: WrongStack's own run on `ws` vs the native
+/// in-place update on `native`, both over the same edited checkout.
+fn incremental_round(name: &str, root: &Path, ws: &Path, native: &Path) -> Vec<String> {
+    let r = wrongstack_index(root, ws);
+    let n = wrongindex_engine::native::rebuild(root, native)
+        .unwrap_or_else(|e| panic!("{name}: native: {e}"));
+    let v = Volatile::logical();
+    let want = dump(&ws.join("index.db"), &v).unwrap();
+    let got = dump(&native.join("index.db"), &v).unwrap();
+    let mut out: Vec<String> = diff(&want, &got, 8)
+        .into_iter()
+        .map(|l| format!("{name}: {l}"))
+        .collect();
+    let outcome = serde_json::to_value(&n).unwrap();
+    eprintln!(
+        "{name}: WrongStack changedFiles {} | native {} | {} differences",
+        r["changedFiles"],
+        outcome,
+        out.len()
+    );
+    if r["changedFiles"].as_u64().unwrap_or(0) > 0 && outcome["outcome"] != "updated" {
+        out.push(format!("{name}: native did not update in place: {outcome}"));
+    }
+    out
+}
+
+/// A named edit applied to a checkout between two incremental runs.
+type EditRound = (&'static str, Box<dyn Fn(&Path)>);
+
+fn ts_edit_rounds() -> Vec<EditRound> {
+    vec![
+        (
+            "edit+add+delete",
+            Box::new(|root: &Path| {
+                write(
+                    root,
+                    "packages/core/src/util/strings.ts",
+                    "export function capitalize(s: string): string {\n  return s.toUpperCase();\n}\nexport function pad(s: string): string {\n  return s;\n}\n",
+                );
+                write(
+                    root,
+                    "packages/core/src/extra.ts",
+                    "export { pad as padLeft } from './util/strings';\nimport { capitalize } from './util/strings';\nexport const big = capitalize('x');\n",
+                );
+                std::fs::remove_file(root.join("packages/core/src/model/team.ts")).unwrap();
+            }),
+        ),
+        ("no-op", Box::new(|_root: &Path| {})),
+        (
+            "rename-and-empty",
+            Box::new(|root: &Path| {
+                let from = root.join("packages/core/src/store.ts");
+                let text = std::fs::read_to_string(&from).unwrap();
+                std::fs::remove_file(&from).unwrap();
+                write(root, "packages/core/src/storage.ts", &text);
+                write(root, "packages/app/src/esm.mjs", "");
+                write(
+                    root,
+                    "packages/core/src/model/user.ts",
+                    "import { makeId } from './ids';\nexport class Person {\n  constructor(public id = makeId('p')) {}\n}\nexport class User extends Person {}\n",
+                );
+            }),
+        ),
+    ]
+}
+
+/// WI-515: the native in-place incremental run leaves the same database as
+/// WrongStack's own incremental run, round after round.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+fn native_incremental_matches_wrongstack_incremental() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    for with_git in [false, true] {
+        let label = if with_git { "git" } else { "walk" };
+        let s = base.join(format!("inc-{label}"));
+        let root = s.join("project");
+        scenario_npm_monorepo(&root);
+        if with_git {
+            git(&root, &["init", "-q"]);
+            git(&root, &["add", "-A"]);
+            git(&root, &["commit", "-q", "-m", "init"]);
+        }
+        let ws = s.join("idx-wrongstack");
+        let native = s.join("idx-native");
+        wrongstack_index(&root, &ws);
+        copy_index(&ws, &native);
+        for (round, edit) in ts_edit_rounds() {
+            edit(&root);
+            failures.extend(incremental_round(
+                &format!("{label}/{round}"),
+                &root,
+                &ws,
+                &native,
+            ));
+            if with_git {
+                git(&root, &["add", "-A"]);
+                git(&root, &["commit", "-q", "--allow-empty", "-m", round]);
+                failures.extend(incremental_round(
+                    &format!("{label}/{round}+commit"),
+                    &root,
+                    &ws,
+                    &native,
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Source files of a checkout (no `.git`), sorted.
+fn source_files(root: &Path) -> Vec<PathBuf> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if e.file_name() == ".git" {
+                continue;
+            }
+            if p.is_dir() {
+                walk(&p, out);
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out);
+    out.sort();
+    out
+}
+
+fn appended_decl(p: &Path, n: usize) -> String {
+    match p.extension().and_then(|e| e.to_str()).unwrap_or("") {
+        "rs" => format!("\npub fn added_{n}() -> u32 {{ {n} }}\n"),
+        "py" => format!("\n\ndef added_{n}():\n    return {n}\n"),
+        "go" => format!("\nfunc Added{n}() int {{ return {n} }}\n"),
+        "ts" | "tsx" | "js" | "jsx" | "mjs" => {
+            format!("\nexport function added{n}() {{ return {n}; }}\n")
+        }
+        "java" | "cs" | "c" | "cpp" | "h" => format!("\n// added {n}\n"),
+        _ => "\n".to_string(),
+    }
+}
+
+fn is_marker(p: &Path) -> bool {
+    matches!(
+        p.file_name().and_then(|n| n.to_str()),
+        Some("Cargo.toml" | "package.json" | "go.mod" | "pyproject.toml" | "__init__.py")
+    )
+}
+
+/// Generic rounds for any scenario: append declarations, copy a file,
+/// delete one, touch a structure marker, then a bulk edit past the rank
+/// refresh threshold.
+fn generic_rounds() -> Vec<EditRound> {
+    vec![
+        (
+            "append",
+            Box::new(|root: &Path| {
+                for (i, p) in source_files(root)
+                    .into_iter()
+                    .filter(|p| !is_marker(p))
+                    .take(2)
+                    .enumerate()
+                {
+                    let mut t = std::fs::read_to_string(&p).unwrap_or_default();
+                    t.push_str(&appended_decl(&p, i));
+                    std::fs::write(&p, t).unwrap();
+                }
+            }),
+        ),
+        (
+            "copy+delete",
+            Box::new(|root: &Path| {
+                let files: Vec<PathBuf> = source_files(root)
+                    .into_iter()
+                    .filter(|p| !is_marker(p))
+                    .collect();
+                let src = &files[0];
+                let copy = src.with_file_name(format!(
+                    "copy_{}",
+                    src.file_name().unwrap().to_string_lossy()
+                ));
+                std::fs::copy(src, copy).unwrap();
+                if files.len() > 3 {
+                    std::fs::remove_file(&files[files.len() / 2]).unwrap();
+                }
+            }),
+        ),
+        (
+            "marker",
+            Box::new(|root: &Path| {
+                if let Some(m) = source_files(root).into_iter().find(|p| is_marker(p)) {
+                    let mut t = std::fs::read_to_string(&m).unwrap();
+                    t.push('\n');
+                    std::fs::write(&m, t).unwrap();
+                }
+            }),
+        ),
+        (
+            "bulk",
+            Box::new(|root: &Path| {
+                for (i, p) in source_files(root).into_iter().take(30).enumerate() {
+                    let mut t = std::fs::read_to_string(&p).unwrap_or_default();
+                    t.push_str(&appended_decl(&p, 100 + i));
+                    std::fs::write(&p, t).unwrap();
+                }
+            }),
+        ),
+    ]
+}
+
+fn incremental_scenario(
+    base: &Path,
+    label: &str,
+    build: &dyn Fn(&Path),
+    with_git: bool,
+) -> Vec<String> {
+    let s = base.join(label);
+    let root = s.join("project");
+    build(&root);
+    if with_git {
+        git(&root, &["init", "-q"]);
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "init"]);
+    }
+    let ws = s.join("idx-wrongstack");
+    let native = s.join("idx-native");
+    wrongstack_index(&root, &ws);
+    copy_index(&ws, &native);
+    let mut failures = Vec::new();
+    for (round, edit) in generic_rounds() {
+        edit(&root);
+        failures.extend(incremental_round(
+            &format!("{label}/{round}"),
+            &root,
+            &ws,
+            &native,
+        ));
+        if with_git {
+            git(&root, &["add", "-A"]);
+            git(&root, &["commit", "-q", "--allow-empty", "-m", round]);
+            failures.extend(incremental_round(
+                &format!("{label}/{round}+commit"),
+                &root,
+                &ws,
+                &native,
+            ));
+        }
+    }
+    failures
+}
+
+/// WI-515 across languages and edit shapes (structure markers, the rank
+/// refresh threshold, Git trust).
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE, bun, Python, Go and bun/node"]
+fn native_incremental_matches_wrongstack_across_languages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    let scenarios: Vec<(&str, Box<dyn Fn(&Path)>)> = vec![
+        ("cargo", Box::new(scenario_cargo_workspace)),
+        ("modules", Box::new(|r: &Path| scenario_many_modules(r, 40))),
+        ("python", Box::new(scenario_python)),
+        ("go", Box::new(scenario_go)),
+        ("polyglot", Box::new(scenario_polyglot)),
+        ("ts", Box::new(scenario_npm_monorepo)),
+    ];
+    for (label, build) in &scenarios {
+        failures.extend(incremental_scenario(&base, label, build.as_ref(), false));
+        failures.extend(incremental_scenario(
+            &base,
+            &format!("{label}-git"),
+            build.as_ref(),
+            true,
+        ));
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

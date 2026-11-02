@@ -263,6 +263,492 @@ pub fn bind_refs_all(tx: &Connection) -> rusqlite::Result<BindingResult> {
     })
 }
 
+/// `nextPow2`-padded IN-list chunk sizes (`inListChunks`, `writer-helpers.ts`).
+pub(crate) fn in_list_chunks(total: usize, max: usize) -> Vec<usize> {
+    if total == 0 {
+        return Vec::new();
+    }
+    if total.next_power_of_two() <= max {
+        return vec![total];
+    }
+    let pow_max = 1usize << (usize::BITS - 1 - max.max(1).leading_zeros());
+    crate::native::ladder(total, pow_max)
+}
+
+/// `padToInBucket`: pad to the next power of two with the first value.
+pub(crate) fn pad_to_bucket(values: &[String]) -> Vec<String> {
+    let mut out = values.to_vec();
+    if out.len() <= 1 {
+        return out;
+    }
+    let target = out.len().next_power_of_two();
+    while out.len() < target {
+        out.push(values[0].clone());
+    }
+    out
+}
+
+pub(crate) fn placeholders(n: usize) -> String {
+    vec!["?"; n].join(",")
+}
+
+pub(crate) const MAX_SQL_VARS: usize = 900;
+
+/// `chunkedRows`: `sql(ph)` over `values` in padded IN-list chunks.
+pub(crate) fn chunked_rows<T>(
+    tx: &Connection,
+    values: &[String],
+    sql: impl Fn(&str) -> String,
+    mut row: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+) -> rusqlite::Result<Vec<T>> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    for n in in_list_chunks(values.len(), MAX_SQL_VARS) {
+        let bucket = pad_to_bucket(&values[at..at + n]);
+        at += n;
+        let mut st = tx.prepare_cached(&sql(&placeholders(bucket.len())))?;
+        let mut rows = st.query(rusqlite::params_from_iter(bucket.iter()))?;
+        while let Some(r) = rows.next()? {
+            out.push(row(r)?);
+        }
+    }
+    Ok(out)
+}
+
+/// `pairRows`: rows for (file, name) pairs over the file x name chunk
+/// product, filtered to the pairs asked for.
+fn pair_rows<T>(
+    tx: &Connection,
+    pairs: &[(String, Vec<String>)],
+    sql: impl Fn(&str, &str) -> String,
+    mut row: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<(String, String, T)>,
+) -> rusqlite::Result<Vec<(String, String, T)>> {
+    let files: Vec<String> = pairs.iter().map(|(f, _)| f.clone()).collect();
+    let mut names: Vec<String> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (_, ns) in pairs {
+        for n in ns {
+            if seen.insert(n.as_str()) {
+                names.push(n.clone());
+            }
+        }
+    }
+    if files.is_empty() || names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let wanted: HashMap<&str, HashSet<&str>> = pairs
+        .iter()
+        .map(|(f, ns)| (f.as_str(), ns.iter().map(String::as_str).collect()))
+        .collect();
+    let half = (MAX_SQL_VARS / 2).max(1);
+    let mut out = Vec::new();
+    let mut fa = 0;
+    for fnum in in_list_chunks(files.len(), half) {
+        let fb = pad_to_bucket(&files[fa..fa + fnum]);
+        fa += fnum;
+        let mut na = 0;
+        for nnum in in_list_chunks(names.len(), half) {
+            let nb = pad_to_bucket(&names[na..na + nnum]);
+            na += nnum;
+            let mut st =
+                tx.prepare_cached(&sql(&placeholders(fb.len()), &placeholders(nb.len())))?;
+            let mut rows = st.query(rusqlite::params_from_iter(fb.iter().chain(nb.iter())))?;
+            while let Some(r) = rows.next()? {
+                let (f, n, t) = row(r)?;
+                if wanted
+                    .get(f.as_str())
+                    .is_some_and(|s| s.contains(n.as_str()))
+                {
+                    out.push((f, n, t));
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+const SYMBOL_COLUMNS: &str = "SELECT file, name,
+    COALESCE(
+      MIN(CASE WHEN kind NOT IN ('method', 'property', 'field', 'ctor', 'namespace') THEN id END),
+      MIN(id)
+    )
+    FROM symbols
+   WHERE kind != 'mod'
+     AND (scope = '' OR lang NOT IN ('ts', 'tsx', 'js', 'jsx', 'vue', 'svelte'))";
+const IMPORT_COLUMNS: &str = "SELECT s.file, r.to_name, r.module, r.to_file
+         FROM refs r JOIN symbols s ON s.id = r.from_id
+        WHERE +r.call_type = 'import'";
+const REF_COLUMNS: &str =
+    "SELECT r.id, s.file, r.to_name, r.to_id, r.call_type, r.module, r.to_file
+       FROM refs r JOIN symbols s ON s.id = r.from_id";
+
+fn ref_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RefRow> {
+    Ok(RefRow {
+        id: r.get(0)?,
+        file: r.get(1)?,
+        to_name: r.get(2)?,
+        to_id: r.get(3)?,
+        call_type: r.get(4)?,
+        module: r.get(5)?,
+        to_file: r.get(6)?,
+    })
+}
+
+type ImportRow = (String, String, Option<String>, Option<String>);
+
+fn import_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ImportRow> {
+    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+}
+
+type DeclRow = (String, String, Option<i64>);
+
+fn decl_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DeclRow> {
+    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+}
+
+fn declare(map: &mut HashMap<String, Facts>, fos: &mut HashMap<i64, String>, rows: Vec<DeclRow>) {
+    for (file, name, id) in rows {
+        let Some(id) = id else { continue };
+        map.entry(file.clone())
+            .or_default()
+            .declared
+            .insert(name, id);
+        fos.insert(id, file);
+    }
+}
+
+/// Complete facts of files, loaded on demand (`loadFacts`).
+struct LazyFacts<'c> {
+    tx: &'c Connection,
+    facts: HashMap<String, Facts>,
+    loaded: HashSet<String>,
+    file_of_symbol: HashMap<i64, String>,
+    forwards: HashMap<String, Forward>,
+    memo: HashMap<(String, String), Option<i64>>,
+}
+
+impl LazyFacts<'_> {
+    fn load(&mut self, list: &[String]) -> rusqlite::Result<()> {
+        let mut fresh: Vec<String> = Vec::new();
+        for f in list {
+            if self.loaded.insert(f.clone()) {
+                self.facts.entry(f.clone()).or_default();
+                fresh.push(f.clone());
+            }
+        }
+        if fresh.is_empty() {
+            return Ok(());
+        }
+        let rows = chunked_rows(
+            self.tx,
+            &fresh,
+            |ph| format!("{SYMBOL_COLUMNS} AND file IN ({ph}) GROUP BY file, name"),
+            decl_row,
+        )?;
+        declare(&mut self.facts, &mut self.file_of_symbol, rows);
+        for (file, to_name, module, to_file) in chunked_rows(
+            self.tx,
+            &fresh,
+            |ph| format!("{IMPORT_COLUMNS} AND s.file IN ({ph})"),
+            import_row,
+        )? {
+            self.facts
+                .entry(file)
+                .or_default()
+                .imports
+                .push((to_name, module, to_file));
+        }
+        Ok(())
+    }
+
+    /// `exportedId` (memoized `findExport`), loading each hop's files first.
+    fn exported_id(&mut self, file: &str, name: &str) -> rusqlite::Result<Option<i64>> {
+        let key = (file.to_string(), name.to_string());
+        if let Some(m) = self.memo.get(&key) {
+            return Ok(*m);
+        }
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut frontier: Vec<String> = vec![file.to_string()];
+        let mut found = None;
+        let mut hop = 0;
+        'hops: while hop <= MAX_REEXPORT_HOPS && !frontier.is_empty() {
+            self.load(&frontier)?;
+            let mut next: Vec<String> = Vec::new();
+            for cur in &frontier {
+                if !seen.insert(cur.clone()) {
+                    continue;
+                }
+                let Some(f) = self.facts.get(cur) else {
+                    continue;
+                };
+                if let Some(id) = f.declared.get(name) {
+                    found = Some(*id);
+                    break 'hops;
+                }
+                let fw = forward(&mut self.forwards, cur, f);
+                if let Some(named) = fw.by_name.get(name) {
+                    next.extend(named.iter().cloned());
+                }
+                next.extend(fw.wildcard.iter().cloned());
+            }
+            frontier = next;
+            hop += 1;
+        }
+        self.memo.insert(key, found);
+        Ok(found)
+    }
+}
+
+/// `bindRefsByImports({ files, names })`: rebind the refs of re-parsed
+/// `files` and, in other files, the refs named in `names` (per file) - the
+/// scoped form an incremental run uses. Same SQL as WrongStack (row order
+/// decides re-export and import precedence), facts loaded on demand.
+pub fn bind_refs_scoped(
+    tx: &Connection,
+    files: &[String],
+    names: &[(String, Vec<String>)],
+) -> rusqlite::Result<BindingResult> {
+    let file_set: HashSet<&str> = files.iter().map(String::as_str).collect();
+    let whole_files: Vec<String> = files
+        .iter()
+        .filter(|f| is_bindable_file(f))
+        .cloned()
+        .collect();
+    let pairs: Vec<(String, Vec<String>)> = names
+        .iter()
+        .filter(|(f, _)| !file_set.contains(f.as_str()) && is_bindable_file(f))
+        .cloned()
+        .collect();
+    if whole_files.is_empty() && pairs.is_empty() {
+        return Ok(BindingResult::default());
+    }
+    let pair_files: HashSet<&str> = pairs.iter().map(|(f, _)| f.as_str()).collect();
+
+    // The refs being rebound.
+    let mut refs: Vec<RefRow> = chunked_rows(
+        tx,
+        &whole_files,
+        |ph| format!("{REF_COLUMNS} WHERE s.file IN ({ph})"),
+        ref_row,
+    )?;
+    refs.extend(
+        pair_rows(
+            tx,
+            &pairs,
+            |fph, nph| format!("{REF_COLUMNS} WHERE s.file IN ({fph}) AND r.to_name IN ({nph})"),
+            |r| {
+                let row = ref_row(r)?;
+                Ok((row.file.clone(), row.to_name.clone(), row))
+            },
+        )?
+        .into_iter()
+        .map(|(_, _, row)| row),
+    );
+    refs.retain(|r| is_bindable_file(&r.file));
+    if refs.is_empty() {
+        return Ok(BindingResult::default());
+    }
+
+    // `owners`: what the rebound refs' own files declare and import - whole
+    // for re-parsed files, narrowed to the scoped names for the rest.
+    let mut lazy = LazyFacts {
+        tx,
+        facts: HashMap::new(),
+        loaded: HashSet::new(),
+        file_of_symbol: HashMap::new(),
+        forwards: HashMap::new(),
+        memo: HashMap::new(),
+    };
+    let mut owners: HashMap<String, Facts> = HashMap::new();
+    let rows = chunked_rows(
+        tx,
+        &whole_files,
+        |ph| format!("{SYMBOL_COLUMNS} AND file IN ({ph}) GROUP BY file, name"),
+        decl_row,
+    )?;
+    declare(&mut owners, &mut lazy.file_of_symbol, rows);
+    let rows: Vec<DeclRow> = pair_rows(
+        tx,
+        &pairs,
+        |fph, nph| {
+            format!("{SYMBOL_COLUMNS} AND file IN ({fph}) AND name IN ({nph}) GROUP BY file, name")
+        },
+        |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?)),
+    )?;
+    declare(&mut owners, &mut lazy.file_of_symbol, rows);
+    for r in &refs {
+        if r.call_type == "import" && !pair_files.contains(r.file.as_str()) {
+            owners.entry(r.file.clone()).or_default().imports.push((
+                r.to_name.clone(),
+                r.module.clone(),
+                r.to_file.clone(),
+            ));
+        }
+    }
+    let pair_file_list: Vec<String> = pairs.iter().map(|(f, _)| f.clone()).collect();
+    if !pair_file_list.is_empty() {
+        for (file, to_name, module, to_file) in chunked_rows(
+            tx,
+            &pair_file_list,
+            |ph| format!("{IMPORT_COLUMNS} AND s.file IN ({ph})"),
+            import_row,
+        )? {
+            owners
+                .entry(file)
+                .or_default()
+                .imports
+                .push((to_name, module, to_file));
+        }
+    }
+    // Direct import targets in one batch; deeper hops load on demand. (The
+    // batch is a set: its order does not change what is loaded.)
+    let mut targets: Vec<String> = Vec::new();
+    {
+        let mut seen: HashSet<String> = HashSet::new();
+        for f in owners.values() {
+            for (_, _, tf) in &f.imports {
+                if let Some(t) = tf.as_ref().filter(|t| !t.is_empty())
+                    && seen.insert(t.clone())
+                {
+                    targets.push(t.clone());
+                }
+            }
+        }
+    }
+    targets.sort();
+    lazy.load(&targets)?;
+
+    let mut bindings_of: HashMap<String, HashMap<String, Binding>> = HashMap::new();
+    let mut updates: Vec<(Option<i64>, Option<String>, i64)> = Vec::new();
+    let mut need_fallback: Vec<&RefRow> = Vec::new();
+    for r in &refs {
+        let js = is_js_file(&r.file);
+        if r.call_type == "import" {
+            if r.module.is_none() || r.module.as_deref() == Some(r.to_name.as_str()) {
+                continue;
+            }
+            let tf = r.to_file.as_deref().filter(|t| !t.is_empty());
+            if js {
+                let to_id = match tf {
+                    Some(t) => lazy.exported_id(t, &r.to_name)?,
+                    None => None,
+                };
+                if to_id != r.to_id {
+                    updates.push((to_id, r.to_file.clone(), r.id));
+                }
+            } else if let Some(t) = tf
+                && let Some(id) = lazy.exported_id(t, &r.to_name)?
+                && Some(id) != r.to_id
+            {
+                updates.push((Some(id), r.to_file.clone(), r.id));
+            }
+            continue;
+        }
+        let local = owners
+            .get(&r.file)
+            .and_then(|f| f.declared.get(&r.to_name))
+            .copied();
+        let mut decision: Decision = None;
+        if let Some(local) = local {
+            decision = Some((Some(local), Some(r.file.clone())));
+        } else {
+            if !bindings_of.contains_key(&r.file) {
+                let m = build_bindings(&r.file, owners.get(&r.file));
+                bindings_of.insert(r.file.clone(), m);
+            }
+            let binding = match bindings_of.get(&r.file).and_then(|m| m.get(&r.to_name)) {
+                Some(Binding::External) => Some(None),
+                Some(Binding::File(bf)) => Some(Some(bf.clone())),
+                None => None,
+            };
+            match binding {
+                Some(None) => decision = Some((None, Some(String::new()))),
+                Some(Some(bf)) => {
+                    if let Some(id) = lazy.exported_id(&bf, &r.to_name)? {
+                        let tf = lazy.file_of_symbol.get(&id).cloned().unwrap_or(bf);
+                        decision = Some((Some(id), Some(tf)));
+                    }
+                }
+                None => {}
+            }
+            if decision.is_none() && !js {
+                let imports: Vec<String> = owners
+                    .get(&r.file)
+                    .map(|f| {
+                        f.imports
+                            .iter()
+                            .filter_map(|(_, _, t)| t.clone().filter(|t| !t.is_empty()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                for imp in imports {
+                    if let Some(id) = lazy.exported_id(&imp, &r.to_name)? {
+                        let tf = lazy.file_of_symbol.get(&id).cloned().unwrap_or(imp);
+                        decision = Some((Some(id), Some(tf)));
+                        break;
+                    }
+                }
+            }
+        }
+        let Some((to_id, to_file)) = decision else {
+            if r.to_file.is_some() {
+                need_fallback.push(r);
+            }
+            continue;
+        };
+        if to_id != r.to_id || to_file != r.to_file {
+            updates.push((to_id, to_file, r.id));
+        }
+    }
+
+    // Refs that lost their binding go back to the family-wide name guess.
+    if !need_fallback.is_empty() {
+        let mut families: Vec<(&'static str, Vec<&RefRow>)> = Vec::new();
+        for r in need_fallback {
+            let fam = detect_lang(&r.file).map_or("other", language_family);
+            match families.iter_mut().find(|(f, _)| *f == fam) {
+                Some((_, list)) => list.push(r),
+                None => families.push((fam, vec![r])),
+            }
+        }
+        for (fam, list) in families {
+            let mut uniq: Vec<String> = Vec::new();
+            let mut seen: HashSet<&str> = HashSet::new();
+            for r in &list {
+                if seen.insert(r.to_name.as_str()) {
+                    uniq.push(r.to_name.clone());
+                }
+            }
+            let min_by_name: HashMap<String, i64> = chunked_rows(
+                tx,
+                &uniq,
+                |ph| {
+                    format!(
+                        "SELECT sym.name, MIN(sym.id) FROM symbols sym
+               JOIN lang_family lf ON lf.lang = sym.lang
+              WHERE lf.family = '{fam}' AND sym.name IN ({ph})
+              GROUP BY sym.name"
+                    )
+                },
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?
+            .into_iter()
+            .collect();
+            for r in list {
+                updates.push((min_by_name.get(&r.to_name).copied(), None, r.id));
+            }
+        }
+    }
+
+    let mut up = tx.prepare_cached("UPDATE refs SET to_id = ?, to_file = ? WHERE id = ?")?;
+    for (to_id, to_file, id) in &updates {
+        up.execute(rusqlite::params![to_id, to_file, id])?;
+    }
+    Ok(BindingResult {
+        updated: updates.len(),
+    })
+}
+
 fn build_bindings(file: &str, facts: Option<&Facts>) -> HashMap<String, Binding> {
     let mut m: HashMap<String, Binding> = HashMap::new();
     let js = is_js_file(file);

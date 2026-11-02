@@ -386,11 +386,18 @@ fn rebuild_is_a_no_op_without_changes_and_replaces_atomically_otherwise() {
 ",
     )
     .unwrap();
-    let Rebuild::Written(second) = rebuild(&root, &index).unwrap() else {
-        panic!("a new file must rewrite the index");
+    // A new file: WrongStack's run is incremental, and so is the native one
+    // (in place, WI-515).
+    let Rebuild::Updated {
+        report: second,
+        changed_files,
+    } = rebuild(&root, &index).unwrap()
+    else {
+        panic!("a new file must update the index");
     };
     assert_eq!(second.symbols_indexed, 11);
-    // Only the index file was replaced: the owner lock and nothing else remain.
+    assert_eq!(changed_files, 1);
+    // Only the index file was written: the owner lock and nothing else remain.
     let mut names: Vec<String> = std::fs::read_dir(&index)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
@@ -398,34 +405,36 @@ fn rebuild_is_a_no_op_without_changes_and_replaces_atomically_otherwise() {
     names.sort();
     assert_eq!(names, vec![".wrongindex-owner.lock", "index.db"]);
 
-    // A WAL file next to the index means another connection: refuse.
+    // Another open connection (e.g. a WrongStack reader) does not block the
+    // in-place update (WAL), as with WrongStack's own incremental run: the
+    // reader keeps its snapshot until it reads again.
     std::fs::write(
         root.join("config/more.yaml"),
         "x: 1
 ",
     )
     .unwrap();
-    // Another open connection (e.g. a WrongStack reader) keeps the WAL alive:
-    // the swap is refused and the old index stays in place.
     let reader = rusqlite::Connection::open(index.join("index.db")).unwrap();
-    let n: i64 = reader
-        .query_row("SELECT count(*) FROM symbols", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(n, 11);
-    assert!(matches!(rebuild(&root, &index), Err(NativeError::Busy(_))));
+    let count = |c: &rusqlite::Connection| -> i64 {
+        c.query_row("SELECT count(*) FROM symbols", [], |r| r.get(0))
+            .unwrap()
+    };
+    assert_eq!(count(&reader), 11);
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Updated { .. }
+    ));
+    assert_eq!(count(&reader), 12);
     drop(reader);
     let leftovers: Vec<String> = std::fs::read_dir(&index)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .filter(|n| n.starts_with(".wrongindex-staging"))
         .collect();
-    assert!(
-        leftovers.is_empty(),
-        "the staging directory is always removed"
-    );
+    assert!(leftovers.is_empty(), "no staging directory is left");
     assert!(matches!(
         rebuild(&root, &index).unwrap(),
-        Rebuild::Written(_)
+        Rebuild::Unchanged { .. }
     ));
 }
 
@@ -574,12 +583,12 @@ fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
     std::fs::write(broken.join("index.db"), b"definitely not sqlite").unwrap();
     refused(&broken, 3, "cannot be read");
 
-    // A baseline index is still replaced.
+    // A baseline index is still written (updated in place).
     let plain = fresh("plain");
     change(4);
     assert!(matches!(
         rebuild(&root, &plain).unwrap(),
-        Rebuild::Written(_)
+        Rebuild::Updated { .. }
     ));
 }
 

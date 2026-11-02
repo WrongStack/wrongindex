@@ -90,6 +90,15 @@ fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
             "ok": true,
             "result": {"outcome": "unchanged", "graphStamp": graph_stamp},
         }),
+        Ok(Rebuild::Updated {
+            report,
+            changed_files,
+        }) => {
+            let mut r = serde_json::to_value(&report).unwrap_or_default();
+            r["outcome"] = serde_json::json!("updated");
+            r["changedFiles"] = serde_json::json!(changed_files);
+            serde_json::json!({"ok": true, "result": r})
+        }
         Ok(Rebuild::Written(report)) => {
             let mut r = serde_json::to_value(&report).unwrap_or_default();
             r["outcome"] = serde_json::json!("written");

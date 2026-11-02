@@ -92,21 +92,32 @@ fn a_run_dying_at_the_publication_boundary_never_leaves_a_partial_index() {
     copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
     std::fs::create_dir_all(&index).unwrap();
 
-    let first = rebuild(&root, &index, None).expect("first run");
-    assert_eq!(first["result"]["outcome"], "written", "{first}");
-    let before = files_table(&index);
-    let before_bytes = std::fs::read(index.join("index.db")).unwrap();
-
-    // Change the project, then die just before the rename: the previous
-    // index stays byte for byte; only a staging directory is left behind.
-    std::fs::write(root.join("extra.json"), "{\"added\": true}\n").unwrap();
+    // First write (fresh, staging + rename). Die just before the rename:
+    // no index at all, only the dead run's staging directory.
     assert!(rebuild(&root, &index, Some("before-publish")).is_none());
-    assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before_bytes);
-    assert_complete(&index);
+    assert!(!index.join("index.db").exists());
     assert_eq!(staging_dirs(&index), 1, "the dead run's staging directory");
-
-    // Die just after the rename: the new index is complete and published.
+    // Die just after the rename: the index is complete and published.
     assert!(rebuild(&root, &index, Some("after-publish")).is_none());
+    assert_complete(&index);
+    let before = files_table(&index);
+    let next = rebuild(&root, &index, None).expect("recovery run");
+    assert_eq!(next["result"]["outcome"], "unchanged", "{next}");
+    assert_eq!(staging_dirs(&index), 0, "the next run sweeps leftovers");
+
+    // Later runs update in place (WI-515); the commit is the publication.
+    // Die just before it: the previous generation stays, complete.
+    std::fs::write(
+        root.join("extra.json"),
+        "{\"added\": true}
+",
+    )
+    .unwrap();
+    assert!(rebuild(&root, &index, Some("before-commit")).is_none());
+    assert_complete(&index);
+    assert_eq!(files_table(&index), before);
+    // Die just after it: the new generation is complete and published.
+    assert!(rebuild(&root, &index, Some("after-commit")).is_none());
     assert_complete(&index);
     let after = files_table(&index);
     assert_ne!(after, before);
@@ -114,17 +125,15 @@ fn a_run_dying_at_the_publication_boundary_never_leaves_a_partial_index() {
         after.iter().any(|(f, _)| f.ends_with("extra.json")),
         "{after:?}"
     );
-
-    // The next run sweeps the leftovers and converges (no-op: same files).
+    // The next run converges (no-op: same files).
     let next = rebuild(&root, &index, None).expect("recovery run");
     assert_eq!(next["result"]["outcome"], "unchanged", "{next}");
-    assert_eq!(staging_dirs(&index), 0);
     assert_eq!(files_table(&index), after);
 
     // And a real change after the faults is written normally.
     std::fs::remove_file(root.join("extra.json")).unwrap();
     let last = rebuild(&root, &index, None).expect("write after recovery");
-    assert_eq!(last["result"]["outcome"], "written", "{last}");
+    assert_eq!(last["result"]["outcome"], "updated", "{last}");
     assert_eq!(files_table(&index), before);
     assert_eq!(staging_dirs(&index), 0);
     assert_complete(&index);

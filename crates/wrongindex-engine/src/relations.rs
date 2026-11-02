@@ -6,7 +6,7 @@
 //! `setup.py`, `pom.xml`, `build.gradle[.kts]`, `*.csproj`) are only ever
 //! read as text; nothing is executed.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -621,6 +621,261 @@ pub fn relation_pass(tx: &Connection, project_root: &str) -> rusqlite::Result<Re
     set_meta(tx, "module_resolution_version", MODULE_RESOLUTION_VERSION)?;
     report.structure = Some(structure);
     Ok(report)
+}
+
+/// What an incremental run changed (`RelationChanges`), each in first-seen
+/// order.
+#[derive(Debug, Default, Clone)]
+pub struct Changes {
+    pub rewritten: Vec<String>,
+    pub added: Vec<String>,
+    pub deleted: Vec<String>,
+}
+
+const STRUCTURE_MARKERS: &[&str] = &[
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+    "pyproject.toml",
+    "setup.py",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "__init__.py",
+];
+const NAMESPACE_FAMILIES: &[&str] = &["dotnet", "php", "elixir", "haskell"];
+
+fn base_name(file: &str) -> &str {
+    file.rsplit(['/', '\\']).next().unwrap_or(file)
+}
+
+/// `isStructureMarker`.
+pub fn is_structure_marker(file: &str) -> bool {
+    let base = base_name(file);
+    STRUCTURE_MARKERS.contains(&base) || base.to_lowercase().ends_with(".csproj")
+}
+
+fn in_namespace_family(file: &str) -> bool {
+    detect_lang(file).is_some_and(|l| NAMESPACE_FAMILIES.contains(&language_family(l)))
+}
+
+type ImportEntry = (String, String, String);
+
+fn import_entries(
+    tx: &Connection,
+    sql: &str,
+    binds: &[String],
+) -> rusqlite::Result<Vec<ImportEntry>> {
+    let mut st = tx.prepare_cached(sql)?;
+    let rows = st
+        .query_map(rusqlite::params_from_iter(binds.iter()), |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+const UNRESOLVED_IMPORTS: &str =
+    "SELECT DISTINCT s.file AS fromFile, r.lang AS lang, r.module AS module
+                  FROM refs r
+                  JOIN symbols s ON s.id = r.from_id
+                 WHERE r.call_type = 'import' AND r.module IS NOT NULL";
+
+/// `getUnresolvedImports(onlyFiles)`.
+fn unresolved_imports(tx: &Connection, only: &[String]) -> rusqlite::Result<Vec<ImportEntry>> {
+    use crate::binding::{in_list_chunks, pad_to_bucket, placeholders};
+    let mut out = Vec::new();
+    let mut at = 0;
+    for n in in_list_chunks(only.len(), crate::binding::MAX_SQL_VARS) {
+        let chunk = pad_to_bucket(&only[at..at + n]);
+        at += n;
+        out.extend(import_entries(
+            tx,
+            &format!(
+                "{UNRESOLVED_IMPORTS} AND s.file IN ({})",
+                placeholders(chunk.len())
+            ),
+            &chunk,
+        )?);
+    }
+    Ok(out)
+}
+
+/// `getImportersOfFiles`: files holding an import resolved to `targets`.
+fn importers_of(tx: &Connection, targets: &[String]) -> rusqlite::Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for f in crate::binding::chunked_rows(
+        tx,
+        targets,
+        |ph| {
+            format!(
+                "SELECT DISTINCT s.file AS file
+         FROM refs r
+         JOIN symbols s ON s.id = r.from_id
+        WHERE r.to_file IN ({ph}) AND r.call_type = 'import'"
+            )
+        },
+        |r| r.get::<_, String>(0),
+    )? {
+        if seen.insert(f.clone()) {
+            out.push(f);
+        }
+    }
+    Ok(out)
+}
+
+/// `resolveProjectRelations(store, root, { changes, full: false,
+/// projectScan: true })` on an index whose relation state is current.
+/// Returns whether anything was written.
+pub fn relation_pass_incremental(
+    tx: &Connection,
+    project_root: &str,
+    changes: &Changes,
+) -> rusqlite::Result<bool> {
+    let mut wrote = false;
+    let touched: Vec<&String> = changes.rewritten.iter().chain(&changes.deleted).collect();
+    let marker_touched = touched.iter().any(|f| is_structure_marker(f));
+    let namespace_touched = touched.iter().any(|f| in_namespace_family(f));
+    let file_set_changed = !changes.added.is_empty() || !changes.deleted.is_empty();
+    let stored_epoch = crate::native::get_meta(tx, "relation_epoch")?.unwrap_or_default();
+
+    // A project scan always needs the structure.
+    let files: Vec<String> = tx
+        .prepare_cached(
+            "SELECT file, lang, mtime_ms, symbol_count, last_indexed, content_hash, git_blob FROM files",
+        )?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    if files.is_empty() {
+        return Ok(false);
+    }
+    let structure = detect_module_roots(project_root, &files);
+    let key = structure_key(&structure);
+    let structure_changed =
+        crate::native::get_meta(tx, "relation_structure")?.as_deref() != Some(key.as_str());
+    let relabel_all = structure_changed || marker_touched;
+    if relabel_all || !changes.added.is_empty() {
+        let added: HashSet<&str> = changes.added.iter().map(String::as_str).collect();
+        let labels: Vec<(String, String)> = assign_package_labels(&structure, &files)
+            .into_iter()
+            .filter(|(f, _)| relabel_all || added.contains(f.as_str()))
+            .collect();
+        let stored: HashMap<String, String> = tx
+            .prepare_cached("SELECT file, package FROM files WHERE package != ''")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<Result<_, _>>()?;
+        let mut up = tx.prepare_cached("UPDATE files SET package = ? WHERE file = ?")?;
+        for (file, label) in &labels {
+            if stored.get(file) != Some(label) {
+                up.execute([label, file])?;
+                wrote = true;
+            }
+        }
+    }
+    if structure_changed {
+        set_meta(tx, "relation_structure", &key)?;
+    }
+    let shape_changed = structure_changed || file_set_changed || namespace_touched;
+    if shape_changed || stored_epoch.is_empty() {
+        set_meta(tx, "relation_epoch", &uuid::Uuid::new_v4().to_string())?;
+    }
+
+    let resolve_all = structure_changed || namespace_touched;
+    let mut pending: Vec<ImportEntry> = if resolve_all {
+        import_entries(tx, UNRESOLVED_IMPORTS, &[])?
+    } else {
+        let mut scope: Vec<String> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut add = |f: String| {
+            if seen.insert(f.clone()) {
+                scope.push(f);
+            }
+        };
+        for f in &changes.rewritten {
+            add(f.clone());
+        }
+        // A deleted target leaves its importers pointing at nothing.
+        for f in importers_of(tx, &changes.deleted)? {
+            add(f);
+        }
+        // A whole-project run also sweeps dangling edges an older build left.
+        if !touched.is_empty() {
+            let dangling: Vec<String> = tx
+                .prepare_cached(
+                    "SELECT DISTINCT s.file AS file
+         FROM refs r
+         JOIN symbols s ON s.id = r.from_id
+        WHERE r.call_type = 'import'
+          AND r.to_file IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM files f WHERE f.file = r.to_file)",
+                )?
+                .query_map([], |r| r.get(0))?
+                .collect::<Result<_, _>>()?;
+            for f in dangling {
+                add(f);
+            }
+        }
+        let mut pending = if scope.is_empty() {
+            Vec::new()
+        } else {
+            unresolved_imports(tx, &scope)?
+        };
+        // A new file can satisfy an import written long before it existed.
+        if !changes.added.is_empty() {
+            pending.extend(import_entries(
+                tx,
+                "SELECT DISTINCT s.file AS fromFile, r.lang AS lang, r.module AS module
+       FROM refs r
+       JOIN symbols s ON s.id = r.from_id
+      WHERE r.call_type = 'import' AND r.module IS NOT NULL AND +r.to_file IS NULL",
+                &[],
+            )?);
+        }
+        pending
+    };
+    if pending.is_empty() {
+        set_meta(tx, "module_resolution_version", MODULE_RESOLUTION_VERSION)?;
+        return Ok(wrote);
+    }
+    let namespaces: Vec<(String, String)> = tx
+        .prepare_cached(
+            "SELECT name, file FROM symbols WHERE kind = 'namespace' ORDER BY file, id",
+        )?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    let resolver = ModuleResolver::new(&structure, &files, &namespaces);
+    // `applyImportResolutions`: one row per (importer, lang, specifier), last
+    // wins at the first one's position.
+    let mut uniq: Vec<(String, String, String, Option<String>)> = Vec::new();
+    let mut at: HashMap<(String, String, String), usize> = HashMap::new();
+    for (from, lang, module) in pending.drain(..) {
+        let to = resolver
+            .resolve(&from, &lang, &module)
+            .filter(|t| *t != from);
+        let k = (from.clone(), lang.clone(), module.clone());
+        match at.get(&k) {
+            Some(&i) => uniq[i].3 = to,
+            None => {
+                at.insert(k, uniq.len());
+                uniq.push((from, lang, module, to));
+            }
+        }
+    }
+    let mut changed = 0usize;
+    let mut up = tx.prepare_cached(
+        "UPDATE refs SET to_file = ?
+          WHERE from_id IN (SELECT id FROM symbols WHERE file = ?)
+            AND +module = ? AND +lang = ? AND +call_type = 'import'",
+    )?;
+    for (from, lang, module, to) in &uniq {
+        changed += up.execute(rusqlite::params![to, from, module, lang])?;
+    }
+    if changed > 0 {
+        wrote = true;
+    }
+    set_meta(tx, "module_resolution_version", MODULE_RESOLUTION_VERSION)?;
+    Ok(wrote)
 }
 
 #[cfg(test)]

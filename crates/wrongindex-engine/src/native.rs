@@ -31,6 +31,9 @@ use crate::js::utf16;
 use crate::parse::{self, Parsed, ParsedRef, ParsedSymbol};
 use crate::rows;
 
+#[path = "incremental.rs"]
+mod incremental;
+
 pub const SCHEMA_SQL: &str =
     include_str!("../../../contracts/profiles/wrongstack-index-v5-baseline/schema.sql");
 pub const MAX_INDEX_FILE_BYTES: u64 = 5 * 1024 * 1024;
@@ -220,6 +223,22 @@ struct Scan {
 }
 
 impl Scan {
+    /// Whether a run would write a Git trust stamp: a file Git reports clean
+    /// whose stored `git_blob` is not `blob:contentHash`, or a stored stamp
+    /// on a file that is no longer clean.
+    fn stamps_differ(&self, stored: &std::collections::HashMap<String, String>) -> bool {
+        let Some(git) = self.git.as_ref().filter(|g| g.snapshot_key.is_some()) else {
+            return false;
+        };
+        self.files.iter().filter(|f| !f.failed).any(|f| {
+            let desired = match git.clean_blobs.get(&f.path) {
+                Some(b) if !f.content_hash.is_empty() => format!("{b}:{}", f.content_hash),
+                _ => String::new(),
+            };
+            stored.get(&f.path).map(String::as_str).unwrap_or("") != desired
+        })
+    }
+
     /// Sorted `(file, content_hash)` of the files that get rows.
     fn hashes(&self) -> Vec<(String, String)> {
         let mut v: Vec<(String, String)> = self
@@ -667,6 +686,12 @@ pub enum Rebuild {
         graph_stamp: Option<String>,
     },
     Written(Report),
+    /// Updated in place, incrementally (WrongStack's non-forced run).
+    Updated {
+        #[serde(flatten)]
+        report: Report,
+        changed_files: usize,
+    },
 }
 
 /// Bring `index_dir/index.db` up to date with a full native run.
@@ -698,10 +723,35 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
             ))
         })?;
         match existing {
-            Existing::Baseline { files, graph_stamp } if files == first.hashes() => {
+            // Same files and bytes, and no clean file whose Git stamp a run
+            // would (re)write: WrongStack's run would change nothing.
+            Existing::Baseline {
+                files,
+                graph_stamp,
+                git_blobs,
+            } if files == first.hashes() && !first.stamps_differ(&git_blobs) => {
                 return Ok(Rebuild::Unchanged { graph_stamp });
             }
-            Existing::Baseline { .. } => {}
+            Existing::Baseline { .. } => {
+                // WrongStack's own run here is incremental, in place.
+                match incremental::applicable(project_root, &db) {
+                    Ok(None) => {
+                        let out = incremental::update(project_root, &db, first)?;
+                        return Ok(Rebuild::Updated {
+                            report: out.report,
+                            changed_files: out.changed_files,
+                        });
+                    }
+                    Ok(Some(why)) => timing(
+                        &format!("incremental skipped: {why}"),
+                        std::time::Instant::now(),
+                    ),
+                    Err(e) => timing(
+                        &format!("incremental skipped: {e}"),
+                        std::time::Instant::now(),
+                    ),
+                }
+            }
             Existing::Other(why) => {
                 return Err(NativeError::Unsupported(format!(
                     "the existing index {why}; the native writer only replaces an index of the exact baseline profile, so it is left untouched"
@@ -879,6 +929,8 @@ enum Existing {
     Baseline {
         files: Vec<(String, String)>,
         graph_stamp: Option<String>,
+        /// `files.git_blob` per file.
+        git_blobs: std::collections::HashMap<String, String>,
     },
     /// Anything else, with a reason ("has schema version 4", ...).
     Other(String),
@@ -947,10 +999,18 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
             version.as_deref().unwrap_or("(none)")
         )));
     }
-    let mut files: Vec<(String, String)> = conn
-        .prepare("SELECT file, content_hash FROM files")?
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .collect::<Result<_, _>>()?;
+    let mut files: Vec<(String, String)> = Vec::new();
+    let mut git_blobs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    {
+        let mut st = conn.prepare("SELECT file, content_hash, git_blob FROM files")?;
+        let mut rows = st.query([])?;
+        while let Some(r) = rows.next()? {
+            let file: String = r.get(0)?;
+            let blob: Option<String> = r.get(2)?;
+            git_blobs.insert(file.clone(), blob.unwrap_or_default());
+            files.push((file, r.get(1)?));
+        }
+    }
     files.sort();
     let graph_stamp = conn
         .query_row(
@@ -959,7 +1019,11 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
             |r| r.get(0),
         )
         .optional()?;
-    Ok(Existing::Baseline { files, graph_stamp })
+    Ok(Existing::Baseline {
+        files,
+        graph_stamp,
+        git_blobs,
+    })
 }
 
 /// Remove a database this run created and never committed.
