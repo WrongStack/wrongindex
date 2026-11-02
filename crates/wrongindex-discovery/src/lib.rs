@@ -126,11 +126,16 @@ pub fn discover(project_root: &Path, extra_ignore: &[&str]) -> Discovery {
 }
 
 fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Discovery> {
-    let top = git::top_level(root)?;
-    if comparable(&top) != comparable(&root.to_string_lossy()) {
+    // Two independent reads; process start-up dominates each, so overlap them.
+    let (top, env) = std::thread::scope(|s| {
+        let top = s.spawn(|| git::top_level(root));
+        let env = git::isolation_env(root);
+        (top.join().ok().flatten(), env)
+    });
+    if comparable(&top?) != comparable(&root.to_string_lossy()) {
         return None;
     }
-    let listing = git::worktree_listing(root)?;
+    let listing = git::worktree_listing_with(root, env?)?;
     let resolve = |rel: &str| resolve_under(root, rel);
     let worktree = git::parse_worktree(&listing, &resolve);
     let ignore: BTreeSet<&str> = DEFAULT_IGNORE_DIRS

@@ -527,7 +527,7 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
     let mut symbols_indexed: i64 = 0;
 
     // Git trust: a clean file whose stamp matches is skipped unread.
-    let candidates: Vec<Source> = files
+    let mut candidates: Vec<Source> = files
         .into_iter()
         .filter(|f| {
             let Some(m) = meta.get(f.path.as_str()) else {
@@ -548,6 +548,10 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
             false
         })
         .collect();
+    // The scan trusted a stamp this transaction no longer holds.
+    for f in &mut candidates {
+        f.read()?;
+    }
 
     // Read phase outcome per file: failed, unchanged (content hash), or to
     // parse. Parsing does not depend on the database, so it runs first.

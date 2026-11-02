@@ -214,6 +214,76 @@ struct Source {
     /// See [`FileRow::failed`].
     failed: bool,
     text: String,
+    /// Not read: Git reports the file clean and its stored stamp matches,
+    /// so the stored content hash stands in (WrongStack skips such a file
+    /// unread too). `text` is empty and `mtime_ms` is 0 until [`Self::read`].
+    unread: bool,
+}
+
+impl Source {
+    /// `readBatchFiles` for one file: an oversized file is a per-file
+    /// failure (no rows; the run goes on).
+    fn load(path: String, lang: &'static str) -> Result<Self, NativeError> {
+        let meta = std::fs::metadata(&path)?;
+        if meta.len() > MAX_INDEX_FILE_BYTES {
+            return Ok(Source {
+                path,
+                lang,
+                mtime_ms: 0,
+                content_hash: String::new(),
+                failed: true,
+                text: String::new(),
+                unread: false,
+            });
+        }
+        let mtime_ms = meta
+            .modified()?
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as i64);
+        let bytes = std::fs::read(&path)?;
+        let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        Ok(Source {
+            path,
+            lang,
+            mtime_ms,
+            content_hash,
+            failed: false,
+            text,
+            unread: false,
+        })
+    }
+
+    /// Read a file the scan skipped.
+    fn read(&mut self) -> Result<(), NativeError> {
+        if self.unread {
+            *self = Source::load(std::mem::take(&mut self.path), self.lang)?;
+        }
+        Ok(())
+    }
+}
+
+/// Stored `(content_hash, git_blob)` per file, for skipping Git-trusted
+/// files unread. Empty when the index cannot be read: every file is read.
+fn trusted_stamps(db: &Path) -> std::collections::HashMap<String, (String, String)> {
+    let read = || -> rusqlite::Result<_> {
+        let conn = Connection::open_with_flags(
+            db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        conn.pragma_update(None, "query_only", true)?;
+        let mut st = conn.prepare(
+            "SELECT file, content_hash, git_blob FROM files
+              WHERE content_hash IS NOT NULL AND content_hash != ''
+                AND git_blob IS NOT NULL AND git_blob != ''",
+        )?;
+        st.query_map([], |r| Ok((r.get(0)?, (r.get(1)?, r.get(2)?))))?
+            .collect::<rusqlite::Result<_>>()
+    };
+    if !db.exists() {
+        return Default::default();
+    }
+    read().unwrap_or_default()
 }
 
 /// Discovery plus the read phase: what the files are, without parsing.
@@ -250,6 +320,16 @@ impl Scan {
         v.sort();
         v
     }
+
+    /// Read every file the scan skipped (a fresh build needs them all).
+    fn read_all(&mut self) -> Result<(), NativeError> {
+        let t = std::time::Instant::now();
+        for f in &mut self.files {
+            f.read()?;
+        }
+        timing("read skipped", t);
+        Ok(())
+    }
 }
 
 /// Phase timings on stderr when `WRONGINDEX_NATIVE_TIMINGS` is set.
@@ -259,8 +339,12 @@ fn timing(phase: &str, since: std::time::Instant) {
     }
 }
 
-/// Discover and read every file; refuse anything unsupported.
-fn scan(project_root: &Path) -> Result<Scan, NativeError> {
+/// Discover and read every file; refuse anything unsupported. A file Git
+/// reports clean whose `trusted` stamp is `blob:contentHash` is not read.
+fn scan(
+    project_root: &Path,
+    trusted: &std::collections::HashMap<String, (String, String)>,
+) -> Result<Scan, NativeError> {
     let t = std::time::Instant::now();
     let d = wrongindex_discovery::discover(project_root, &[]);
     timing("discover", t);
@@ -299,35 +383,22 @@ fn scan(project_root: &Path) -> Result<Scan, NativeError> {
                 )));
             }
         };
-        let meta = std::fs::metadata(&path)?;
-        // `readBatchFiles`: an oversized file is a per-file error; it gets no
-        // rows and the run goes on.
-        if meta.len() > MAX_INDEX_FILE_BYTES {
+        let clean = git.as_ref().and_then(|g| g.clean_blobs.get(&path));
+        if let (Some(blob), Some((hash, stamp))) = (clean, trusted.get(&path))
+            && *stamp == format!("{blob}:{hash}")
+        {
             files.push(Source {
+                content_hash: hash.clone(),
                 path,
                 lang,
                 mtime_ms: 0,
-                content_hash: String::new(),
-                failed: true,
+                failed: false,
                 text: String::new(),
+                unread: true,
             });
             continue;
         }
-        let mtime_ms = meta
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| d.as_millis() as i64);
-        let bytes = std::fs::read(&path)?;
-        let content_hash = wrongindex_storage::content_hash::file_content_hash(&bytes);
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        files.push(Source {
-            path,
-            lang,
-            mtime_ms,
-            content_hash,
-            failed: false,
-            text,
-        });
+        files.push(Source::load(path, lang)?);
     }
     timing("read", t);
     Ok(Scan { files, git })
@@ -511,7 +582,7 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
 
 /// Read and parse every discovered file.
 fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
-    parse_scan(scan(project_root)?)
+    parse_scan(scan(project_root, &Default::default())?)
 }
 
 /// Statements of `schema.sql`: tables first, then the FTS table, then indexes.
@@ -708,7 +779,7 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     sweep_staging(index_dir);
     // Read (and hash) before parsing anything: an unchanged project costs a
     // discovery and a read, and a changed one is not scanned twice.
-    let first = scan(project_root)?;
+    let mut first = scan(project_root, &trusted_stamps(&db))?;
     // One look at the existing file decides: no-op, refuse, or replace.
     // The native writer replaces the whole file with a fresh baseline-schema
     // index, which is only safe for an index it reproduces exactly: extra
@@ -763,6 +834,7 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
         ".wrongindex-staging-{}",
         uuid::Uuid::new_v4().simple()
     ));
+    first.read_all()?;
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         for suffix in ["-wal", "-shm"] {
@@ -820,11 +892,12 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
     };
     busy(&db)?;
     refuse_newer(&db)?;
-    let first = scan(project_root)?;
+    let mut first = scan(project_root, &Default::default())?;
     let staging = index_dir.join(format!(
         ".wrongindex-staging-{}",
         uuid::Uuid::new_v4().simple()
     ));
+    first.read_all()?;
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         busy(&db)?;

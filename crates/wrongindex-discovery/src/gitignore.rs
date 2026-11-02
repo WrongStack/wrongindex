@@ -27,6 +27,10 @@ fn is_line_terminator(c: char) -> bool {
 #[derive(Debug, Clone)]
 pub struct Glob {
     tokens: Vec<Token>,
+    /// The longest run of consecutive literal tokens. Each matches exactly
+    /// one character, so any match of the glob contains this text: an input
+    /// without it cannot match (a pre-filter; it never changes a result).
+    required: String,
 }
 
 impl Glob {
@@ -93,7 +97,28 @@ impl Glob {
                 }
             }
         }
-        Glob { tokens }
+        let mut required = String::new();
+        let mut run = String::new();
+        for t in &tokens {
+            match t {
+                Token::Literal(c) => run.push(*c),
+                _ => {
+                    if run.chars().count() > required.chars().count() {
+                        required = std::mem::take(&mut run);
+                    }
+                    run.clear();
+                }
+            }
+        }
+        if run.chars().count() > required.chars().count() {
+            required = run;
+        }
+        Glob { tokens, required }
+    }
+
+    /// Whether `input` (the same characters as `chars`) could hold a match.
+    fn may_match(&self, input: &str) -> bool {
+        self.required.is_empty() || input.contains(self.required.as_str())
     }
 
     fn step_ok(token: &Token, c: char) -> bool {
@@ -127,6 +152,7 @@ impl Glob {
     ) -> Option<usize> {
         let n = self.tokens.len();
         let mut cur = vec![false; n + 1];
+        let mut next = vec![false; n + 1];
         for i in 0..=input.len() {
             if is_start(i, input) {
                 cur[0] = true;
@@ -139,7 +165,7 @@ impl Glob {
                 return Some(i);
             }
             let c = input[i];
-            let mut next = vec![false; n + 1];
+            next.fill(false);
             for s in 0..n {
                 if cur[s] && Self::step_ok(&self.tokens[s], c) {
                     match self.tokens[s] {
@@ -148,7 +174,7 @@ impl Glob {
                     }
                 }
             }
-            cur = next;
+            std::mem::swap(&mut cur, &mut next);
         }
         None
     }
@@ -167,6 +193,7 @@ impl Glob {
     ) -> bool {
         let n = self.tokens.len();
         let mut cur = vec![false; n + 1];
+        let mut next = vec![false; n + 1];
         for i in 0..=input.len() {
             if is_start(i, input) {
                 cur[0] = true;
@@ -179,23 +206,16 @@ impl Glob {
                 break;
             }
             let c = input[i];
-            let mut next = vec![false; n + 1];
-            let mut any = false;
+            next.fill(false);
             for s in 0..n {
-                if !cur[s] {
-                    continue;
-                }
-                let t = &self.tokens[s];
-                if Self::step_ok(t, c) {
-                    match t {
+                if cur[s] && Self::step_ok(&self.tokens[s], c) {
+                    match self.tokens[s] {
                         Token::Star | Token::Globstar => next[s] = true,
                         _ => next[s + 1] = true,
                     }
-                    any = true;
                 }
             }
-            cur = next;
-            let _ = any;
+            std::mem::swap(&mut cur, &mut next);
         }
         false
     }
@@ -275,6 +295,9 @@ const MAX_TOTAL_TOKENS: usize = 200_000;
 pub struct Gitignore {
     rules: Vec<Rule>,
     has_negation: bool,
+    /// Skip rules whose required literal text is absent (tests turn it off
+    /// to check that it never changes a result).
+    prefilter: bool,
 }
 
 impl Gitignore {
@@ -282,6 +305,7 @@ impl Gitignore {
         Self {
             rules: Vec::new(),
             has_negation: false,
+            prefilter: true,
         }
     }
 
@@ -350,6 +374,7 @@ impl Gitignore {
         Self {
             rules,
             has_negation,
+            prefilter: true,
         }
     }
 
@@ -361,9 +386,13 @@ impl Gitignore {
     }
 
     fn evaluate(&self, p: &[char], is_dir: bool) -> bool {
+        let text: String = p.iter().collect();
         let mut ignored = false;
         for r in &self.rules {
             if self.has_negation && r.dir_only && !is_dir {
+                continue;
+            }
+            if self.prefilter && !r.parts.iter().all(|g| g.may_match(&text)) {
                 continue;
             }
             let is_end: &dyn Fn(usize, &[char]) -> bool = if self.has_negation {
@@ -503,6 +532,61 @@ mod tests {
         assert!(g.is_ignored("a/x/b/y/z/c", false));
         assert!(g.is_ignored("a/b/c", false));
         assert!(!g.is_ignored("a/c/b", false));
+    }
+
+    #[test]
+    fn literal_prefilter_never_changes_a_result() {
+        let rules = [
+            "node_modules\n*.log\n",
+            "/build\nsrc/**/gen\n!src/keep/gen\n",
+            "a*b\n[ab]c.ts\n?x.py\n",
+            "docs/\n!docs/api/\n**/tmp/**\n",
+            "foo/**/bar/**/baz.rs\n\\#hash\n\\!bang\n",
+            "日本/*.md\n*語\n",
+        ];
+        let paths = [
+            "node_modules/x.js",
+            "src/node_modules/y.ts",
+            "a.log",
+            "deep/dir/b.log",
+            "build/out.js",
+            "x/build/out.js",
+            "src/gen/a.ts",
+            "src/a/b/gen/c.ts",
+            "src/keep/gen/d.ts",
+            "ab",
+            "axxb",
+            "ac.ts",
+            "bc.ts",
+            "cc.ts",
+            "zx.py",
+            "x.py",
+            "docs/readme.md",
+            "docs/api/index.md",
+            "a/tmp/b/c.ts",
+            "foo/bar/baz.rs",
+            "foo/1/bar/2/baz.rs",
+            "foo/baz.rs",
+            "#hash",
+            "!bang",
+            "日本/a.md",
+            "x/日本語",
+            "plain.ts",
+        ];
+        for src in rules {
+            let fast = gi(src);
+            let mut slow = gi(src);
+            slow.prefilter = false;
+            for p in paths {
+                for dir in [false, true] {
+                    assert_eq!(
+                        fast.is_ignored(p, dir),
+                        slow.is_ignored(p, dir),
+                        "{src:?} {p} dir={dir}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

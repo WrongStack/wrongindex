@@ -9,6 +9,7 @@
 //! the indexed project's `go.mod`/`go.work` are never read and none of its
 //! code is built or run.
 
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -43,19 +44,15 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
             .map(|f| finish(without_toolchain(&utf16(f.text)), f))
             .collect());
     };
-    let (dir, script) = private_script("wi-go-parse-", "batch.go", GO_BATCH_SCRIPT)?;
     // `go run` is build + run. Building once, with a deadline that covers a
     // cold build cache, keeps the per-chunk `batchTimeoutMs` about parsing
     // (a cold `go run` can exceed it, which made results timing-dependent);
     // the program, and so its output, is the same.
-    let exe = dir
-        .path()
-        .join(if cfg!(windows) { "batch.exe" } else { "batch" });
-    build(go, &script, &exe)?;
+    let (_dir, exe) = program(go)?;
     par_chunks(files, |chunk| {
         let mut out = Vec::with_capacity(chunk.len());
         let cmd = Command::new(&exe);
-        let stdout = run_chunk(cmd, &script, chunk)?
+        let stdout = run_chunk(cmd, &exe, chunk)?
             .ok_or_else(|| "go parser failed on a chunk".to_string())?;
         let results = decode_batch(&stdout, "go")?;
         for f in chunk {
@@ -78,6 +75,142 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
         }
         Ok(out)
     })
+}
+
+const EXE_SUFFIX: &str = if cfg!(windows) { ".exe" } else { "" };
+
+/// The built parser program: from the per-user cache when an intact build
+/// for this program and Go installation is there, else built now (and
+/// cached). Linking alone costs over a second per run on a warm Go cache.
+fn program(go: &std::path::Path) -> Result<(Option<tempfile::TempDir>, PathBuf), String> {
+    program_in(go, cache_dir())
+}
+
+fn program_in(
+    go: &std::path::Path,
+    cache: Option<PathBuf>,
+) -> Result<(Option<tempfile::TempDir>, PathBuf), String> {
+    let cache = cache.map(|d| {
+        let key = build_key(go);
+        (
+            d.join(format!("go-batch-{key}{EXE_SUFFIX}")),
+            d.join(format!("go-batch-{key}.sha256")),
+            d,
+        )
+    });
+    if let Some((exe, sum, _)) = &cache
+        && intact(exe, sum)
+    {
+        return Ok((None, exe.clone()));
+    }
+    let (dir, script) = private_script("wi-go-parse-", "batch.go", GO_BATCH_SCRIPT)?;
+    let exe = dir.path().join(format!("batch{EXE_SUFFIX}"));
+    build(go, &script, &exe)?;
+    if let Some((cached, sum, d)) = &cache
+        && store(&exe, cached, sum, d).is_ok()
+        && intact(cached, sum)
+    {
+        return Ok((Some(dir), cached.clone()));
+    }
+    Ok((Some(dir), exe))
+}
+
+/// `WRONGINDEX_TOOLCHAIN_CACHE`, else the per-user cache directory; an empty
+/// variable turns the cache off.
+fn cache_dir() -> Option<PathBuf> {
+    match std::env::var_os("WRONGINDEX_TOOLCHAIN_CACHE") {
+        Some(v) if v.is_empty() => None,
+        Some(v) => Some(PathBuf::from(v)),
+        None => {
+            let base = if cfg!(windows) {
+                std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+            } else {
+                std::env::var_os("XDG_CACHE_HOME")
+                    .map(PathBuf::from)
+                    .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            }?;
+            Some(base.join("WrongIndex").join("toolchain"))
+        }
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// What the built program depends on: its source, the Go installation
+/// (path, size, modification time) and the environment `go build` reads.
+fn build_key(go: &std::path::Path) -> String {
+    use sha2::Digest;
+    let mut h = sha2::Sha256::new();
+    let mut part = |b: &[u8]| {
+        h.update((b.len() as u64).to_le_bytes());
+        h.update(b);
+    };
+    part(GO_BATCH_SCRIPT.as_bytes());
+    part(go.as_os_str().as_encoded_bytes());
+    if let Ok(m) = std::fs::metadata(go) {
+        part(&m.len().to_le_bytes());
+        let t = m
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos());
+        part(&t.to_le_bytes());
+    }
+    for var in [
+        "GOROOT",
+        "GOFLAGS",
+        "GOOS",
+        "GOARCH",
+        "CGO_ENABLED",
+        "GOEXPERIMENT",
+        "GOAMD64",
+        "GOARM64",
+    ] {
+        part(var.as_bytes());
+        part(std::env::var_os(var).unwrap_or_default().as_encoded_bytes());
+    }
+    hex(&h.finalize()[..16])
+}
+
+fn file_sha256(path: &std::path::Path) -> Option<String> {
+    use sha2::Digest;
+    std::fs::read(path)
+        .ok()
+        .map(|b| hex(&sha2::Sha256::digest(&b)))
+}
+
+/// A cached program whose bytes match the digest recorded with it.
+fn intact(exe: &std::path::Path, sum: &std::path::Path) -> bool {
+    match (std::fs::read_to_string(sum), file_sha256(exe)) {
+        (Ok(want), Some(got)) => want.trim() == got,
+        _ => false,
+    }
+}
+
+/// Publish a build into the cache: digest first, then the program, each by
+/// rename, so a reader sees a mismatch (and rebuilds), never a torn file.
+fn store(
+    exe: &std::path::Path,
+    cached: &std::path::Path,
+    sum: &std::path::Path,
+    dir: &std::path::Path,
+) -> std::io::Result<()> {
+    let digest = file_sha256(exe).ok_or_else(|| std::io::Error::other("unreadable build"))?;
+    std::fs::create_dir_all(dir)?;
+    let tag = uuid::Uuid::new_v4().simple().to_string();
+    let tmp_sum = dir.join(format!(".tmp-{tag}.sha256"));
+    let tmp_exe = dir.join(format!(".tmp-{tag}{EXE_SUFFIX}"));
+    let result = (|| {
+        std::fs::write(&tmp_sum, &digest)?;
+        std::fs::copy(exe, &tmp_exe)?;
+        std::fs::rename(&tmp_sum, sum)?;
+        std::fs::rename(&tmp_exe, cached)
+    })();
+    let _ = std::fs::remove_file(&tmp_sum);
+    let _ = std::fs::remove_file(&tmp_exe);
+    result
 }
 
 /// Deadline for building the parser program (cold build cache included).
@@ -319,6 +452,29 @@ fn static_group(g: &U16) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_parser_program_is_cached_and_a_damaged_copy_is_rebuilt() {
+        let Some(go) = go() else {
+            eprintln!("go not installed; skipped");
+            return;
+        };
+        let cache = tempfile::tempdir().unwrap();
+        let (dir, first) = program_in(go, Some(cache.path().to_path_buf())).unwrap();
+        assert!(first.starts_with(cache.path()), "{}", first.display());
+        drop(dir);
+        // A second run takes the cached build without building.
+        let (dir, again) = program_in(go, Some(cache.path().to_path_buf())).unwrap();
+        assert!(dir.is_none());
+        assert_eq!(again, first);
+        // A damaged copy fails its digest and is replaced by a fresh build.
+        std::fs::write(&first, b"not a program").unwrap();
+        let (dir, rebuilt) = program_in(go, Some(cache.path().to_path_buf())).unwrap();
+        assert!(dir.is_some());
+        assert_eq!(rebuilt, first);
+        let sum = std::fs::read_to_string(first.with_extension("sha256")).unwrap();
+        assert_eq!(file_sha256(&rebuilt).unwrap(), sum.trim());
+    }
 
     fn names(src: &str) -> Vec<(String, &'static str, usize, usize, String)> {
         without_toolchain(&utf16(src))

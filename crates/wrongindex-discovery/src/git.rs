@@ -157,7 +157,11 @@ pub fn top_level(root: &Path) -> Option<String> {
 
 /// The worktree listing with isolation applied, or `None`.
 pub fn worktree_listing(root: &Path) -> Option<Vec<u8>> {
-    let env = isolation_env(root)?;
+    worktree_listing_with(root, isolation_env(root)?)
+}
+
+/// [`worktree_listing`] with an [`isolation_env`] already computed.
+pub fn worktree_listing_with(root: &Path, env: Vec<(String, String)>) -> Option<Vec<u8>> {
     let mut c = base_command(root);
     c.arg("-C").arg(root).args(WORKTREE_ARGS);
     for (k, v) in env {
