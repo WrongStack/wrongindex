@@ -478,7 +478,20 @@ fn py_basic_matches_the_wrongstack_oracle() {
         eprintln!("NOT RUN: no Python interpreter");
         return;
     }
+    let _serial = toolchain_serial();
     assert_eq!(assert_matches_oracle("py-basic"), (3, 0, 9));
+}
+
+/// Toolchain fixtures run one at a time. Their parsers keep WrongStack's
+/// own per-chunk deadlines (`batchTimeoutMs`: 15 s + 1.5 s per file); on a
+/// 2-core CI runner, a cold `go build`, Node compiling the WASM grammars and
+/// Python started together pushed the tree-sitter chunk past 24 s once
+/// (2026-11-02, run for b063752). The product keeps the deadline; the
+/// tests stop competing with each other.
+fn toolchain_serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Go through `go run` of WrongStack's own `go/ast` program.
@@ -488,6 +501,7 @@ fn go_basic_matches_the_wrongstack_oracle() {
         eprintln!("NOT RUN: no Go toolchain");
         return;
     }
+    let _serial = toolchain_serial();
     assert_eq!(assert_matches_oracle("go-basic"), (2, 0, 6));
 }
 
@@ -499,6 +513,7 @@ fn treesitter_mix_matches_the_wrongstack_oracle() {
         eprintln!("NOT RUN: neither Bun nor Node.js on PATH");
         return;
     }
+    let _serial = toolchain_serial();
     assert_eq!(assert_matches_oracle("treesitter-mix"), (6, 0, 17));
 }
 
