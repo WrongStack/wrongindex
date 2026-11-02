@@ -683,11 +683,30 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     // Read (and hash) before parsing anything: an unchanged project costs a
     // discovery and a read, and a changed one is not scanned twice.
     let first = scan(project_root)?;
-    if db.exists()
-        && let Some((stored, stamp)) = stored_state(&db)?
-        && stored == first.hashes()
-    {
-        return Ok(Rebuild::Unchanged { graph_stamp: stamp });
+    // One look at the existing file decides: no-op, refuse, or replace.
+    // The native writer replaces the whole file with a fresh baseline-schema
+    // index, which is only safe for an index it reproduces exactly: extra
+    // tables/columns/indexes WrongStack must preserve, another schema
+    // version, or an unreadable file are left untouched - for the
+    // compatibility worker (which migrates and preserves) or an explicit
+    // maintenance rebuild.
+    if db.exists() {
+        let existing = stored_state(&db).map_err(|e| {
+            NativeError::Unsupported(format!(
+                "the existing index cannot be read ({e}); it is left untouched"
+            ))
+        })?;
+        match existing {
+            Existing::Baseline { files, graph_stamp } if files == first.hashes() => {
+                return Ok(Rebuild::Unchanged { graph_stamp });
+            }
+            Existing::Baseline { .. } => {}
+            Existing::Other(why) => {
+                return Err(NativeError::Unsupported(format!(
+                    "the existing index {why}; the native writer only replaces an index of the exact baseline profile, so it is left untouched"
+                )));
+            }
+        }
     }
     let staging = index_dir.join(format!(
         ".wrongindex-staging-{}",
@@ -742,12 +761,44 @@ fn fault_point(point: &str) {
 #[cfg(not(debug_assertions))]
 fn fault_point(_point: &str) {}
 
-/// `(file, content_hash)` rows (sorted) and `graph_stamp` of an existing
-/// WrongStack v5 index; `None` when it is not one.
-/// Sorted `(file, content_hash)` rows plus the stored `graph_stamp`.
-type StoredState = (Vec<(String, String)>, Option<String>);
+/// What [`rebuild`] found in an existing `index.db`.
+enum Existing {
+    /// Exactly the baseline v5 schema: sorted `(file, content_hash)` rows
+    /// and the stored `graph_stamp`.
+    Baseline {
+        files: Vec<(String, String)>,
+        graph_stamp: Option<String>,
+    },
+    /// Anything else, with a reason ("has schema version 4", ...).
+    Other(String),
+}
 
-fn stored_state(db: &Path) -> Result<Option<StoredState>, NativeError> {
+/// The baseline schema objects as `(type, name, tbl_name, sql)`, from an
+/// in-memory database built with [`schema_statements`].
+fn baseline_schema() -> rusqlite::Result<Vec<SchemaObject>> {
+    let conn = Connection::open_in_memory()?;
+    for stmt in schema_statements() {
+        conn.execute_batch(&stmt)?;
+    }
+    schema_objects(&conn)
+}
+
+type SchemaObject = (String, String, String, Option<String>);
+
+/// `sqlite_master` minus SQLite's own objects (`sqlite_stat1`, autoindexes).
+fn schema_objects(conn: &Connection) -> rusqlite::Result<Vec<SchemaObject>> {
+    let mut v: Vec<SchemaObject> = conn
+        .prepare(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+        )?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+        .collect::<Result<_, _>>()?;
+    v.sort();
+    Ok(v)
+}
+
+fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
+    use rusqlite::OptionalExtension;
     // Read-write without create, but query-only: a read-only connection to a
     // WAL database leaves `-wal`/`-shm` behind, which would block the swap.
     let conn = Connection::open_with_flags(
@@ -755,29 +806,49 @@ fn stored_state(db: &Path) -> Result<Option<StoredState>, NativeError> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
     conn.pragma_update(None, "query_only", true)?;
+    let schema = schema_objects(&conn)?;
+    if schema != baseline_schema()? {
+        let base: std::collections::BTreeSet<_> = baseline_schema()?.into_iter().collect();
+        let extra: Vec<&str> = schema
+            .iter()
+            .filter(|o| !base.contains(*o))
+            .map(|o| o.1.as_str())
+            .collect();
+        return Ok(Existing::Other(if extra.is_empty() {
+            "lacks baseline schema objects".into()
+        } else {
+            format!(
+                "has schema objects outside the baseline ({})",
+                extra.join(", ")
+            )
+        }));
+    }
     let version: Option<String> = conn
         .query_row(
             "SELECT value FROM metadata WHERE key = 'version'",
             [],
             |r| r.get(0),
         )
-        .ok();
+        .optional()?;
     if version.as_deref() != Some("5") {
-        return Ok(None);
+        return Ok(Existing::Other(format!(
+            "has schema version {}",
+            version.as_deref().unwrap_or("(none)")
+        )));
     }
-    let mut rows: Vec<(String, String)> = conn
+    let mut files: Vec<(String, String)> = conn
         .prepare("SELECT file, content_hash FROM files")?
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<Result<_, _>>()?;
-    rows.sort();
-    let stamp = conn
+    files.sort();
+    let graph_stamp = conn
         .query_row(
             "SELECT value FROM metadata WHERE key = 'graph_stamp'",
             [],
             |r| r.get(0),
         )
-        .ok();
-    Ok(Some((rows, stamp)))
+        .optional()?;
+    Ok(Existing::Baseline { files, graph_stamp })
 }
 
 /// Remove a database this run created and never committed.

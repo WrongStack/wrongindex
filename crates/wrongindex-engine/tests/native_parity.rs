@@ -501,3 +501,69 @@ fn treesitter_mix_matches_the_wrongstack_oracle() {
     }
     assert_eq!(assert_matches_oracle("treesitter-mix"), (6, 0, 17));
 }
+
+/// The native writer replaces the whole file, so it must refuse any existing
+/// index it would not reproduce exactly: one carrying data WrongStack must
+/// preserve, another schema version, or an unreadable file. Each is left
+/// byte for byte; a plain baseline index is still replaced.
+#[test]
+fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let fresh = |name: &str| {
+        let index = base.join(name);
+        std::fs::create_dir_all(&index).unwrap();
+        assert!(matches!(
+            rebuild(&root, &index).unwrap(),
+            Rebuild::Written(_)
+        ));
+        index
+    };
+    let change = |n: u32| {
+        std::fs::write(root.join("changed.json"), format!("{{\"n\": {n}}}\n")).unwrap();
+    };
+    let refused = |index: &Path, n: u32, want: &str| {
+        let before = std::fs::read(index.join("index.db")).unwrap();
+        change(n);
+        match rebuild(&root, index) {
+            Err(NativeError::Unsupported(why)) => assert!(why.contains(want), "{why}"),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
+    };
+
+    // Extra data WrongStack would keep (an unknown table).
+    let extra = fresh("extra");
+    {
+        let c = rusqlite::Connection::open(extra.join("index.db")).unwrap();
+        c.execute_batch("CREATE TABLE x_plugin_notes(id INTEGER PRIMARY KEY, note TEXT); INSERT INTO x_plugin_notes(note) VALUES ('keep me');")
+            .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
+    refused(&extra, 1, "outside the baseline (x_plugin_notes)");
+
+    // Another schema version.
+    let older = fresh("older");
+    {
+        let c = rusqlite::Connection::open(older.join("index.db")).unwrap();
+        c.execute("UPDATE metadata SET value = '4' WHERE key = 'version'", [])
+            .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
+    refused(&older, 2, "has schema version 4");
+
+    // An unreadable file.
+    let broken = fresh("broken");
+    std::fs::write(broken.join("index.db"), b"definitely not sqlite").unwrap();
+    refused(&broken, 3, "cannot be read");
+
+    // A baseline index is still replaced.
+    let plain = fresh("plain");
+    change(4);
+    assert!(matches!(
+        rebuild(&root, &plain).unwrap(),
+        Rebuild::Written(_)
+    ));
+}
