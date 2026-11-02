@@ -676,6 +676,7 @@ pub enum Rebuild {
 /// replacement is refused while the old file has WAL/shared-memory files
 /// (another connection may have it open).
 pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
+    stall_point(project_root);
     let db = index_dir.join("index.db");
     // A run that died (crash, kill, power loss) leaves its staging directory
     // behind; writes to one project are serialized, so any is stale now.
@@ -853,6 +854,23 @@ fn fault_point(point: &str) {
 
 #[cfg(not(debug_assertions))]
 fn fault_point(_point: &str) {}
+
+/// Test hook (debug builds only): `WRONGINDEX_NATIVE_STALL=<text>:<secs>`
+/// makes a run whose project root contains `<text>` sleep first, standing
+/// in for a slow or hostile project.
+#[cfg(debug_assertions)]
+fn stall_point(project_root: &Path) {
+    if let Ok(v) = std::env::var("WRONGINDEX_NATIVE_STALL")
+        && let Some((text, secs)) = v.rsplit_once(':')
+        && let Ok(secs) = secs.parse::<u64>()
+        && project_root.to_string_lossy().contains(text)
+    {
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn stall_point(_project_root: &Path) {}
 
 /// What [`rebuild`] found in an existing `index.db`.
 enum Existing {

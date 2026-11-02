@@ -147,6 +147,9 @@ fn main() -> ExitCode {
         return native_rebuild_child(&raw[2], &raw[3]);
     }
     let args = Args::parse();
+    if let Err(e) = confine::kill_children_with_me() {
+        eprintln!("wrongindexd: child processes will not die with the service: {e}");
+    }
     let root = match DataRoot::resolve(args.data_root.as_deref()) {
         Ok(r) => r,
         Err(e) => {

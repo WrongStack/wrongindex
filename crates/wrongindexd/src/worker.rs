@@ -1,17 +1,19 @@
 //! Durable job execution. Jobs are claimed from the registry in admission
-//! order; completion is recorded before it becomes observable via `job.get`.
+//! order, up to `PARALLEL_JOBS` at once and one per project; completion is recorded before it becomes observable via `job.get`.
 //!
 //! `check` jobs inspect the project's `index.db` read-only. Write jobs run on
 //! the native engine when it supports the project (`--backend auto|native`)
 //! and otherwise on the WrongStack compatibility worker (`auto|legacy`).
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
 use tokio::sync::watch;
-use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, JobState, OwnerFence};
+use tokio::task::JoinSet;
+use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, JobRecord, JobState, OwnerFence};
 
 use crate::server::{Backend, Shared};
 use crate::{info, warn};
@@ -19,65 +21,125 @@ use crate::{info, warn};
 /// Fallback poll interval; admission normally wakes the worker immediately.
 const IDLE_POLL: Duration = Duration::from_secs(5);
 
-pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
-    loop {
-        if *shutdown.borrow() {
-            return;
-        }
-        let queued = match shared.registry(|r| r.queued_jobs()).await {
-            Ok(q) => q,
-            Err(e) => {
-                warn!("worker_queue_read_failed", {"error": e.to_string()});
-                Vec::new()
-            }
-        };
-        if queued.is_empty() {
-            tokio::select! {
-                _ = shared.wake_worker.notified() => {}
-                _ = shutdown.changed() => return,
-                _ = tokio::time::sleep(IDLE_POLL) => {}
-            }
-            continue;
-        }
-        for job in queued {
-            if *shutdown.borrow() {
-                return;
-            }
-            let job_id = job.job_id.clone();
-            let claimed = {
-                let id = job_id.clone();
-                shared.registry(move |r| r.mark_running(&id)).await
-            };
-            match claimed {
-                Ok(true) => {
-                    let mut running = job.clone();
-                    running.state = JobState::Running;
-                    crate::events::job_event(&shared, "job.started", &running);
-                }
-                Ok(false) => continue,
-                Err(e) => {
-                    warn!("worker_claim_failed", {"jobId": job_id, "error": e.to_string()});
-                    continue;
-                }
-            }
-            let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
-            let ok = outcome.is_ok();
-            let id = job_id.clone();
-            match shared.registry(move |r| r.complete_job(&id, outcome)).await {
-                Ok(done) => {
-                    prune_now_and_then(&shared).await;
-                    info!("job_completed", {
-                        "jobId": done.job_id, "projectId": done.project_id,
-                        "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
-                    });
-                    crate::events::job_event(&shared, "job.finished", &done);
-                }
-                Err(e) => {
-                    warn!("job_completion_not_recorded", {"jobId": job_id, "error": e.to_string()})
-                }
-            }
+/// Jobs run at once. At most one per project, so a slow or hostile project
+/// occupies one slot and every other project still progresses in the other
+/// (security review WI-604). Native runs are separate confined processes;
+/// compatibility-worker calls still serialize on the one WrongStack worker.
+pub const PARALLEL_JOBS: usize = 2;
+
+/// Projects with a job in flight; removed when the job's task ends (also
+/// on panic).
+struct Busy {
+    projects: Arc<std::sync::Mutex<HashSet<String>>>,
+    project_id: String,
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        if let Ok(mut b) = self.projects.lock() {
+            b.remove(&self.project_id);
         }
     }
+}
+
+/// The next jobs to start: in admission order, skipping projects that
+/// already have a job in flight or picked, at most `slots`.
+fn pick(queued: Vec<JobRecord>, busy: &HashSet<String>, slots: usize) -> Vec<JobRecord> {
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut out = Vec::new();
+    for job in queued {
+        if out.len() == slots {
+            break;
+        }
+        if busy.contains(&job.project_id) || !taken.insert(job.project_id.clone()) {
+            continue;
+        }
+        out.push(job);
+    }
+    out
+}
+
+pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
+    let busy: Arc<std::sync::Mutex<HashSet<String>>> = Arc::default();
+    let mut running: JoinSet<()> = JoinSet::new();
+    loop {
+        while running.try_join_next().is_some() {}
+        if *shutdown.borrow() {
+            break;
+        }
+        let mut started = false;
+        if running.len() < PARALLEL_JOBS {
+            let queued = match shared.registry(|r| r.queued_jobs()).await {
+                Ok(q) => q,
+                Err(e) => {
+                    warn!("worker_queue_read_failed", {"error": e.to_string()});
+                    Vec::new()
+                }
+            };
+            let in_flight = busy.lock().map(|b| b.clone()).unwrap_or_default();
+            for job in pick(queued, &in_flight, PARALLEL_JOBS - running.len()) {
+                let job_id = job.job_id.clone();
+                let claimed = {
+                    let id = job_id.clone();
+                    shared.registry(move |r| r.mark_running(&id)).await
+                };
+                match claimed {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(e) => {
+                        warn!("worker_claim_failed", {"jobId": job_id, "error": e.to_string()});
+                        continue;
+                    }
+                }
+                if let Ok(mut b) = busy.lock() {
+                    b.insert(job.project_id.clone());
+                }
+                let marker = Busy {
+                    projects: busy.clone(),
+                    project_id: job.project_id.clone(),
+                };
+                running.spawn(run_job(shared.clone(), job, marker));
+                started = true;
+            }
+        }
+        if started {
+            continue;
+        }
+        tokio::select! {
+            _ = shared.wake_worker.notified() => {}
+            Some(_) = running.join_next(), if !running.is_empty() => {}
+            _ = shutdown.changed() => {}
+            _ = tokio::time::sleep(IDLE_POLL) => {}
+        }
+    }
+    // Drain: no new job starts; the ones in flight finish (the server bounds
+    // this with its drain budget).
+    while running.join_next().await.is_some() {}
+}
+
+async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
+    let mut running = job.clone();
+    running.state = JobState::Running;
+    crate::events::job_event(&shared, "job.started", &running);
+    let job_id = job.job_id.clone();
+    let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
+    let ok = outcome.is_ok();
+    let id = job_id.clone();
+    match shared.registry(move |r| r.complete_job(&id, outcome)).await {
+        Ok(done) => {
+            prune_now_and_then(&shared).await;
+            info!("job_completed", {
+                "jobId": done.job_id, "projectId": done.project_id,
+                "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
+            });
+            crate::events::job_event(&shared, "job.finished", &done);
+        }
+        Err(e) => {
+            warn!("job_completion_not_recorded", {"jobId": job_id, "error": e.to_string()})
+        }
+    }
+    // Another project's queued job may be waiting for this slot.
+    shared.wake_worker.notify_one();
 }
 
 async fn execute(
@@ -387,4 +449,47 @@ async fn record_failure(shared: &Arc<Shared>, project_id: &str, msg: &str) {
     let _ = shared
         .registry(move |r| r.record_publication(&pid, None, Some(&msg)))
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(id: &str, project: &str) -> JobRecord {
+        JobRecord {
+            job_id: id.into(),
+            project_id: project.into(),
+            kind: JobKind::Full,
+            state: JobState::Queued,
+            attempt: 0,
+            admitted_at_ms: 0,
+            started_at_ms: None,
+            completed_at_ms: None,
+            result: None,
+            error: None,
+            params: None,
+        }
+    }
+
+    #[test]
+    fn pick_is_one_per_project_in_admission_order() {
+        let queued = || {
+            vec![
+                job("1", "a"),
+                job("2", "a"),
+                job("3", "b"),
+                job("4", "c"),
+                job("5", "b"),
+            ]
+        };
+        let ids = |v: Vec<JobRecord>| v.into_iter().map(|j| j.job_id).collect::<Vec<_>>();
+        let none = HashSet::new();
+        assert_eq!(ids(pick(queued(), &none, 2)), ["1", "3"]);
+        assert_eq!(ids(pick(queued(), &none, 5)), ["1", "3", "4"]);
+        // `a` busy (its slow job runs): the others get the slots.
+        let busy: HashSet<String> = ["a".to_string()].into();
+        assert_eq!(ids(pick(queued(), &busy, 1)), ["3"]);
+        assert_eq!(ids(pick(queued(), &busy, 2)), ["3", "4"]);
+        assert!(pick(queued(), &none, 0).is_empty());
+    }
 }

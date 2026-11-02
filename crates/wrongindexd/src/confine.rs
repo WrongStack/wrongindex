@@ -12,7 +12,8 @@
 //!   failure aborts the child, which the daemon reports as a failed run.
 
 /// Memory cap for the whole child tree: `WRONGINDEX_NATIVE_MEMORY_MB` (at
-/// least 256), else half of physical memory, at least 2 GiB.
+/// least 256), else a quarter of physical memory (two jobs may run at once,
+/// see `worker::PARALLEL_JOBS`), at least 2 GiB.
 #[cfg(windows)]
 fn memory_cap() -> usize {
     use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
@@ -33,14 +34,32 @@ fn memory_cap() -> usize {
             0
         }
     };
-    usize::try_from((total / 2).max(MIN)).unwrap_or(usize::MAX)
+    usize::try_from((total / 4).max(MIN)).unwrap_or(usize::MAX)
 }
 
 /// Confine the current process (and everything it starts afterwards).
-/// Returns the cap in bytes. The job handle is deliberately leaked: it must
-/// live exactly as long as this process.
+/// Returns the cap in bytes.
 #[cfg(windows)]
 pub fn confine_current_process() -> Result<usize, String> {
+    let cap = memory_cap();
+    join_new_job(Some(cap))?;
+    Ok(cap)
+}
+
+/// The daemon: every process it starts (native children, the WrongStack
+/// worker, git) dies with it. Otherwise a native child could keep writing
+/// and publish `index.db` after the daemon died and its ownership lock was
+/// released (INV-01).
+#[cfg(windows)]
+pub fn kill_children_with_me() -> Result<(), String> {
+    join_new_job(None)
+}
+
+/// Put the current process into a new kill-on-close Job Object (nested
+/// under any job it is already in). The handle is deliberately leaked: it
+/// must live exactly as long as this process.
+#[cfg(windows)]
+fn join_new_job(memory: Option<usize>) -> Result<(), String> {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
@@ -49,7 +68,6 @@ pub fn confine_current_process() -> Result<usize, String> {
         SetInformationJobObject,
     };
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
-    let cap = memory_cap();
     // SAFETY: plain Win32 calls on a handle this function owns; the limit
     // struct is plain data and outlives the call.
     unsafe {
@@ -61,10 +79,12 @@ pub fn confine_current_process() -> Result<usize, String> {
             ));
         }
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            | JOB_OBJECT_LIMIT_JOB_MEMORY
-            | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
-        info.JobMemoryLimit = cap;
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if let Some(cap) = memory {
+            info.BasicLimitInformation.LimitFlags |=
+                JOB_OBJECT_LIMIT_JOB_MEMORY | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
+            info.JobMemoryLimit = cap;
+        }
         if SetInformationJobObject(
             job,
             JobObjectExtendedLimitInformation,
@@ -78,10 +98,15 @@ pub fn confine_current_process() -> Result<usize, String> {
             return Err(format!("job object: {e}"));
         }
     }
-    Ok(cap)
+    Ok(())
 }
 
 #[cfg(not(windows))]
 pub fn confine_current_process() -> Result<usize, String> {
     Err("process confinement is implemented for Windows only".into())
+}
+
+#[cfg(not(windows))]
+pub fn kill_children_with_me() -> Result<(), String> {
+    Ok(())
 }

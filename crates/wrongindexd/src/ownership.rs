@@ -6,7 +6,7 @@
 //! long as this daemon owns the index; the OS drops it if the daemon dies,
 //! and startup recovery never trusts a previous instance's recorded state.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -25,9 +25,11 @@ use crate::{info, warn};
 #[derive(Default)]
 pub struct Owners {
     guards: Mutex<HashMap<String, OwnerGuard>>,
-    /// Projects with a write run in flight. A guard is never released while
-    /// its project is here (INV-01: the OS lock covers the whole write).
-    runs: Mutex<HashSet<String>>,
+    /// Runs in flight per project (write jobs and reads that open the
+    /// store). A guard is never released while its project has one (INV-01:
+    /// the OS lock covers the whole write). Counted: a read finishing must
+    /// not end a concurrent write's protection.
+    runs: Mutex<HashMap<String, usize>>,
     run_done: Notify,
 }
 
@@ -39,8 +41,13 @@ pub struct RunGuard<'a> {
 
 impl Drop for RunGuard<'_> {
     fn drop(&mut self) {
-        if let Ok(mut r) = self.owners.runs.lock() {
-            r.remove(&self.project_id);
+        if let Ok(mut r) = self.owners.runs.lock()
+            && let Some(n) = r.get_mut(&self.project_id)
+        {
+            *n -= 1;
+            if *n == 0 {
+                r.remove(&self.project_id);
+            }
         }
         self.owners.run_done.notify_waiters();
     }
@@ -54,7 +61,12 @@ impl Owners {
         if !guards.contains_key(project_id) {
             return None;
         }
-        self.runs.lock().ok()?.insert(project_id.to_string());
+        *self
+            .runs
+            .lock()
+            .ok()?
+            .entry(project_id.to_string())
+            .or_insert(0) += 1;
         drop(guards);
         Some(RunGuard {
             owners: self,
@@ -67,7 +79,7 @@ impl Owners {
     fn take_if_idle(&self, project_id: &str) -> Result<Option<OwnerGuard>, ()> {
         let mut guards = self.guards.lock().map_err(|_| ())?;
         let runs = self.runs.lock().map_err(|_| ())?;
-        if runs.contains(project_id) {
+        if runs.contains_key(project_id) {
             return Err(());
         }
         Ok(guards.remove(project_id))
@@ -311,4 +323,36 @@ pub async fn restore(shared: &Arc<Shared>, desired: Vec<String>) -> Value {
         }));
     }
     Value::Array(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A read finishing while a write job runs on the same project must not
+    /// make the guard releasable (it did when runs were a plain set).
+    #[test]
+    fn overlapping_runs_are_counted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = OwnerGuard::acquire(
+            tmp.path(),
+            OwnerInfo {
+                owner: "test".into(),
+                instance_id: "i".into(),
+                pid: std::process::id(),
+                epoch: 1,
+                profile_id: BASELINE_PROFILE_ID.into(),
+                acquired_at_ms: 0,
+            },
+        )
+        .unwrap();
+        let owners = Owners::default();
+        owners.insert("p", guard);
+        let write = owners.begin_run("p").unwrap();
+        let read = owners.begin_run("p").unwrap();
+        drop(read);
+        assert!(owners.take_if_idle("p").is_err(), "write still running");
+        drop(write);
+        assert!(matches!(owners.take_if_idle("p"), Ok(Some(_))));
+    }
 }
