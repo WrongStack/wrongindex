@@ -547,10 +547,63 @@ fn relative_inside(root: &str, file: &str) -> Option<String> {
     same.then(|| f[cut..].replace('\\', "/"))
 }
 
+/// Containment for targeted paths (security review WI-604): a path inside
+/// the checkout must stay inside once its symbolic links and junctions are
+/// resolved. Links are resolved by reading their targets, never by opening
+/// them, so a link to a share or device is never touched. Full discovery
+/// never follows such links either (Git-listed ones refuse the run, the walk
+/// skips links); WrongStack itself follows them, so the run is refused
+/// rather than indexed differently.
+struct Containment {
+    root: String,
+    /// The root with its own links resolved (a checkout reached through a
+    /// junction is still inside itself).
+    real_root: Option<String>,
+}
+
+impl Containment {
+    fn new(root: &str) -> Self {
+        let real_root = wrongindex_storage::git_containment::resolve_links_locally(Path::new(root))
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned());
+        Containment {
+            root: root.to_string(),
+            real_root,
+        }
+    }
+
+    /// `Err` (refusal) when `path` leaves the checkout through a link.
+    fn check(&self, path: &str) -> Result<(), NativeError> {
+        let inside = wrongindex_storage::git_containment::resolve_links_locally(Path::new(path))
+            .ok()
+            .is_some_and(|real| {
+                let real = real.to_string_lossy();
+                relative_inside(&self.root, &real).is_some()
+                    || self
+                        .real_root
+                        .as_deref()
+                        .is_some_and(|r| relative_inside(r, &real).is_some())
+            });
+        if inside {
+            Ok(())
+        } else {
+            Err(NativeError::Unsupported(format!(
+                "a targeted path leaves the checkout through a link ({path}); WrongIndex never reads outside it"
+            )))
+        }
+    }
+}
+
 /// `expandTargetedDirectories` plus the targeted filters of
 /// `discoverIndexerFiles`, in WrongStack's order. `indexed` is the `files`
-/// table in its own order (`getAllFileMetas`).
-fn targeted_files(project_root: &Path, indexed: &[String], targets: &[String]) -> Vec<String> {
+/// table in its own order (`getAllFileMetas`). Nothing outside the checkout
+/// is opened (see [`Containment`]).
+fn targeted_files(
+    project_root: &Path,
+    indexed: &[String],
+    targets: &[String],
+    containment: &Containment,
+) -> Result<Vec<String>, NativeError> {
     use wrongindex_discovery::{DEFAULT_IGNORE_DIRS, DEFAULT_IGNORE_FILES, Gitignore, lang};
     let root = wrongindex_storage::wrongstack_paths::node_resolve(project_root);
     let root_s = root.to_string_lossy().into_owned();
@@ -570,6 +623,8 @@ fn targeted_files(project_root: &Path, indexed: &[String], targets: &[String]) -
             add(target, &mut expanded);
             continue;
         }
+        // Before the stat: it follows links.
+        containment.check(&target)?;
         let stats = match std::fs::metadata(&target) {
             Ok(m) => Some(m),
             Err(e) if is_missing(&e) => None,
@@ -625,7 +680,7 @@ fn targeted_files(project_root: &Path, indexed: &[String], targets: &[String]) -
         }
         walk(&root_s, Path::new(&target), &gi, &mut expanded, &mut add);
     }
-    expanded
+    Ok(expanded
         .into_iter()
         .filter(|f| {
             let Some(rel) = relative_inside(&root_s, f) else {
@@ -637,7 +692,7 @@ fn targeted_files(project_root: &Path, indexed: &[String], targets: &[String]) -
                 || rel.starts_with(".wrongstack/atlas/")
                 || gi.is_ignored(&rel, false))
         })
-        .collect()
+        .collect())
 }
 
 /// `isMissingPathError`: ENOENT or ENOTDIR.
@@ -649,7 +704,9 @@ fn is_missing(e: &std::io::Error) -> bool {
 }
 
 /// `readBatchFiles` for one file of a targeted run.
-fn stat_target(path: String) -> Result<Entry, NativeError> {
+fn stat_target(path: String, containment: &Containment) -> Result<Entry, NativeError> {
+    // Before the stat and the read: both follow links.
+    containment.check(&path)?;
     let meta = match std::fs::metadata(&path) {
         Ok(m) => m,
         Err(e) if is_missing(&e) => return Ok(Entry::Missing(path)),
@@ -733,12 +790,14 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
             super::stage("discover");
             let t = std::time::Instant::now();
             let indexed: Vec<String> = existing.iter().map(|(f, _)| f.clone()).collect();
-            let list = targeted_files(project_root, &indexed, targets);
+            let root = wrongindex_storage::wrongstack_paths::node_resolve(project_root);
+            let containment = Containment::new(&root.to_string_lossy());
+            let list = targeted_files(project_root, &indexed, targets, &containment)?;
             timing("discover", t);
             let t = std::time::Instant::now();
             let mut v = Vec::with_capacity(list.len());
             for path in list {
-                v.push(stat_target(path)?);
+                v.push(stat_target(path, &containment)?);
             }
             timing("read", t);
             (v, None)

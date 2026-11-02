@@ -777,3 +777,95 @@ fn maintenance_rebuild_never_replaces_a_newer_schema() {
     let backup = r.backup.expect("backup kept");
     assert_eq!(std::fs::read(&backup).unwrap(), before);
 }
+
+#[cfg(windows)]
+fn junction(link: &Path, target: &Path) {
+    let ok = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok, "mklink /J {}", link.display());
+}
+
+/// Security review (WI-604) for targeted runs: a named path that leaves the
+/// checkout through a junction is refused before anything behind it is
+/// stat'ed or read, as a file or as a directory to expand; a junction that
+/// stays inside, and a checkout reached through a junction, are fine.
+#[cfg(windows)]
+#[test]
+fn targeted_paths_never_leave_the_checkout_through_links() {
+    use wrongindex_engine::native::update_files;
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join("idx");
+    std::fs::create_dir_all(&index).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    let secret = base.join("secret");
+    std::fs::create_dir_all(&secret).unwrap();
+    std::fs::write(secret.join("leak.json"), "{\"secret\": 1}\n").unwrap();
+    junction(&root.join("config").join("linked"), &secret);
+    let before = std::fs::read(index.join("index.db")).unwrap();
+    for target in [
+        root.join("config/linked/leak.json"),
+        root.join("config/linked"),
+        root.join("config/linked/missing.json"),
+    ] {
+        let t = target.to_string_lossy().into_owned();
+        match update_files(&root, &index, std::slice::from_ref(&t)) {
+            Err(NativeError::Unsupported(why)) => {
+                assert!(why.contains("leaves the checkout"), "{why}")
+            }
+            other => panic!("{t}: expected a refusal, got {other:?}"),
+        }
+        assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
+    }
+
+    // Inside to inside: indexed like any other path.
+    std::fs::remove_dir(root.join("config/linked")).unwrap();
+    junction(&root.join("alias"), &root.join("config"));
+    let t = root.join("alias/app.yaml").to_string_lossy().into_owned();
+    let r = update_files(&root, &index, std::slice::from_ref(&t)).unwrap();
+    assert!(
+        matches!(
+            r,
+            Rebuild::Updated {
+                changed_files: 1,
+                ..
+            }
+        ),
+        "{r:?}"
+    );
+
+    // A checkout reached through a junction is still inside itself.
+    let via = base.join("via");
+    junction(&via, &root);
+    let index2 = base.join("idx2");
+    std::fs::create_dir_all(&index2).unwrap();
+    std::fs::remove_dir(root.join("alias")).unwrap();
+    assert!(matches!(
+        rebuild(&via, &index2).unwrap(),
+        Rebuild::Written(_)
+    ));
+    std::fs::write(root.join("config/new.json"), "{\"n\": 1}\n").unwrap();
+    let t = via.join("config/new.json").to_string_lossy().into_owned();
+    let r = update_files(&via, &index2, std::slice::from_ref(&t)).unwrap();
+    assert!(
+        matches!(
+            r,
+            Rebuild::Updated {
+                changed_files: 1,
+                ..
+            }
+        ),
+        "{r:?}"
+    );
+}
