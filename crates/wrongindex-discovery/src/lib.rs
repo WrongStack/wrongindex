@@ -102,6 +102,22 @@ fn admitted(portable: &str, ignore: &BTreeSet<&str>, gi: &Gitignore) -> bool {
 /// `findSourceFiles(projectRoot, extraIgnore, loadGitignoreMatcher(root))`.
 pub fn discover(project_root: &Path, extra_ignore: &[&str]) -> Discovery {
     let root = wrongindex_storage::wrongstack_paths::node_resolve(project_root);
+    if let Some(target) = wrongindex_storage::wrongstack_paths::remote_git_link(&root) {
+        // Never run git (or read anything) through a `.git` file that names a
+        // network share: incomplete, so nothing is indexed or deleted.
+        return Discovery {
+            source: Source::Walk,
+            files: Vec::new(),
+            complete: false,
+            errors: vec![format!(
+                ".git names a network or device path ({target}); refusing to follow it"
+            )],
+            clean_blobs: BTreeMap::new(),
+            snapshot_key: None,
+            dirty_hashes: BTreeMap::new(),
+            outside_root: Vec::new(),
+        };
+    }
     let gi = Gitignore::load(&root);
     if let Some(d) = discover_git(&root, extra_ignore, &gi) {
         return d;
@@ -345,6 +361,21 @@ mod tests {
             .collect();
         names.sort();
         assert_eq!(names, vec!["Makefile", "src/a.ts"]);
+    }
+
+    #[test]
+    fn a_git_file_naming_a_share_makes_discovery_incomplete_without_running_git() {
+        let tmp = tempfile::tempdir().unwrap();
+        let r = long_path(tmp.path()).join("repo");
+        write(&r.join("a.ts"), "export const a = 1;\n");
+        write(
+            &r.join(".git"),
+            "gitdir: //attacker.invalid/s/x/worktrees/y\n",
+        );
+        let d = discover(&r, &[]);
+        assert!(!d.complete);
+        assert!(d.files.is_empty());
+        assert!(d.errors[0].contains("network"), "{:?}", d.errors);
     }
 
     #[test]

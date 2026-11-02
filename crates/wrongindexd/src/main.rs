@@ -4,6 +4,7 @@
 //! (first named-pipe instance) -> registry open/migrate/recover -> credential
 //! and discovery publication -> accept authenticated clients.
 
+mod confine;
 mod dirty;
 mod engine;
 mod events;
@@ -111,8 +112,34 @@ fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Confine a native child before it does any work; refuse to run unconfined
+/// on Windows (the daemon then reports the run as failed).
+fn confined_or_reply() -> Option<ExitCode> {
+    match confine::confine_current_process() {
+        Ok(_) => None,
+        Err(e) if cfg!(windows) => {
+            let reply = serde_json::json!({
+                "ok": false,
+                "kind": "error",
+                "message": format!("cannot confine the native indexer: {e}"),
+            });
+            println!("{reply}");
+            Some(ExitCode::SUCCESS)
+        }
+        Err(_) => None,
+    }
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
+    if matches!(
+        raw.get(1).map(String::as_str),
+        Some("--native-rebuild" | "--native-rebuild-replace")
+    ) && raw.len() == 4
+        && let Some(code) = confined_or_reply()
+    {
+        return code;
+    }
     if raw.get(1).map(String::as_str) == Some("--native-rebuild-replace") && raw.len() == 4 {
         return native_replace_child(&raw[2], &raw[3]);
     }

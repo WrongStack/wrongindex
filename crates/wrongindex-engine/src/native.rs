@@ -768,6 +768,7 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
         Ok(())
     };
     busy(&db)?;
+    refuse_newer(&db)?;
     let first = scan(project_root)?;
     let staging = index_dir.join(format!(
         ".wrongindex-staging-{}",
@@ -776,6 +777,9 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         busy(&db)?;
+        // Re-checked at the swap: a newer WrongStack may have written it
+        // meanwhile (ownership is held, but never rely on that alone).
+        refuse_newer(&db)?;
         let mut backup = None;
         if db.exists() {
             let to = index_dir.join(format!("index.db.wrongindex-backup-{}", now_ms()));
@@ -788,6 +792,38 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
     })();
     let _ = std::fs::remove_dir_all(&staging);
     result
+}
+
+/// Maintenance never replaces an index a newer WrongStack wrote (schema
+/// version above 5 or not numeric): that would downgrade its data. An
+/// unreadable file or one without `metadata` is fair game (kept as backup).
+fn refuse_newer(db: &Path) -> Result<(), NativeError> {
+    if !db.exists() {
+        return Ok(());
+    }
+    let read = || -> rusqlite::Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        // Query-only read-write without create (see `stored_state`).
+        let conn = Connection::open_with_flags(
+            db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        conn.pragma_update(None, "query_only", true)?;
+        conn.query_row(
+            "SELECT CAST(value AS TEXT) FROM metadata WHERE key = 'version'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()
+    };
+    match read() {
+        Ok(Some(v)) if v.trim().parse::<i64>().map_or(true, |n| n > 5) => {
+            Err(NativeError::Unsupported(format!(
+                "the index has schema version {v:?}, written by a newer WrongStack; it is left untouched"
+            )))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Remove `.wrongindex-staging-*` directories left by runs that died.

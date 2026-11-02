@@ -218,6 +218,12 @@ where
                 );
             }
         });
+        // A failed chunk fails the whole run: start no further parsers
+        // (security review WI-604: a hostile repo must not keep the queue
+        // busy for every remaining chunk's timeout).
+        if group.iter().any(|&i| matches!(results[i], Some(Err(_)))) {
+            break;
+        }
     }
     let mut out = Vec::with_capacity(files.len());
     for r in results.into_iter().flatten() {

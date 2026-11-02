@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use wrongindex_engine::dbdump::{Volatile, diff, dump};
-use wrongindex_engine::native::{NativeError, Rebuild, index_fresh, rebuild};
+use wrongindex_engine::native::{NativeError, Rebuild, index_fresh, rebuild, rebuild_replacing};
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -566,4 +566,49 @@ fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
         rebuild(&root, &plain).unwrap(),
         Rebuild::Written(_)
     ));
+}
+
+/// Maintenance replaces what the regular writer refuses, keeping a backup,
+/// but never an index a newer WrongStack wrote (security review WI-604).
+#[test]
+fn maintenance_rebuild_never_replaces_a_newer_schema() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let with_version = |name: &str, v: &str| {
+        let index = base.join(name);
+        std::fs::create_dir_all(&index).unwrap();
+        assert!(matches!(
+            rebuild(&root, &index).unwrap(),
+            Rebuild::Written(_)
+        ));
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        c.execute("UPDATE metadata SET value = ?1 WHERE key = 'version'", [v])
+            .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+        index
+    };
+    for (name, v) in [("newer", "6"), ("unknown", "v6")] {
+        let index = with_version(name, v);
+        let before = std::fs::read(index.join("index.db")).unwrap();
+        match rebuild_replacing(&root, &index) {
+            Err(NativeError::Unsupported(why)) => {
+                assert!(why.contains("newer WrongStack"), "{why}")
+            }
+            other => panic!("expected a refusal for version {v}, got {other:?}"),
+        }
+        assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
+        assert_eq!(
+            std::fs::read_dir(&index).unwrap().count(),
+            1,
+            "nothing else written"
+        );
+    }
+    // An older schema is replaced and kept as a backup.
+    let older = with_version("older", "4");
+    let before = std::fs::read(older.join("index.db")).unwrap();
+    let r = rebuild_replacing(&root, &older).unwrap();
+    let backup = r.backup.expect("backup kept");
+    assert_eq!(std::fs::read(&backup).unwrap(), before);
 }

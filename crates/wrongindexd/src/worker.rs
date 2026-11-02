@@ -327,7 +327,7 @@ async fn rebuild_in_child(
         None => {
             warn!("native_indexer_crashed", {"status": out.status.to_string()});
             Err(NativeOutcome::Unsupported(format!(
-                "native indexer crashed ({}); a source file may be too deeply nested",
+                "native indexer crashed ({}); a source file may be too deeply nested, or the run exceeded its memory cap",
                 out.status
             )))
         }

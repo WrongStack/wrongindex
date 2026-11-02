@@ -118,6 +118,47 @@ pub fn on_disk_case(root: &str) -> String {
     }
 }
 
+/// A path naming a network share or a device namespace (`\\server\share`,
+/// `//server/share`, `\\?\`, `\\.\`). Merely opening one makes Windows
+/// connect and authenticate as the user.
+fn is_remote_or_device(p: &str) -> bool {
+    let b = p.as_bytes();
+    b.len() >= 2 && matches!(b[0], b'\\' | b'/') && matches!(b[1], b'\\' | b'/')
+}
+
+/// The `gitdir:` target of a `.git` file, if any.
+fn gitdir_link(dot_git: &Path) -> Option<String> {
+    if !std::fs::symlink_metadata(dot_git).ok()?.is_file() {
+        return None;
+    }
+    let line = std::fs::read_to_string(dot_git).ok()?;
+    let line = line.trim();
+    line.get(..7)
+        .filter(|p| p.eq_ignore_ascii_case("gitdir:"))
+        .map(|_| line[7..].trim().to_string())
+}
+
+/// Containment (security review WI-604): the `.git` Git would use for
+/// `checkout` (the nearest one in it or an ancestor) is a file whose
+/// `gitdir:` names a network share or device while the checkout itself is
+/// local. Following it - by WrongIndex or by `git` - would send the user's
+/// credentials to that host. A cloned repository never contains a `.git`
+/// file; such a folder came from an archive or a copy. Returns the target.
+pub fn remote_git_link(checkout: &Path) -> Option<String> {
+    if is_remote_or_device(&strip_verbatim(checkout)) {
+        return None;
+    }
+    let mut dir = Some(checkout);
+    while let Some(d) = dir {
+        let dot_git = d.join(".git");
+        if std::fs::symlink_metadata(&dot_git).is_ok() {
+            return gitdir_link(&dot_git).filter(|t| is_remote_or_device(t));
+        }
+        dir = d.parent();
+    }
+    None
+}
+
 /// `gitIdentityRoot`: map a linked Git worktree to its main checkout.
 /// Submodules, separate-git-dir layouts, and malformed metadata keep the
 /// checkout root.
@@ -133,7 +174,8 @@ fn git_identity_root(checkout: &Path) -> PathBuf {
             .get(..7)
             .filter(|p| p.eq_ignore_ascii_case("gitdir:"))
             .map(|_| line[7..].trim())?;
-        if rest.is_empty() {
+        if rest.is_empty() || remote_git_link(checkout).is_some() {
+            // Never touch a share named by a `.git` file (see `remote_git_link`).
             return None;
         }
         let git_dir = node_resolve(&checkout.join(rest));
@@ -220,6 +262,36 @@ pub fn resolve_index_dir(project_root: &Path, global_root: &Path) -> ResolvedInd
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_git_file_pointing_at_a_share_is_recognised_and_never_followed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("p");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        assert_eq!(super::remote_git_link(&root.join("sub")), None);
+        for target in [
+            r"\\attacker.invalid\s\x\worktrees\y",
+            "//attacker.invalid/s/x/worktrees/y",
+            r"\\?\UNC\attacker.invalid\s",
+        ] {
+            std::fs::write(root.join(".git"), format!("gitdir: {target}\n")).unwrap();
+            // The checkout and anything below it.
+            assert_eq!(super::remote_git_link(&root).as_deref(), Some(target));
+            assert_eq!(
+                super::remote_git_link(&root.join("sub")).as_deref(),
+                Some(target)
+            );
+            // Identity falls back to the checkout itself.
+            let canonical = super::canonical_project_root(&root);
+            assert!(
+                !canonical.starts_with(r"\\") && !canonical.starts_with("//"),
+                "{canonical}"
+            );
+        }
+        // An ordinary linked worktree is local.
+        std::fs::write(root.join(".git"), "gitdir: ../main/.git/worktrees/p\n").unwrap();
+        assert_eq!(super::remote_git_link(&root), None);
+    }
+
     use super::*;
 
     #[test]
