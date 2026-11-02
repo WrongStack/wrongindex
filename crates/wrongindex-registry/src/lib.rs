@@ -617,6 +617,50 @@ impl Registry {
         self.get_job(job_id)
     }
 
+    /// History retention: keep the newest `keep_jobs` finished jobs and the
+    /// newest `keep_transitions` ownership transitions per project. Queued
+    /// and running jobs are never removed; receipts of removed jobs go with
+    /// them. Returns `(jobs, transitions)` removed.
+    pub fn prune_history(
+        &mut self,
+        keep_jobs: usize,
+        keep_transitions: usize,
+    ) -> Result<(usize, usize), ErrorBody> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_err)?;
+        let old_jobs = "SELECT job_id FROM (
+               SELECT job_id, ROW_NUMBER() OVER (
+                 PARTITION BY project_id ORDER BY admitted_at_ms DESC, job_id DESC) AS rn
+               FROM jobs WHERE state IN ('succeeded', 'failed', 'canceled'))
+             WHERE rn > ?1";
+        tx.execute(
+            &format!("DELETE FROM job_receipts WHERE job_id IN ({old_jobs})"),
+            [keep_jobs as i64],
+        )
+        .map_err(db_err)?;
+        let jobs = tx
+            .execute(
+                &format!("DELETE FROM jobs WHERE job_id IN ({old_jobs})"),
+                [keep_jobs as i64],
+            )
+            .map_err(db_err)?;
+        let transitions = tx
+            .execute(
+                "DELETE FROM ownership_transitions WHERE id IN (
+                   SELECT id FROM (
+                     SELECT id, ROW_NUMBER() OVER (
+                       PARTITION BY project_id ORDER BY id DESC) AS rn
+                     FROM ownership_transitions)
+                   WHERE rn > ?1)",
+                [keep_transitions as i64],
+            )
+            .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+        Ok((jobs, transitions))
+    }
+
     /// Startup recovery: a job left `running` by a previous instance is
     /// requeued when its kind is idempotent and side-effect free (`check`),
     /// otherwise failed with an explicit interruption error. Never assumes the
@@ -1196,6 +1240,67 @@ mod tests {
         let reg = Registry::open(&db).unwrap();
         assert_eq!(reg.get_job(&job_id).unwrap().state, JobState::Queued);
         assert_eq!(reg.queued_jobs().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn history_is_pruned_per_project_and_never_touches_pending_jobs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut reg = Registry::open_in_memory().unwrap();
+        let root_b = tmp.path().join("b");
+        std::fs::create_dir_all(&root_b).unwrap();
+        let (a, _) = reg
+            .register_project(&params(tmp.path(), &tmp.path().join("idx-a")))
+            .unwrap();
+        let (b, _) = reg
+            .register_project(&params(&root_b, &tmp.path().join("idx-b")))
+            .unwrap();
+        let mut finished = Vec::new();
+        for i in 0..6 {
+            let key = format!("k{i}");
+            let j = reg
+                .admit_job(&a.project_id, JobKind::Check, &json!({}), "t", Some(&key))
+                .unwrap()
+                .job;
+            assert!(reg.mark_running(&j.job_id).unwrap());
+            reg.complete_job(&j.job_id, Ok(json!({}))).unwrap();
+            finished.push(j.job_id);
+            // Admission times must differ for a stable newest-first order.
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let pending = reg
+            .admit_job(&a.project_id, JobKind::Check, &json!({}), "t", None)
+            .unwrap()
+            .job;
+        let other = reg
+            .admit_job(&b.project_id, JobKind::Check, &json!({}), "t", None)
+            .unwrap()
+            .job;
+        assert!(reg.mark_running(&other.job_id).unwrap());
+        reg.complete_job(&other.job_id, Ok(json!({}))).unwrap();
+
+        let (jobs, _) = reg.prune_history(2, 500).unwrap();
+        assert_eq!(jobs, 4);
+        for old in &finished[..4] {
+            assert_eq!(reg.get_job(old).unwrap_err().code, ErrorCode::JobNotFound);
+        }
+        for kept in &finished[4..] {
+            assert_eq!(reg.get_job(kept).unwrap().state, JobState::Succeeded);
+        }
+        assert_eq!(
+            reg.get_job(&pending.job_id).unwrap().state,
+            JobState::Queued
+        );
+        assert_eq!(
+            reg.get_job(&other.job_id).unwrap().state,
+            JobState::Succeeded
+        );
+        // Receipts of removed jobs are gone: the key admits a new job.
+        let again = reg
+            .admit_job(&a.project_id, JobKind::Check, &json!({}), "t", Some("k0"))
+            .unwrap();
+        assert!(!again.deduplicated);
+        // A second pass has nothing left to remove.
+        assert_eq!(reg.prune_history(2, 500).unwrap().0, 0);
     }
 
     #[test]

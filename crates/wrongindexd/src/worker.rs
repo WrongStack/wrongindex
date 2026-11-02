@@ -65,6 +65,7 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             let id = job_id.clone();
             match shared.registry(move |r| r.complete_job(&id, outcome)).await {
                 Ok(done) => {
+                    prune_now_and_then(&shared).await;
                     info!("job_completed", {
                         "jobId": done.job_id, "projectId": done.project_id,
                         "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
@@ -187,6 +188,33 @@ async fn execute(
                 }
             }
         }
+    }
+}
+
+/// Finished jobs kept per project (watcher edits each add one).
+pub const KEEP_JOBS: usize = 1000;
+/// Ownership transitions kept per project.
+pub const KEEP_TRANSITIONS: usize = 500;
+
+/// Bound the registry's history: every 64 completed jobs (and at startup,
+/// see `server::run`).
+async fn prune_now_and_then(shared: &Arc<Shared>) {
+    static COMPLETED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if COMPLETED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 64 == 63 {
+        prune(shared).await;
+    }
+}
+
+pub async fn prune(shared: &Arc<Shared>) {
+    match shared
+        .registry(|r| r.prune_history(KEEP_JOBS, KEEP_TRANSITIONS))
+        .await
+    {
+        Ok((0, 0)) => {}
+        Ok((jobs, transitions)) => {
+            info!("history_pruned", {"jobs": jobs, "transitions": transitions});
+        }
+        Err(e) => warn!("history_prune_failed", {"error": e.message}),
     }
 }
 

@@ -235,6 +235,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     });
 
     if !desired_ownership.is_empty() {
+        crate::worker::prune(&shared).await;
         let restored = crate::ownership::restore(&shared, desired_ownership).await;
         info!("ownership_restored", {"results": restored});
     }
