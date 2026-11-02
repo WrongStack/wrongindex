@@ -125,7 +125,11 @@ async fn a_lagging_subscriber_is_told_and_the_snapshot_reports_the_failure() {
     assert_eq!(ok["state"], "succeeded", "{ok}");
 
     // A subscriber that stops reading.
-    let (ack, mut stream) = connect(&home).await.subscribe(None, None, None).await.unwrap();
+    let (ack, mut stream) = connect(&home)
+        .await
+        .subscribe(None, None, None)
+        .await
+        .unwrap();
     assert_eq!(ack["gap"], false);
 
     // Fill what the transport buffers, fail a job, then push the failure
