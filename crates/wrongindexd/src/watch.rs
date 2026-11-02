@@ -206,11 +206,11 @@ impl Supervisor {
     /// Freshness is separate from activity (WI-ADR-012): an idle project with
     /// pending paths or a failed run is never reported current.
     pub fn freshness(status: &WatchStatus, last_error: Option<&str>) -> Freshness {
+        if status.watch_health == "failed" || status.watch_health == ROOT_UNAVAILABLE {
+            return Freshness::Unavailable;
+        }
         if !status.watching {
             return Freshness::Unknown;
-        }
-        if status.watch_health == "failed" {
-            return Freshness::Unavailable;
         }
         if !status.initial_scan_done
             || status.pending_paths > 0
@@ -363,6 +363,21 @@ impl Supervisor {
         }
     }
 
+    /// Every attached project re-reconciles (e.g. after a suspend).
+    pub fn mark_all_reconcile(&self, reason: &str) {
+        let now = Instant::now();
+        if let Ok(mut p) = self.projects.lock() {
+            let mut n = 0usize;
+            for w in p.values_mut().filter(|w| w.watcher.is_some()) {
+                w.dirty.mark_reconcile(reason, now);
+                n += 1;
+            }
+            if n > 0 {
+                info!("watch_reconcile_all", {"reason": reason, "projects": n});
+            }
+        }
+    }
+
     pub fn detach_all(&self) {
         if let Ok(mut p) = self.projects.lock() {
             for w in p.values_mut() {
@@ -370,6 +385,18 @@ impl Supervisor {
                 w.health = "off";
             }
         }
+    }
+}
+
+/// The supervisor checks in about once a second; a wall-clock gap far
+/// beyond that means the machine slept (or the clock jumped).
+const SUSPEND_GAP: Duration = Duration::from_secs(30);
+
+fn suspended_between(before: std::time::SystemTime, after: std::time::SystemTime) -> bool {
+    match after.duration_since(before) {
+        Ok(gap) => gap >= SUSPEND_GAP,
+        // The clock went backwards: treat as a jump too.
+        Err(e) => e.duration() >= SUSPEND_GAP,
     }
 }
 
@@ -381,6 +408,7 @@ pub async fn run(
 ) {
     let mut tick = tokio::time::interval(Duration::from_millis(50));
     let mut last_reconcile = Instant::now() - Duration::from_secs(10);
+    let mut last_wall = std::time::SystemTime::now();
     loop {
         tokio::select! {
             msg = rx.recv() => match msg {
@@ -390,6 +418,14 @@ pub async fn run(
             _ = tick.tick() => {
                 if last_reconcile.elapsed() >= Duration::from_secs(1) {
                     last_reconcile = Instant::now();
+                    let wall = std::time::SystemTime::now();
+                    if suspended_between(last_wall, wall) {
+                        // Watch events across a suspend are not guaranteed:
+                        // catch up with a reconciliation (a no-op when
+                        // nothing changed).
+                        shared.watch.mark_all_reconcile("resumed");
+                    }
+                    last_wall = wall;
                     shared.watch.expire_leases();
                     reconcile_desired(&shared).await;
                 }
@@ -432,7 +468,21 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
             }
             continue;
         }
+        // A root that is gone (moved, unmounted, a network drive away) is
+        // not reported by the watcher on Windows; the old watch is dead and
+        // the index can no longer be called current. Detach, and attach
+        // again once the root is back (the attach reconciliation catches up).
+        let root_present = Path::new(&p.checkout_root).is_dir();
+        if attached && !root_present {
+            shared.watch.detach(&p.project_id);
+            root_unavailable(shared, &p.project_id);
+            continue;
+        }
         if attached || retry_at.is_some_and(|r| now < r) {
+            continue;
+        }
+        if !root_present {
+            root_unavailable(shared, &p.project_id);
             continue;
         }
         // Watching implies writing: take ownership first.
@@ -452,6 +502,25 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
             }
             Err(e) => set_failure(shared, &p.project_id, format!("watcher: {e}")),
         }
+    }
+}
+
+/// How often a missing checkout root is looked for again.
+const ROOT_POLL: Duration = Duration::from_secs(2);
+
+/// `watchHealth` of a project whose checkout root is missing.
+pub const ROOT_UNAVAILABLE: &str = "root_unavailable";
+
+fn root_unavailable(shared: &Arc<Shared>, project_id: &str) {
+    if let Ok(mut g) = shared.watch.projects.lock() {
+        let w = g.entry(project_id.to_string()).or_default();
+        if w.health != ROOT_UNAVAILABLE {
+            warn!("watch_root_unavailable", {"projectId": project_id});
+        }
+        w.health = ROOT_UNAVAILABLE;
+        w.last_error = Some("the checkout root is unavailable".into());
+        // Checking for the root is cheap: look again soon.
+        w.retry_at = Some(Instant::now() + ROOT_POLL);
     }
 }
 
@@ -558,5 +627,19 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
             }
             Err(e) => set_failure(shared, &pid, format!("admission: {e}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod suspend_tests {
+    use super::*;
+
+    #[test]
+    fn a_long_wall_clock_gap_counts_as_a_suspend() {
+        let t = std::time::SystemTime::now();
+        assert!(!suspended_between(t, t + Duration::from_secs(2)));
+        assert!(suspended_between(t, t + Duration::from_secs(45)));
+        assert!(suspended_between(t + Duration::from_secs(45), t));
+        assert!(!suspended_between(t + Duration::from_secs(1), t));
     }
 }

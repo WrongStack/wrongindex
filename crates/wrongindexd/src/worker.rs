@@ -224,6 +224,20 @@ async fn execute(
             }))
         }
         JobKind::Full | JobKind::Incremental | JobKind::Reconcile | JobKind::Rebuild => {
+            // A missing root is not an empty project: nothing is indexed and
+            // nothing deleted until it is back.
+            let root = project.checkout_root.clone();
+            if !tokio::task::spawn_blocking(move || Path::new(&root).is_dir())
+                .await
+                .unwrap_or(false)
+            {
+                let msg = format!(
+                    "the checkout root {} is unavailable; nothing was indexed or deleted",
+                    project.checkout_root
+                );
+                record_failure(shared, project_id, &msg).await;
+                return Err(ErrorBody::new(ErrorCode::ProjectUnavailable, msg));
+            }
             let params = params.unwrap_or_default();
             let fence: OwnerFence =
                 serde_json::from_value(params["fence"].clone()).map_err(|_| {
