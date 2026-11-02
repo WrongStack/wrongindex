@@ -64,6 +64,31 @@ impl Reader {
         })
     }
 
+    /// [`Self::call`] inside one read transaction, with the index's
+    /// `graph_stamp` read from the same snapshot: the answer and the stamp
+    /// describe the same generation, even while a writer commits a new one.
+    pub fn call_snapshot(
+        &self,
+        op: &str,
+        args: &Value,
+    ) -> Result<(Value, Option<String>), QueryError> {
+        self.conn.execute_batch("BEGIN")?;
+        let out = (|| {
+            use rusqlite::OptionalExtension;
+            let stamp: Option<String> = self
+                .conn
+                .query_row(
+                    "SELECT value FROM metadata WHERE key = 'graph_stamp'",
+                    [],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            Ok((self.call(op, args)?, stamp))
+        })();
+        let _ = self.conn.execute_batch("COMMIT");
+        out
+    }
+
     /// Run `op` with WrongStack's argument shape (`projectRoot`/`indexDir`
     /// are ignored: the reader already knows its index).
     pub fn call(&self, op: &str, args: &Value) -> Result<Value, QueryError> {

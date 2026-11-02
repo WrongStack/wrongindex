@@ -881,18 +881,8 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
         if carry {
             carry_enrichment(&db, &staging.join("index.db"))?;
         }
-        for suffix in ["-wal", "-shm"] {
-            let mut p = db.as_os_str().to_owned();
-            p.push(suffix);
-            if Path::new(&p).exists() {
-                return Err(NativeError::Busy(format!(
-                    "{} exists",
-                    PathBuf::from(p).display()
-                )));
-            }
-        }
         fault_point("before-publish");
-        std::fs::rename(staging.join("index.db"), &db)?;
+        publish_staged(&staging.join("index.db"), &db)?;
         fault_point("after-publish");
         Ok(Rebuild::Written(report))
     })();
@@ -945,31 +935,100 @@ pub struct Replaced {
     pub backup: Option<String>,
 }
 
+/// Whether SQLite may have `db` open (its `-wal` or `-shm` exists).
+fn in_use(db: &Path) -> Option<PathBuf> {
+    ["-wal", "-shm"].iter().find_map(|suffix| {
+        let mut p = db.as_os_str().to_owned();
+        p.push(suffix);
+        Path::new(&p).exists().then(|| PathBuf::from(p))
+    })
+}
+
+/// Publish the complete database `staged` as `db` (WI-513).
+///
+/// No `db` yet: renamed into place. Otherwise the staged pages are copied
+/// into the live file with SQLite's online backup, all in one write
+/// transaction: readers keep the snapshot they hold and see the new
+/// generation once it commits, so publication neither waits for readers
+/// nor breaks them, and a run dying mid-copy rolls back with the
+/// transaction. A file SQLite cannot take the copy into (not a database, a
+/// different page size under WAL) is replaced by rename instead, and only
+/// while nothing has it open: renaming over a file whose `-wal` survives
+/// would hand that log to the new file.
+fn publish_staged(staged: &Path, db: &Path) -> Result<(), NativeError> {
+    if !db.exists() {
+        std::fs::rename(staged, db)?;
+        return Ok(());
+    }
+    let copied = (|| -> rusqlite::Result<()> {
+        let src = Connection::open_with_flags(
+            staged,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        let mut dst = Connection::open_with_flags(
+            db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        dst.pragma_update(None, "busy_timeout", 15000)?;
+        // Fails early on a file that is not a database.
+        dst.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| {
+            r.get::<_, i64>(0)
+        })?;
+        let backup = rusqlite::backup::Backup::new(&src, &mut dst)?;
+        // Every page in one step: one write transaction on the live file.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            use rusqlite::backup::StepResult;
+            match backup.step(-1)? {
+                StepResult::Done => break,
+                StepResult::More => continue,
+                _ if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                _ => {
+                    return Err(rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                        Some("the live index stayed locked".into()),
+                    ));
+                }
+            }
+        }
+        drop(backup);
+        // Fold the copy into the main file when no reader holds an older
+        // snapshot - without waiting for one (a reader keeps the log alive
+        // until a later checkpoint).
+        let _ = dst.busy_timeout(std::time::Duration::ZERO);
+        let _ = dst.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+        dst.close().map_err(|(_, e)| e)
+    })();
+    match copied {
+        Ok(()) => Ok(()),
+        Err(e) => match in_use(db) {
+            Some(p) => Err(NativeError::Busy(format!(
+                "{} exists and the new index could not be copied in ({e})",
+                p.display()
+            ))),
+            None => {
+                std::fs::rename(staged, db)?;
+                Ok(())
+            }
+        },
+    }
+}
+
 /// Maintenance rebuild: write a fresh index whatever the existing file is,
 /// and keep that file as `index.db.wrongindex-backup-<ms>` next to it.
 ///
 /// The new index is complete in its staging directory before anything is
-/// moved; the old file is renamed (never deleted) and the new one renamed
-/// into place. A run dying between the two renames leaves no `index.db`
-/// and the backup, which the next run treats as a fresh index. Refused while
-/// the old file has WAL/shared-memory files (another connection may use it).
+/// touched. A readable old index is saved (a byte copy when nothing has it
+/// open, else a consistent `VACUUM INTO` snapshot) and the new one copied
+/// in by [`publish_staged`]. A file SQLite cannot read is renamed aside (never
+/// deleted) and the new one renamed into place, only while nothing has it
+/// open; a run dying between those two renames leaves no `index.db` and
+/// the backup, which the next run treats as a fresh index.
 pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replaced, NativeError> {
     let db = index_dir.join("index.db");
     sweep_staging(index_dir);
-    let busy = |db: &Path| -> Result<(), NativeError> {
-        for suffix in ["-wal", "-shm"] {
-            let mut p = db.as_os_str().to_owned();
-            p.push(suffix);
-            if Path::new(&p).exists() {
-                return Err(NativeError::Busy(format!(
-                    "{} exists",
-                    PathBuf::from(p).display()
-                )));
-            }
-        }
-        Ok(())
-    };
-    busy(&db)?;
     refuse_newer(&db)?;
     let mut first = scan(project_root, &Default::default())?;
     let staging = index_dir.join(format!(
@@ -979,19 +1038,63 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
     first.read_all()?;
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
-        busy(&db)?;
         // Re-checked at the swap: a newer WrongStack may have written it
         // meanwhile (ownership is held, but never rely on that alone).
         refuse_newer(&db)?;
-        let mut backup = None;
-        if db.exists() {
-            let to = index_dir.join(format!("index.db.wrongindex-backup-{}", now_ms()));
-            std::fs::rename(&db, &to)?;
-            backup = Some(to.display().to_string());
+        let staged = staging.join("index.db");
+        if !db.exists() {
+            fault_point("between-backup-and-publish");
+            std::fs::rename(&staged, &db)?;
+            return Ok(Replaced {
+                report,
+                backup: None,
+            });
         }
-        fault_point("between-backup-and-publish");
-        std::fs::rename(staging.join("index.db"), &db)?;
-        Ok(Replaced { report, backup })
+        let to = index_dir.join(format!("index.db.wrongindex-backup-{}", now_ms()));
+        // A readable index is saved and the new one copied in (readers may
+        // stay): byte for byte when nothing has it open, else a consistent
+        // `VACUUM INTO` snapshot.
+        let readable = Connection::open_with_flags(
+            &db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .and_then(|c| {
+            c.pragma_update(None, "busy_timeout", 15000)?;
+            c.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| {
+                r.get::<_, i64>(0)
+            })?;
+            Ok(c)
+        });
+        let saved = readable.and_then(|c| {
+            if in_use(&db).is_none() {
+                drop(c);
+                std::fs::copy(&db, &to).map(|_| ()).map_err(|e| {
+                    rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
+                        Some(e.to_string()),
+                    )
+                })
+            } else {
+                c.execute("VACUUM INTO ?1", [to.to_string_lossy()])
+                    .map(|_| ())
+            }
+        });
+        if saved.is_ok() {
+            fault_point("between-backup-and-publish");
+            publish_staged(&staged, &db)?;
+        } else {
+            let _ = std::fs::remove_file(&to);
+            if let Some(p) = in_use(&db) {
+                return Err(NativeError::Busy(format!("{} exists", p.display())));
+            }
+            std::fs::rename(&db, &to)?;
+            fault_point("between-backup-and-publish");
+            std::fs::rename(&staged, &db)?;
+        }
+        Ok(Replaced {
+            report,
+            backup: Some(to.display().to_string()),
+        })
     })();
     let _ = std::fs::remove_dir_all(&staging);
     result

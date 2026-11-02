@@ -949,3 +949,61 @@ fn sage_heal_never_writes_through_a_link_out_of_the_checkout() {
         "no temporary file left behind"
     );
 }
+
+/// WI-513: publication never waits for readers. With a reader holding an
+/// open read transaction on the live index, a fresh native write (here the
+/// maintenance rebuild, which takes the staged path) is published anyway:
+/// the reader keeps its snapshot, a new reader sees the new generation,
+/// and the old index is kept as a consistent backup.
+#[test]
+fn publication_does_not_wait_for_readers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join("idx");
+    std::fs::create_dir_all(&index).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    let count = |c: &rusqlite::Connection| -> i64 {
+        c.query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))
+            .unwrap()
+    };
+    let reader = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    reader.execute_batch("BEGIN").unwrap();
+    let before = count(&reader);
+    std::fs::write(root.join("config/extra.json"), "{\"x\": 1}\n").unwrap();
+    let r = rebuild_replacing(&root, &index).unwrap();
+    assert_eq!(count(&reader), before, "the open snapshot is kept");
+    reader.execute_batch("COMMIT").unwrap();
+    let fresh = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    assert_eq!(
+        count(&fresh),
+        before + 1,
+        "a new reader sees the new generation"
+    );
+    let backup = rusqlite::Connection::open(r.backup.expect("backup kept")).unwrap();
+    assert_eq!(count(&backup), before, "the backup is the old generation");
+    drop((reader, fresh, backup));
+    // The staged path of the regular writer, too (a stale rank version
+    // sends it there), with a reader open.
+    let reader = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    reader
+        .execute(
+            "UPDATE metadata SET value = '0' WHERE key = 'rank_version'",
+            [],
+        )
+        .unwrap();
+    reader.execute_batch("BEGIN").unwrap();
+    let before = count(&reader);
+    std::fs::write(root.join("config/extra2.json"), "{\"y\": 1}\n").unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    assert_eq!(count(&reader), before);
+    reader.execute_batch("COMMIT").unwrap();
+    assert_eq!(count(&reader), before + 1);
+}

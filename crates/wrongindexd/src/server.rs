@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use serde::Deserialize;
@@ -927,7 +927,7 @@ async fn dispatch_inner(
             }
             let q: QueryParams = parse(req.params)?;
             let p2 = pid.clone();
-            let (project, ownership, publication) = shared
+            let (project, ownership, mut publication) = shared
                 .registry(move |r| {
                     Ok((
                         r.get_project(&p2)?,
@@ -960,6 +960,8 @@ async fn dispatch_inner(
             let backend = shared.backend_for(project.backend_preference)?;
             let mut native_skipped = None;
             let mut served = None;
+            // The `graph_stamp` the native answer was read with.
+            let mut read_stamp: Option<Option<String>> = None;
             if backend != Backend::Legacy {
                 let (dir, op, a2) = (
                     std::path::PathBuf::from(&project.index_dir),
@@ -967,13 +969,16 @@ async fn dispatch_inner(
                     args.clone(),
                 );
                 let r = tokio::task::spawn_blocking(move || {
-                    wrongindex_engine::query::Reader::open(&dir)?.call(&op, &a2)
+                    wrongindex_engine::query::Reader::open(&dir)?.call_snapshot(&op, &a2)
                 })
                 .await
                 .map_err(|e| ErrorBody::new(ErrorCode::Internal, format!("query task: {e}")))?;
                 use wrongindex_engine::query::QueryError;
                 match r {
-                    Ok(v) => served = Some((v, "native")),
+                    Ok((v, stamp)) => {
+                        read_stamp = Some(stamp);
+                        served = Some((v, "native"));
+                    }
                     Err(QueryError::Unsupported(why))
                         if backend == Backend::Auto && shared.engine.configured() =>
                     {
@@ -1011,6 +1016,43 @@ async fn dispatch_inner(
                 ),
             };
             drop(in_use);
+            // A run commits its generation before the service records the
+            // publication; an answer read in between describes the new one.
+            // Label it with that generation once it is recorded (moments
+            // later), or say the publication is pending (WI-513).
+            // Only while a write job runs for the project: an index the
+            // service adopted (never published here) is labelled as before.
+            let mut pending = false;
+            let job_running = || {
+                shared
+                    .progress
+                    .lock()
+                    .map(|p| p.contains_key(&pid))
+                    .unwrap_or(false)
+            };
+            if let Some(stamp) = read_stamp
+                && stamp.is_some()
+                && stamp != publication.graph_stamp
+                && job_running()
+            {
+                let deadline = Instant::now() + Duration::from_secs(2);
+                loop {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    let finished = !job_running();
+                    let p2 = pid.clone();
+                    publication = shared.registry(move |r| r.publication_state(&p2)).await?;
+                    if publication.graph_stamp == stamp {
+                        break;
+                    }
+                    // Finished without publishing it (fenced off), or still
+                    // unrecorded at the deadline: say so.
+                    if finished || Instant::now() >= deadline {
+                        pending = true;
+                        publication.graph_stamp = stamp;
+                        break;
+                    }
+                }
+            }
             let mut out = json!({
                 "projectId": pid,
                 "daemonInstanceId": shared.instance_id,
@@ -1022,6 +1064,9 @@ async fn dispatch_inner(
             });
             if let Some(why) = native_skipped {
                 out["nativeSkipped"] = json!(why);
+            }
+            if pending {
+                out["publicationPending"] = json!(true);
             }
             Ok(out)
         }
