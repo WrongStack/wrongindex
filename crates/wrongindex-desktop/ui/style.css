@@ -5,10 +5,11 @@
   --muted: #5c6678;
   --line: #dde1e8;
   --accent: #2563eb;
-  --ok: #15803d;
-  --warn: #b45309;
+  --ok: #166534;
+  --warn: #92400e;
   --bad: #b91c1c;
   --chip: #eef1f5;
+  --on-accent: #ffffff;
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   color-scheme: light;
@@ -26,6 +27,7 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --chip: #242b38;
+    --on-accent: #0b1220;
     color-scheme: dark;
   }
 }
@@ -51,7 +53,7 @@ button { font: inherit; }
 .nav:hover { background: var(--chip); }
 .nav[aria-current="page"] { background: var(--chip); font-weight: 600; }
 main:focus { outline: none; }
-main { flex: 1; overflow: auto; padding: 20px 24px; }
+main { flex: 1; min-width: 0; overflow: auto; padding: 20px 24px; }
 h1 { font-size: 20px; margin: 0 0 16px; }
 h2 { font-size: 15px; margin: 20px 0 8px; }
 
@@ -73,7 +75,7 @@ td.path { font-family: Consolas, monospace; font-size: 12px; word-break: break-a
 .state.degraded, .state.unavailable, .state.failed, .state.conflict { color: var(--bad); }
 .state.unknown, .state.canceled { color: var(--muted); }
 
-.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 .btn.subtle { background: transparent; color: var(--text); border-color: var(--line); }
 .btn.danger { background: var(--bad); border-color: var(--bad); }
 .btn:disabled { opacity: .5; cursor: default; }
@@ -83,7 +85,7 @@ td.path { font-family: Consolas, monospace; font-size: 12px; word-break: break-a
 .grid .k { color: var(--muted); }
 .mono { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
 input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
-input[type=text] { min-width: 420px; flex: 1; }
+input[type=text] { min-width: min(420px, 100%); flex: 1; }
 input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); width: 140px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 12px 0; }
 .field label { display: block; margin-bottom: 4px; }
@@ -96,3 +98,16 @@ input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--li
 .toast.bad { border-left-color: var(--bad); }
 dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); max-width: 460px; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Narrow windows and large text scale (high DPI, zoom): wide tables scroll
+   on their own instead of widening the page; long paths wrap. */
+main table { display: block; overflow-x: auto; max-width: 100%; }
+main table > thead, main table > tbody { width: 100%; }
+td.path, .mono, td.error { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .sidebar { width: 128px; }
+  .grid { grid-template-columns: 1fr; }
+  main { padding: 16px; }
+}

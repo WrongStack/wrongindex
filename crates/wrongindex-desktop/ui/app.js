@@ -75,6 +75,11 @@ const POLICY = {
   disabled: 'Disabled',
 };
 
+/** Column header; an action column gets a name for screen readers only. */
+function th(h) {
+  return el('th', { scope: 'col' }, h || el('span', { class: 'sr-only' }, 'Actions'));
+}
+
 function badge(value, labels) {
   const v = String(value ?? 'unknown');
   return el('span', { class: `state ${v}` }, labels[v] ?? v);
@@ -260,7 +265,7 @@ function projectTable(ps) {
     el('td', { class: p.lastError ? 'error' : '' }, p.lastError ? '⚠ error' : ''));
   });
   return el('table', {},
-    el('thead', {}, el('tr', {}, ...['Project', 'Policy', 'Freshness', 'Ownership', 'Activity', 'Watch', 'Generation', 'Pending', 'Last indexed', ''].map((h) => el('th', { scope: 'col' }, h)))),
+    el('thead', {}, el('tr', {}, ...['Project', 'Policy', 'Freshness', 'Ownership', 'Activity', 'Watch', 'Generation', 'Pending', 'Last indexed', ''].map(th))),
     el('tbody', {}, rows));
 }
 
@@ -390,7 +395,7 @@ function detailView() {
     jobsTable(d.jobs ?? []),
     journal.length ? el('h2', {}, 'Ownership history') : null,
     journal.length ? el('table', {},
-      el('thead', {}, el('tr', {}, ...['When', 'Epoch', 'Phase', 'Previous owner', 'New owner'].map((h) => el('th', { scope: 'col' }, h)))),
+      el('thead', {}, el('tr', {}, ...['When', 'Epoch', 'Phase', 'Previous owner', 'New owner'].map(th))),
       el('tbody', {}, journal.map((j) => el('tr', {},
         el('td', {}, when(j.atMs)), el('td', {}, String(j.epoch ?? '')),
         el('td', {}, j.phase ?? ''), el('td', { class: 'mono' }, j.oldOwner ?? '—'), el('td', { class: 'mono' }, j.newOwner ?? '—'))))) : null);
@@ -452,7 +457,7 @@ function filesAndErrors(d, id) {
       : null,
     rows.length
       ? el('table', {},
-        el('thead', {}, el('tr', {}, ...['Error', 'Times', 'Latest', 'Next step', ''].map((h) => el('th', { scope: 'col' }, h)))),
+        el('thead', {}, el('tr', {}, ...['Error', 'Times', 'Latest', 'Next step', ''].map(th))),
         el('tbody', {}, rows.map((g) => el('tr', {},
           el('td', { class: recovered ? '' : 'error' }, g.key, recovered ? el('div', { class: 'note' }, 'Recovered: a later run succeeded.') : null),
           el('td', {}, String(g.count)),
@@ -473,7 +478,7 @@ function backupsPanel(d, p) {
     el('h2', {}, 'Index backups'),
     el('p', { class: 'note' }, 'Taken each time the service took ownership of this index.'),
     el('table', {},
-      el('thead', {}, el('tr', {}, ...['Backup', 'Taken', 'Size', ''].map((h) => el('th', { scope: 'col' }, h)))),
+      el('thead', {}, el('tr', {}, ...['Backup', 'Taken', 'Size', ''].map(th))),
       el('tbody', {}, list.map((b) => el('tr', {},
         el('td', { class: 'mono' }, b.name),
         el('td', {}, when(b.modifiedAtMs)),
@@ -520,7 +525,7 @@ function searchPanel(p) {
     const rows = r.result?.results ?? [];
     body = rows.length
       ? el('table', {},
-        el('thead', {}, el('tr', {}, ...['Symbol', 'Kind', 'Location', 'Signature'].map((h) => el('th', { scope: 'col' }, h)))),
+        el('thead', {}, el('tr', {}, ...['Symbol', 'Kind', 'Location', 'Signature'].map(th))),
         el('tbody', {}, rows.map((x) => el('tr', {},
           el('td', {}, x.name),
           el('td', {}, x.kind),
@@ -540,7 +545,7 @@ function searchPanel(p) {
 function jobsTable(jobs) {
   if (!jobs.length) return el('div', { class: 'empty' }, 'No jobs yet.');
   return el('table', {},
-    el('thead', {}, el('tr', {}, ...['Job', 'Kind', 'State', 'Admitted', 'Finished', 'Result', ''].map((h) => el('th', { scope: 'col' }, h)))),
+    el('thead', {}, el('tr', {}, ...['Job', 'Kind', 'State', 'Admitted', 'Finished', 'Result', ''].map(th))),
     el('tbody', {}, jobs.map((j) => el('tr', {},
       el('td', { class: 'mono' }, j.jobId),
       el('td', {}, j.kind),
@@ -579,7 +584,7 @@ function activityView() {
     el('p', { class: 'note' }, `The last ${ACTIVITY_CAP} service events seen by this window. After a reconnect the views are re-read from the service; missed events are not replayed here.`),
     state.activity.length
       ? el('table', {},
-        el('thead', {}, el('tr', {}, ...['#', 'Time', 'Event', 'Project', 'Details'].map((h) => el('th', { scope: 'col' }, h)))),
+        el('thead', {}, el('tr', {}, ...['#', 'Time', 'Event', 'Project', 'Details'].map(th))),
         el('tbody', {}, state.activity.map((e) => el('tr', {},
           el('td', {}, String(e.seq ?? '')),
           el('td', {}, when(e.atMs)),
@@ -775,6 +780,11 @@ function render(force = false) {
   lastScreen = screen;
   main.replaceChildren(views[state.view]());
   main.scrollTop = scroll;
+  // A table that scrolls sideways (narrow window, large text) must be
+  // reachable and scrollable from the keyboard.
+  for (const t of main.querySelectorAll('table')) {
+    if (t.scrollWidth > t.clientWidth) t.tabIndex = 0;
+  }
 }
 
 async function startService() {
