@@ -726,21 +726,27 @@ fn importers_of(tx: &Connection, targets: &[String]) -> rusqlite::Result<Vec<Str
 }
 
 /// `resolveProjectRelations(store, root, { changes, full: false,
-/// projectScan: true })` on an index whose relation state is current.
-/// Returns whether anything was written.
+/// projectScan })` on an index whose relation state is current. Returns
+/// whether anything was written.
 pub fn relation_pass_incremental(
     tx: &Connection,
     project_root: &str,
     changes: &Changes,
+    project_scan: bool,
 ) -> rusqlite::Result<bool> {
     let mut wrote = false;
     let touched: Vec<&String> = changes.rewritten.iter().chain(&changes.deleted).collect();
+    // A targeted run that rewrote and deleted nothing has nothing to do.
+    if !project_scan && touched.is_empty() {
+        return Ok(false);
+    }
     let marker_touched = touched.iter().any(|f| is_structure_marker(f));
     let namespace_touched = touched.iter().any(|f| in_namespace_family(f));
     let file_set_changed = !changes.added.is_empty() || !changes.deleted.is_empty();
     let stored_epoch = crate::native::get_meta(tx, "relation_epoch")?.unwrap_or_default();
 
-    // A project scan always needs the structure.
+    // The structure is always detected (WrongStack skips it only when a
+    // long-lived process has it cached and nothing could have moved it).
     let files: Vec<String> = tx
         .prepare_cached(
             "SELECT file, lang, mtime_ms, symbol_count, last_indexed, content_hash, git_blob FROM files",
@@ -800,7 +806,7 @@ pub fn relation_pass_incremental(
             add(f);
         }
         // A whole-project run also sweeps dangling edges an older build left.
-        if !touched.is_empty() {
+        if project_scan && !touched.is_empty() {
             let dangling: Vec<String> = tx
                 .prepare_cached(
                     "SELECT DISTINCT s.file AS file

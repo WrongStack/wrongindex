@@ -889,6 +889,41 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     result
 }
 
+/// Bring the index up to date for an explicit file list, as WrongStack's
+/// watcher/edit path does (`runIndexer({ files })`): directories expand to
+/// their files, a missing path deletes its rows, nothing else is looked at.
+///
+/// Only an existing baseline index in the steady state is updated this way;
+/// anything else (no index yet, another profile, a state the incremental
+/// writer does not take) gets the whole-project [`rebuild`]. An empty list is
+/// a whole-project run, as in WrongStack.
+pub fn update_files(
+    project_root: &Path,
+    index_dir: &Path,
+    targets: &[String],
+) -> Result<Rebuild, NativeError> {
+    let db = index_dir.join("index.db");
+    if targets.is_empty() || !db.exists() {
+        return rebuild(project_root, index_dir);
+    }
+    let baseline = matches!(stored_state(&db), Ok(Existing::Baseline { .. }));
+    let steady = baseline && matches!(incremental::applicable(project_root, &db), Ok(None));
+    if !steady {
+        timing(
+            "targeted run skipped: not a steady baseline index",
+            std::time::Instant::now(),
+        );
+        return rebuild(project_root, index_dir);
+    }
+    stall_point(project_root);
+    sweep_staging(index_dir);
+    let out = incremental::update_files(project_root, &db, targets)?;
+    Ok(Rebuild::Updated {
+        report: out.report,
+        changed_files: out.changed_files,
+    })
+}
+
 /// Outcome of [`rebuild_replacing`].
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -18,7 +18,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - Background indexing can be paused globally.
 - Native writer (`--backend auto`, the default) for every language WrongStack indexes:
   - fresh builds, in-place incremental runs and no-ops behave as WrongStack's own runs (differential tests on synthetic projects and on cloned real ones);
-  - a single-file edit on a 5,600-file project takes about 1 s;
+  - watcher and edit jobs run as WrongStack's targeted runs over the changed paths only: a single-file edit on a 5,600-file project takes 0.25-0.45 s (a whole-project pass about 0.85 s);
   - TS/JS, Rust, JSON/YAML/TOML and the regex-extracted languages are parsed in-process;
   - Python, Go, the ten tree-sitter languages, and TS/JS the in-process parser refuses run WrongStack's own extraction programs (they need `python`, `go`, and Bun or Node.js). These programs only parse; the project's code is never run or built.
 - Reads: every index read operation is served natively and read-only (search, context, graphs, call hierarchies, stats).

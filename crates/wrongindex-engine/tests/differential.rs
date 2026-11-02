@@ -29,6 +29,11 @@ fn long(p: &Path) -> PathBuf {
 
 /// Index `root` into `index` with WrongStack itself.
 fn wrongstack_index(root: &Path, index: &Path) -> Value {
+    wrongstack_index_with(root, index, None)
+}
+
+/// WrongStack's run, whole-project or (`files`) targeted.
+fn wrongstack_index_with(root: &Path, index: &Path, files: Option<&[String]>) -> Value {
     let engine = std::env::var("WRONGINDEX_TEST_ENGINE").expect("WRONGINDEX_TEST_ENGINE");
     let mut child = Command::new("bun")
         .arg(repo().join("packages/legacy-worker/worker.ts"))
@@ -40,7 +45,10 @@ fn wrongstack_index(root: &Path, index: &Path) -> Value {
         .spawn()
         .expect("bun");
     let mut stdin = child.stdin.take().unwrap();
-    let req = json!({"id": 1, "op": "index", "args": {"projectRoot": root, "indexDir": index}});
+    let mut req = json!({"id": 1, "op": "index", "args": {"projectRoot": root, "indexDir": index}});
+    if let Some(files) = files {
+        req["args"]["files"] = json!(files);
+    }
     writeln!(stdin, "{req}").unwrap();
     stdin.flush().unwrap();
     let mut line = String::new();
@@ -1768,5 +1776,310 @@ fn native_keeps_enrichment_as_wrongstack_does() {
         rows, 8,
         "enrichment kept, orphans included (WrongStack prunes them in its enrichment pass)"
     );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// One targeted round: WrongStack's `runIndexer({ files })` on `ws` vs the
+/// native targeted update on `native`, same list, same checkout.
+fn targeted_round(
+    name: &str,
+    root: &Path,
+    ws: &Path,
+    native: &Path,
+    targets: &[String],
+) -> Vec<String> {
+    if std::env::var_os("WRONGINDEX_TARGETED_DEBUG").is_some() {
+        eprintln!("{name}: targets {targets:?}");
+    }
+    let r = wrongstack_index_with(root, ws, Some(targets));
+    let n = wrongindex_engine::native::update_files(root, native, targets)
+        .unwrap_or_else(|e| panic!("{name}: native: {e}"));
+    let v = Volatile::logical();
+    let want = dump(&ws.join("index.db"), &v).unwrap();
+    let got = dump(&native.join("index.db"), &v).unwrap();
+    let mut out: Vec<String> = diff(&want, &got, 8)
+        .into_iter()
+        .map(|l| format!("{name}: {l}"))
+        .collect();
+    let outcome = serde_json::to_value(&n).unwrap();
+    eprintln!(
+        "{name}: {} target(s) | WrongStack changedFiles {} | native {} | {} differences",
+        targets.len(),
+        r["changedFiles"],
+        outcome,
+        out.len()
+    );
+    if outcome["outcome"] != "updated" {
+        out.push(format!(
+            "{name}: native did not take the targeted path: {outcome}"
+        ));
+    } else if r["changedFiles"] != outcome["changed_files"] {
+        out.push(format!(
+            "{name}: changedFiles {} vs native {}",
+            r["changedFiles"], outcome["changed_files"]
+        ));
+    }
+    out
+}
+
+/// A targeted edit: mutate the checkout, return the list a watcher would
+/// hand over (absolute, relative, directories, junk included).
+type TargetRound = (&'static str, Box<dyn Fn(&Path, &Path) -> Vec<String>>);
+
+fn abs(p: &Path) -> String {
+    p.to_string_lossy().into_owned()
+}
+
+/// Indexed source files (WrongStack's index of this scenario), markers
+/// excluded, in file order: the files a watcher would report edits to.
+fn indexed(base: &Path) -> Vec<PathBuf> {
+    let c = rusqlite::Connection::open_with_flags(
+        base.join("idx-wrongstack").join("index.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    let files: Vec<String> = c
+        .prepare("SELECT file FROM files ORDER BY file")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    files
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|p| !is_marker(p) && p.exists())
+        .collect()
+}
+
+fn targeted_rounds() -> Vec<TargetRound> {
+    vec![
+        (
+            "edit",
+            Box::new(|_: &Path, base: &Path| {
+                let p = indexed(base).remove(0);
+                let mut t = std::fs::read_to_string(&p).unwrap();
+                t.push_str(&appended_decl(&p, 1));
+                std::fs::write(&p, t).unwrap();
+                vec![abs(&p)]
+            }),
+        ),
+        (
+            "echo",
+            Box::new(|_: &Path, base: &Path| vec![abs(&indexed(base).remove(0))]),
+        ),
+        (
+            "touch",
+            Box::new(|_: &Path, base: &Path| {
+                let p = indexed(base).remove(1);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                let t = std::fs::read(&p).unwrap();
+                std::fs::write(&p, t).unwrap();
+                vec![abs(&p)]
+            }),
+        ),
+        (
+            "add-relative",
+            Box::new(|root: &Path, base: &Path| {
+                let first = indexed(base).remove(0);
+                let ext = first.extension().unwrap().to_string_lossy().into_owned();
+                let p = first.with_file_name(format!("added_target.{ext}"));
+                std::fs::write(&p, appended_decl(&p, 7).trim_start()).unwrap();
+                let rel = p.strip_prefix(root).unwrap().to_string_lossy().into_owned();
+                vec![rel]
+            }),
+        ),
+        (
+            "delete",
+            Box::new(|_: &Path, base: &Path| {
+                let files = indexed(base);
+                let p = files[files.len() / 2].clone();
+                std::fs::remove_file(&p).unwrap();
+                vec![abs(&p)]
+            }),
+        ),
+        (
+            "rename",
+            Box::new(|_: &Path, base: &Path| {
+                let files = indexed(base);
+                let p = files[files.len() / 3].clone();
+                let to = p.with_file_name(format!(
+                    "renamed_{}",
+                    p.file_name().unwrap().to_string_lossy()
+                ));
+                std::fs::rename(&p, &to).unwrap();
+                vec![abs(&p), abs(&to)]
+            }),
+        ),
+        (
+            "empty",
+            Box::new(|_: &Path, base: &Path| {
+                let first = indexed(base).remove(0);
+                let ext = first.extension().unwrap().to_string_lossy().into_owned();
+                let p = first.with_file_name(format!("empty_target.{ext}"));
+                std::fs::write(&p, "").unwrap();
+                vec![abs(&p)]
+            }),
+        ),
+        (
+            "dir-add",
+            Box::new(|_: &Path, base: &Path| {
+                let files = indexed(base);
+                let dir = files[0].parent().unwrap().join("newdir");
+                std::fs::create_dir_all(dir.join("inner")).unwrap();
+                for (i, src) in files.iter().take(3).enumerate() {
+                    let to = if i == 2 {
+                        dir.join("inner").join(src.file_name().unwrap())
+                    } else {
+                        dir.join(format!(
+                            "{i}_{}",
+                            src.file_name().unwrap().to_string_lossy()
+                        ))
+                    };
+                    std::fs::copy(src, to).unwrap();
+                }
+                std::fs::create_dir_all(dir.join("node_modules")).unwrap();
+                std::fs::copy(
+                    &files[0],
+                    dir.join("node_modules").join(files[0].file_name().unwrap()),
+                )
+                .unwrap();
+                vec![abs(&dir)]
+            }),
+        ),
+        (
+            "dir-delete",
+            Box::new(|_: &Path, base: &Path| {
+                let dir = indexed(base)
+                    .iter()
+                    .find_map(|p| {
+                        p.ancestors()
+                            .find(|a| a.file_name().is_some_and(|n| n == "newdir"))
+                            .map(Path::to_path_buf)
+                    })
+                    .expect("newdir");
+                std::fs::remove_dir_all(&dir).unwrap();
+                vec![abs(&dir)]
+            }),
+        ),
+        (
+            "filtered",
+            Box::new(|root: &Path, base: &Path| {
+                let p = indexed(base).remove(0);
+                let mut t = std::fs::read_to_string(&p).unwrap();
+                t.push_str(&appended_decl(&p, 2));
+                std::fs::write(&p, t).unwrap();
+                let ext = p.extension().unwrap().to_string_lossy().into_owned();
+                let dep = format!("node_modules/dep/index.{ext}");
+                let out = format!("dist/out.{ext}");
+                write(root, &dep, "export const dep = 1;\n");
+                write(root, &out, "export const out = 1;\n");
+                write(root, "notes.unknownext", "not source\n");
+                write(
+                    base,
+                    &format!("outside.{ext}"),
+                    "export const outside = 1;\n",
+                );
+                vec![
+                    abs(&p),
+                    abs(&root.join(dep)),
+                    abs(&root.join(out)),
+                    abs(&root.join("notes.unknownext")),
+                    abs(&base.join(format!("outside.{ext}"))),
+                    abs(&p),
+                    abs(&root.join("does-not-exist-dir")),
+                ]
+            }),
+        ),
+        (
+            "marker",
+            Box::new(|root: &Path, base: &Path| {
+                match source_files(root).into_iter().find(|p| is_marker(p)) {
+                    Some(m) => {
+                        let mut t = std::fs::read_to_string(&m).unwrap();
+                        t.push('\n');
+                        std::fs::write(&m, t).unwrap();
+                        vec![abs(&m)]
+                    }
+                    None => vec![abs(&indexed(base).remove(0))],
+                }
+            }),
+        ),
+        (
+            "bulk",
+            Box::new(|_: &Path, base: &Path| {
+                let mut out = Vec::new();
+                for (i, p) in indexed(base).into_iter().take(60).enumerate() {
+                    let mut t = std::fs::read_to_string(&p).unwrap_or_default();
+                    t.push_str(&appended_decl(&p, 200 + i));
+                    std::fs::write(&p, t).unwrap();
+                    out.push(abs(&p));
+                }
+                out
+            }),
+        ),
+    ]
+}
+
+/// WI-515 step 3: the watcher's targeted runs. Each scenario is indexed by
+/// WrongStack, copied, and taken through targeted rounds (absolute and
+/// relative paths, echoes, mtime-only touches, adds, deletes, renames, empty
+/// files, directory adds and deletes, ignored/outside/unknown/duplicate
+/// entries, structure markers, a bulk list past the optimize threshold),
+/// walk and Git, then a whole-project run to check the two still converge.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE, bun, Python, Go and bun/node"]
+fn native_targeted_matches_wrongstack_targeted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let mut failures = Vec::new();
+    let only = std::env::var("WRONGINDEX_TARGETED_ONLY").ok();
+    let scenarios: Vec<EditRound> = vec![
+        ("ts", Box::new(scenario_npm_monorepo)),
+        ("modules", Box::new(|r: &Path| scenario_many_modules(r, 60))),
+        ("polyglot", Box::new(scenario_polyglot)),
+        ("python", Box::new(scenario_python)),
+        ("cargo", Box::new(scenario_cargo_workspace)),
+    ];
+    for (label, build) in &scenarios {
+        if only.as_deref().is_some_and(|o| o != *label) {
+            continue;
+        }
+        for with_git in [false, true] {
+            let label = format!("{label}{}", if with_git { "-git" } else { "" });
+            let s = base.join(&label);
+            let root = s.join("project");
+            build(&root);
+            if with_git {
+                git(&root, &["init", "-q"]);
+                git(&root, &["add", "-A"]);
+                git(&root, &["commit", "-q", "-m", "init"]);
+            }
+            let ws = s.join("idx-wrongstack");
+            let native = s.join("idx-native");
+            wrongstack_index(&root, &ws);
+            copy_index(&ws, &native);
+            for (round, edit) in targeted_rounds() {
+                let targets = edit(&root, &s);
+                failures.extend(targeted_round(
+                    &format!("{label}/{round}"),
+                    &root,
+                    &ws,
+                    &native,
+                    &targets,
+                ));
+            }
+            if with_git {
+                git(&root, &["add", "-A"]);
+                git(&root, &["commit", "-q", "-m", "after"]);
+            }
+            failures.extend(incremental_round(
+                &format!("{label}/whole-project"),
+                &root,
+                &ws,
+                &native,
+            ));
+        }
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

@@ -282,8 +282,14 @@ async fn execute(
                 }
             };
             let mut native_skipped: Option<String> = None;
+            // A watcher/edit job names its paths: WrongStack's targeted run
+            // (`runIndexer({ files })`), not a whole-project pass.
+            let targets: Option<Vec<String>> = (kind == JobKind::Incremental)
+                .then(|| serde_json::from_value::<Vec<String>>(params["paths"].clone()).ok())
+                .flatten()
+                .filter(|p| !p.is_empty());
             if backend != Backend::Legacy {
-                match run_native(shared, &project, replace).await {
+                match run_native(shared, &project, replace, targets.as_deref()).await {
                     Ok((stamp, detail)) => {
                         // The index is now a baseline index the native writer
                         // wrote or accepted.
@@ -445,6 +451,7 @@ async fn run_native(
     shared: &Arc<Shared>,
     project: &wrongindex_contracts::ProjectRecord,
     replace: bool,
+    targets: Option<&[String]>,
 ) -> Result<(Option<String>, serde_json::Value), NativeOutcome> {
     // The compatibility worker may hold a pooled handle on this index; close
     // it so the native swap is not refused for our own reader.
@@ -478,6 +485,7 @@ async fn run_native(
         &project.checkout_root,
         &project.index_dir,
         replace,
+        targets,
         memory_mb,
         on_progress,
     )
@@ -488,6 +496,9 @@ async fn run_native(
             let stamp = outcome["graphStamp"].as_str().map(str::to_string);
             let mut detail = outcome;
             detail["durationMs"] = json!(ms);
+            if let Some(t) = targets {
+                detail["targets"] = json!(t.len());
+            }
             Ok((stamp, detail))
         }
         Err(e) => Err(e),
@@ -497,7 +508,9 @@ async fn run_native(
 /// Deadline for one isolated native run.
 const NATIVE_RUN_DEADLINE: Duration = Duration::from_secs(30 * 60);
 
-/// Run `native::rebuild` in a child process (`wrongindexd --native-rebuild`).
+/// Run `native::rebuild` in a child process (`wrongindexd --native-rebuild`),
+/// or `native::update_files` for a path list (`--native-update`, the list
+/// as a JSON array on the child's stdin).
 ///
 /// Parsers recurse on source structure and oxc has no recursion limit: a
 /// hostile file can overflow the stack, which aborts a process and cannot be
@@ -507,6 +520,7 @@ async fn rebuild_in_child(
     root: &str,
     index_dir: &str,
     replace: bool,
+    targets: Option<&[String]>,
     memory_mb: u64,
     on_progress: impl Fn(serde_json::Value) + Send + 'static,
 ) -> Result<serde_json::Value, NativeOutcome> {
@@ -515,12 +529,18 @@ async fn rebuild_in_child(
     let mut cmd = tokio::process::Command::new(exe);
     cmd.arg(if replace {
         "--native-rebuild-replace"
+    } else if targets.is_some() {
+        "--native-update"
     } else {
         "--native-rebuild"
     })
     .arg(root)
     .arg(index_dir)
-    .stdin(std::process::Stdio::null())
+    .stdin(if targets.is_some() {
+        std::process::Stdio::piped()
+    } else {
+        std::process::Stdio::null()
+    })
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::piped())
     .env("WRONGINDEX_NATIVE_PROGRESS", "1")
@@ -536,6 +556,13 @@ async fn rebuild_in_child(
             format!("cannot start the native indexer: {e}"),
         ))
     })?;
+    if let (Some(t), Some(mut stdin)) = (targets, child.stdin.take()) {
+        use tokio::io::AsyncWriteExt;
+        let list = serde_json::to_vec(t).unwrap_or_default();
+        // A child that died early closes the pipe: its reply says why.
+        let _ = stdin.write_all(&list).await;
+        drop(stdin);
+    }
     // Progress lines on stderr; anything else there is drained and dropped
     // (the pipe must never fill and stall the child).
     let progress_reader = child.stderr.take().map(|stderr| {

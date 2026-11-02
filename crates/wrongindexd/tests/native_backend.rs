@@ -268,3 +268,117 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
     let s = status(&mut c, &pid).await;
     assert!(s["generation"].as_i64().unwrap() >= 2, "{s}");
 }
+
+async fn search(c: &mut Client, pid: &str, query: &str) -> Vec<String> {
+    let q = c
+        .call_raw(
+            method::INDEX_QUERY,
+            Some(pid),
+            json!({"op": "search", "args": {"query": query, "limit": 20}}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(q["backend"], "native", "{q}");
+    let hits = q["result"]["results"]
+        .as_array()
+        .or_else(|| q["result"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    hits.iter()
+        .filter_map(|h| h["name"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// WI-515 step 3: an incremental job (watcher batch, edit hook) runs as
+/// WrongStack's targeted run over its paths - the native child gets the list,
+/// touches only those files (a deleted one loses its rows, a directory
+/// expands), and an edit nobody named is not picked up until a full run.
+#[tokio::test(flavor = "multi_thread")]
+async fn incremental_jobs_are_targeted_native_updates() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let (_d, mut c) = start(&base.join("home")).await;
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/basic-ts"), &root);
+    let pid = register(&mut c, &root, &base.join("idx")).await;
+    let job = run_job(&mut c, &pid, json!({"kind": "full"})).await;
+    assert_eq!(job["state"], "succeeded", "{job}");
+
+    // Named: a new file in a new directory (by directory), an edit; not
+    // named: another edit.
+    std::fs::create_dir_all(root.join("src/extra")).unwrap();
+    std::fs::write(
+        root.join("src/extra/added.ts"),
+        "export function targetedAddition(): number { return 1; }\n",
+    )
+    .unwrap();
+    let greet = std::fs::read_to_string(root.join("src/greet.ts")).unwrap();
+    std::fs::write(
+        root.join("src/greet.ts"),
+        format!("{greet}\nexport function namedEdit(): number {{ return 2; }}\n"),
+    )
+    .unwrap();
+    let runner = std::fs::read_to_string(root.join("src/runner.ts")).unwrap();
+    std::fs::write(
+        root.join("src/runner.ts"),
+        format!("{runner}\nexport function unnamedEdit(): number {{ return 3; }}\n"),
+    )
+    .unwrap();
+    let job = run_job(
+        &mut c,
+        &pid,
+        json!({"kind": "incremental", "paths": [root.join("src/extra"), "src/greet.ts"]}),
+    )
+    .await;
+    assert_eq!(job["state"], "succeeded", "{job}");
+    let native = &job["result"]["native"];
+    assert_eq!(native["outcome"], "updated", "{job}");
+    assert_eq!(native["targets"], 2, "{job}");
+    assert_eq!(native["changedFiles"], 2, "{job}");
+    assert_eq!(job["result"]["generation"], 2, "{job}");
+    assert!(
+        search(&mut c, &pid, "targetedAddition")
+            .await
+            .contains(&"targetedAddition".to_string())
+    );
+    assert!(
+        search(&mut c, &pid, "namedEdit")
+            .await
+            .contains(&"namedEdit".to_string())
+    );
+    assert!(
+        !search(&mut c, &pid, "unnamedEdit")
+            .await
+            .contains(&"unnamedEdit".to_string())
+    );
+
+    // A deleted path loses its rows; nothing else is looked at.
+    std::fs::remove_dir_all(root.join("src/extra")).unwrap();
+    let job = run_job(
+        &mut c,
+        &pid,
+        json!({"kind": "incremental", "paths": [root.join("src/extra")]}),
+    )
+    .await;
+    assert_eq!(job["result"]["native"]["changedFiles"], 1, "{job}");
+    assert!(
+        !search(&mut c, &pid, "targetedAddition")
+            .await
+            .contains(&"targetedAddition".to_string())
+    );
+    assert!(
+        !search(&mut c, &pid, "unnamedEdit")
+            .await
+            .contains(&"unnamedEdit".to_string())
+    );
+
+    // A full run catches up with the edit nobody named.
+    let job = run_job(&mut c, &pid, json!({"kind": "full"})).await;
+    assert_eq!(job["result"]["native"]["outcome"], "updated", "{job}");
+    assert!(
+        search(&mut c, &pid, "unnamedEdit")
+            .await
+            .contains(&"unnamedEdit".to_string())
+    );
+}

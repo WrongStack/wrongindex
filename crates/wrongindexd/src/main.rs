@@ -86,8 +86,44 @@ fn native_replace_child(root: &str, index_dir: &str) -> ExitCode {
 }
 
 fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
-    use wrongindex_engine::native::{NativeError, Rebuild, rebuild};
-    let reply = match rebuild(std::path::Path::new(root), std::path::Path::new(index_dir)) {
+    let r = wrongindex_engine::native::rebuild(
+        std::path::Path::new(root),
+        std::path::Path::new(index_dir),
+    );
+    println!("{}", rebuild_reply(r));
+    ExitCode::SUCCESS
+}
+
+/// `wrongindexd --native-update <root> <index-dir>`: one isolated targeted
+/// run; the path list arrives as a JSON array on stdin.
+fn native_update_child(root: &str, index_dir: &str) -> ExitCode {
+    use std::io::Read;
+    let mut input = String::new();
+    let targets: Result<Vec<String>, String> = std::io::stdin()
+        .read_to_string(&mut input)
+        .map_err(|e| e.to_string())
+        .and_then(|_| serde_json::from_str(&input).map_err(|e| e.to_string()));
+    let reply = match targets {
+        Ok(targets) => rebuild_reply(wrongindex_engine::native::update_files(
+            std::path::Path::new(root),
+            std::path::Path::new(index_dir),
+            &targets,
+        )),
+        Err(e) => serde_json::json!({
+            "ok": false,
+            "kind": "error",
+            "message": format!("unreadable path list: {e}"),
+        }),
+    };
+    println!("{reply}");
+    ExitCode::SUCCESS
+}
+
+fn rebuild_reply(
+    r: Result<wrongindex_engine::native::Rebuild, wrongindex_engine::native::NativeError>,
+) -> serde_json::Value {
+    use wrongindex_engine::native::{NativeError, Rebuild};
+    match r {
         Ok(Rebuild::Unchanged { graph_stamp }) => serde_json::json!({
             "ok": true,
             "result": {"outcome": "unchanged", "graphStamp": graph_stamp},
@@ -118,9 +154,7 @@ fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
             };
             serde_json::json!({"ok": false, "kind": kind, "message": message})
         }
-    };
-    println!("{reply}");
-    ExitCode::SUCCESS
+    }
 }
 
 /// Confine a native child before it does any work; refuse to run unconfined
@@ -145,7 +179,7 @@ fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
     if matches!(
         raw.get(1).map(String::as_str),
-        Some("--native-rebuild" | "--native-rebuild-replace")
+        Some("--native-rebuild" | "--native-rebuild-replace" | "--native-update")
     ) && raw.len() == 4
         && let Some(code) = confined_or_reply()
     {
@@ -156,6 +190,9 @@ fn main() -> ExitCode {
     }
     if raw.get(1).map(String::as_str) == Some("--native-rebuild") && raw.len() == 4 {
         return native_rebuild_child(&raw[2], &raw[3]);
+    }
+    if raw.get(1).map(String::as_str) == Some("--native-update") && raw.len() == 4 {
+        return native_update_child(&raw[2], &raw[3]);
     }
     let args = Args::parse();
     if let Err(e) = confine::kill_children_with_me() {

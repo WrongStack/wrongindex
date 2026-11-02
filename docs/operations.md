@@ -51,6 +51,8 @@ Watch policies:
 | `manual` | never; only explicit `index` requests | claim with `ownership.acquire` (desktop: Claim ownership) |
 | `disabled` | never | — |
 
+A watcher batch (or `wrongindex index <id> --path ...`) runs as WrongStack's targeted run over exactly those paths: a directory expands to its files, a vanished path deletes its rows, and nothing else in the checkout is looked at. Edits the watcher missed (for example while the service was stopped) are caught by the reconciliation that follows every claim, suspend and `.gitignore` change, or by `index <id> --full`.
+
 Freshness is reported separately from activity. `current` means the watcher is attached, nothing is pending and the last run succeeded. The other states are:
 
 - `pending`: edits are waiting, or the service is paused.

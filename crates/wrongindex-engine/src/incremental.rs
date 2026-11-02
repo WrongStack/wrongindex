@@ -11,6 +11,12 @@
 //! Only an index in the current steady state is updated here (every version
 //! marker current, no SAGE memories to heal, no vectors); anything else is
 //! left to the fresh rebuild.
+//!
+//! The targeted run (`runIndexer({ files })`, WrongStack's watcher/edit path)
+//! is the same pipeline over an explicit file list: directories expanded
+//! (`expandTargetedDirectories`), a missing path deletes its rows, no stale
+//! sweep, no Git trust, `projectScan: false` relations, and the targeted
+//! rules for `PRAGMA optimize` and `last_indexed`.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -18,9 +24,9 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use super::{
-    FileRow, NativeError, ParsedSymbol, Report, Scan, Source, assign_refs, batch_width, get_meta,
-    insert_fts, insert_refs, insert_symbols, module_owner, needs_module_owner, now_ms, parse_scan,
-    rows, set_meta, timing,
+    FileRow, GitTrust, MAX_INDEX_FILE_BYTES, NativeError, ParsedSymbol, Report, Scan, Source,
+    assign_refs, batch_width, get_meta, insert_fts, insert_refs, insert_symbols, module_owner,
+    needs_module_owner, now_ms, parse_scan, rows, set_meta, timing,
 };
 use crate::binding::{chunked_rows, in_list_chunks, pad_to_bucket, placeholders};
 use crate::relations::Changes;
@@ -481,6 +487,207 @@ pub(super) fn applicable(project_root: &Path, db: &Path) -> rusqlite::Result<Opt
 /// One incremental whole-project run over `db`, an existing baseline index
 /// [`applicable`] accepted.
 pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outcome, NativeError> {
+    run(project_root, db, Input::Project(scan))
+}
+
+/// One targeted run (`runIndexer({ files: targets })`) over `db`, an
+/// existing baseline index [`applicable`] accepted. `targets` is not empty
+/// (an empty list is a whole-project run in WrongStack).
+pub(super) fn update_files(
+    project_root: &Path,
+    db: &Path,
+    targets: &[String],
+) -> Result<Outcome, NativeError> {
+    run(project_root, db, Input::Files(targets))
+}
+
+enum Input<'a> {
+    Project(Scan),
+    Files(&'a [String]),
+}
+
+/// One entry of the run's file list after the stat (`readBatchFiles`).
+enum Entry {
+    Source(Source),
+    /// ENOENT/ENOTDIR in a targeted run: the file was deleted or renamed.
+    Missing(String),
+    /// Not a regular file, or no language: no rows, no error.
+    Ignored,
+}
+
+/// Comparable form of a path (`normalizeComparablePath`).
+fn comparable(p: &str) -> String {
+    let r = wrongindex_storage::wrongstack_paths::node_resolve(Path::new(p))
+        .to_string_lossy()
+        .into_owned();
+    if cfg!(windows) { r.to_lowercase() } else { r }
+}
+
+/// `path.relative(root, file)` for a file inside `root` (POSIX separators),
+/// `None` when it is not inside (`isWithinProject` false).
+fn relative_inside(root: &str, file: &str) -> Option<String> {
+    let resolve = |p: &str| {
+        wrongindex_storage::wrongstack_paths::node_resolve(Path::new(p))
+            .to_string_lossy()
+            .into_owned()
+    };
+    let (r, f) = (resolve(root), resolve(file));
+    let sep = std::path::MAIN_SEPARATOR;
+    let r = r.trim_end_matches(sep);
+    let cut = r.len() + 1;
+    if f.len() <= cut || !f.is_char_boundary(cut - 1) || !f[cut - 1..].starts_with(sep) {
+        return None;
+    }
+    let head = &f[..cut - 1];
+    let same = if cfg!(windows) {
+        head.to_lowercase() == r.to_lowercase()
+    } else {
+        head == r
+    };
+    same.then(|| f[cut..].replace('\\', "/"))
+}
+
+/// `expandTargetedDirectories` plus the targeted filters of
+/// `discoverIndexerFiles`, in WrongStack's order. `indexed` is the `files`
+/// table in its own order (`getAllFileMetas`).
+fn targeted_files(project_root: &Path, indexed: &[String], targets: &[String]) -> Vec<String> {
+    use wrongindex_discovery::{DEFAULT_IGNORE_DIRS, DEFAULT_IGNORE_FILES, Gitignore, lang};
+    let root = wrongindex_storage::wrongstack_paths::node_resolve(project_root);
+    let root_s = root.to_string_lossy().into_owned();
+    let gi = Gitignore::load(&root);
+    let mut expanded: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut add = |f: String, expanded: &mut Vec<String>| {
+        if seen.insert(f.clone()) {
+            expanded.push(f);
+        }
+    };
+    for t in targets {
+        let target = wrongindex_storage::wrongstack_paths::node_resolve(&root.join(t))
+            .to_string_lossy()
+            .into_owned();
+        if lang::is_indexable(&target) || relative_inside(&root_s, &target).is_none() {
+            add(target, &mut expanded);
+            continue;
+        }
+        let stats = match std::fs::metadata(&target) {
+            Ok(m) => Some(m),
+            Err(e) if is_missing(&e) => None,
+            Err(_) => {
+                add(target, &mut expanded);
+                continue;
+            }
+        };
+        if stats.as_ref().is_some_and(|m| !m.is_dir()) {
+            add(target, &mut expanded);
+            continue;
+        }
+        let prefix = format!("{}{}", comparable(&target), std::path::MAIN_SEPARATOR);
+        for f in indexed {
+            if comparable(f).starts_with(&prefix) {
+                add(f.clone(), &mut expanded);
+            }
+        }
+        if stats.is_none() {
+            continue;
+        }
+        fn walk(
+            root: &str,
+            dir: &Path,
+            gi: &Gitignore,
+            out: &mut Vec<String>,
+            add: &mut dyn FnMut(String, &mut Vec<String>),
+        ) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if DEFAULT_IGNORE_DIRS.contains(&name.as_str()) {
+                    continue;
+                }
+                let full = dir.join(&name);
+                let full_s = full.to_string_lossy().into_owned();
+                // Dirent semantics: links are neither files nor directories.
+                let Ok(ft) = entry.file_type() else { continue };
+                if ft.is_symlink() {
+                    continue;
+                }
+                if ft.is_dir() {
+                    let rel = relative_inside(root, &full_s).unwrap_or_default();
+                    if !gi.is_ignored(&rel, true) {
+                        walk(root, &full, gi, out, add);
+                    }
+                } else if ft.is_file() && lang::is_indexable(&full_s) {
+                    add(full_s, out);
+                }
+            }
+        }
+        walk(&root_s, Path::new(&target), &gi, &mut expanded, &mut add);
+    }
+    expanded
+        .into_iter()
+        .filter(|f| {
+            let Some(rel) = relative_inside(&root_s, f) else {
+                return false;
+            };
+            let base = rel.rsplit('/').next().unwrap_or(&rel);
+            !(rel.split('/').any(|seg| DEFAULT_IGNORE_DIRS.contains(&seg))
+                || DEFAULT_IGNORE_FILES.contains(&base)
+                || rel.starts_with(".wrongstack/atlas/")
+                || gi.is_ignored(&rel, false))
+        })
+        .collect()
+}
+
+/// `isMissingPathError`: ENOENT or ENOTDIR.
+fn is_missing(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    )
+}
+
+/// `readBatchFiles` for one file of a targeted run.
+fn stat_target(path: String) -> Result<Entry, NativeError> {
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(e) if is_missing(&e) => return Ok(Entry::Missing(path)),
+        Err(_) => return Ok(Entry::Source(failed_source(path, "other"))),
+    };
+    if !meta.is_file() {
+        return Ok(Entry::Ignored);
+    }
+    let Some(lang) = wrongindex_discovery::lang::detect_lang(&path) else {
+        return Ok(Entry::Ignored);
+    };
+    if !super::parse::is_native_lang(lang) {
+        return Err(NativeError::Unsupported(format!(
+            "language {lang} ({path})"
+        )));
+    }
+    if meta.len() > MAX_INDEX_FILE_BYTES {
+        return Ok(Entry::Source(failed_source(path, lang)));
+    }
+    // A read failure is per file and keeps the previous rows.
+    Ok(Entry::Source(
+        Source::load(path.clone(), lang).unwrap_or_else(|_| failed_source(path, lang)),
+    ))
+}
+
+fn failed_source(path: String, lang: &'static str) -> Source {
+    Source {
+        path,
+        lang,
+        mtime_ms: 0,
+        content_hash: String::new(),
+        failed: true,
+        text: String::new(),
+        unread: false,
+    }
+}
+
+fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeError> {
     let t_all = std::time::Instant::now();
     let mut conn = Connection::open_with_flags(
         db,
@@ -517,19 +724,54 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         .collect::<Result<_, _>>()?;
     let meta: HashMap<&str, &Meta> = existing.iter().map(|(f, m)| (f.as_str(), m)).collect();
 
-    let Scan { files, git } = scan;
-    let discovered: Vec<String> = files.iter().map(|f| f.path.clone()).collect();
-    let failed: HashSet<String> = files
+    let project_scan = matches!(input, Input::Project(_));
+    let (entries, git): (Vec<Entry>, Option<GitTrust>) = match input {
+        Input::Project(Scan { files, git }) => {
+            (files.into_iter().map(Entry::Source).collect(), git)
+        }
+        Input::Files(targets) => {
+            super::stage("discover");
+            let t = std::time::Instant::now();
+            let indexed: Vec<String> = existing.iter().map(|(f, _)| f.clone()).collect();
+            let list = targeted_files(project_root, &indexed, targets);
+            timing("discover", t);
+            let t = std::time::Instant::now();
+            let mut v = Vec::with_capacity(list.len());
+            for path in list {
+                v.push(stat_target(path)?);
+            }
+            timing("read", t);
+            (v, None)
+        }
+    };
+    // Whole-project runs only: the discovered set (stale sweep, Git stamps).
+    let discovered: Vec<String> = if project_scan {
+        entries
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Source(f) => Some(f.path.clone()),
+                _ => None,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let failed: HashSet<String> = entries
         .iter()
-        .filter(|f| f.failed)
-        .map(|f| f.path.clone())
+        .filter_map(|e| match e {
+            Entry::Source(f) if f.failed => Some(f.path.clone()),
+            _ => None,
+        })
         .collect();
     let mut symbols_indexed: i64 = 0;
 
     // Git trust: a clean file whose stamp matches is skipped unread.
-    let mut candidates: Vec<Source> = files
+    let mut candidates: Vec<Entry> = entries
         .into_iter()
-        .filter(|f| {
+        .filter(|e| {
+            let Entry::Source(f) = e else {
+                return true;
+            };
             let Some(m) = meta.get(f.path.as_str()) else {
                 return true;
             };
@@ -549,42 +791,41 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         })
         .collect();
     // The scan trusted a stamp this transaction no longer holds.
-    for f in &mut candidates {
-        f.read()?;
+    for e in &mut candidates {
+        if let Entry::Source(f) = e {
+            f.read()?;
+        }
     }
 
-    // Read phase outcome per file: failed, unchanged (content hash), or to
-    // parse. Parsing does not depend on the database, so it runs first.
-    #[derive(PartialEq)]
-    enum Kind {
-        Failed,
-        Skip,
+    // Read phase outcome per file: failed, unchanged (content hash), to
+    // parse, or (targeted) missing / ignored. Parsing does not depend on the
+    // database, so it runs first.
+    enum Item {
+        /// No rows written, previous rows kept (failed read, no language).
+        Nothing,
+        Skip(String, &'static str, i64, String),
         Parse,
+        Parsed(FileRow),
+        Missing(String),
     }
-    let kinds: Vec<Kind> = candidates
-        .iter()
-        .map(|f| {
-            if f.failed {
-                Kind::Failed
-            } else if meta
-                .get(f.path.as_str())
-                .is_some_and(|m| !m.content_hash.is_empty() && m.content_hash == f.content_hash)
-            {
-                Kind::Skip
-            } else {
-                Kind::Parse
-            }
-        })
-        .collect();
-    let mut skip_rows: Vec<Option<(String, &'static str, i64, String)>> = Vec::new();
+    let mut pre: Vec<Item> = Vec::with_capacity(candidates.len());
     let mut to_parse: Vec<Source> = Vec::new();
-    for (f, k) in candidates.into_iter().zip(&kinds) {
-        match k {
-            Kind::Parse => {
-                skip_rows.push(None);
-                to_parse.push(f);
+    for e in candidates {
+        match e {
+            Entry::Missing(p) => pre.push(Item::Missing(p)),
+            Entry::Ignored => pre.push(Item::Nothing),
+            Entry::Source(f) if f.failed => pre.push(Item::Nothing),
+            Entry::Source(f) => {
+                if meta
+                    .get(f.path.as_str())
+                    .is_some_and(|m| !m.content_hash.is_empty() && m.content_hash == f.content_hash)
+                {
+                    pre.push(Item::Skip(f.path, f.lang, f.mtime_ms, f.content_hash));
+                } else {
+                    pre.push(Item::Parse);
+                    to_parse.push(f);
+                }
             }
-            _ => skip_rows.push(Some((f.path, f.lang, f.mtime_ms, f.content_hash))),
         }
     }
     let (parsed_rows, _) = parse_scan(Scan {
@@ -593,19 +834,11 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
     })?;
     let mut parsed_iter = parsed_rows.into_iter();
     // Re-assemble in discovery order.
-    enum Item {
-        Failed,
-        Skip(String, &'static str, i64, String),
-        Parsed(FileRow),
-    }
-    let items: Vec<Item> = kinds
-        .iter()
-        .zip(skip_rows)
-        .map(|(k, s)| match (k, s) {
-            (Kind::Parse, _) => Item::Parsed(parsed_iter.next().expect("parsed row")),
-            (Kind::Failed, Some(_)) => Item::Failed,
-            (_, Some((p, l, m, h))) => Item::Skip(p, l, m, h),
-            (_, None) => unreachable!(),
+    let items: Vec<Item> = pre
+        .into_iter()
+        .map(|i| match i {
+            Item::Parse => Item::Parsed(parsed_iter.next().expect("parsed row")),
+            other => other,
         })
         .collect();
 
@@ -631,7 +864,14 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         let mut entries: Vec<(&FileRow, Vec<ParsedSymbol>)> = Vec::new();
         for item in batch {
             match item {
-                Item::Failed => {}
+                Item::Nothing | Item::Parse => {}
+                // A missing path in a targeted run is authoritative.
+                Item::Missing(path) => {
+                    if meta.contains_key(path.as_str()) {
+                        delete_file(&tx, path)?;
+                        deleted.add(path);
+                    }
+                }
                 Item::Skip(path, lang, mtime, hash) => {
                     let m = meta[path.as_str()];
                     symbols_indexed += m.symbol_count;
@@ -670,11 +910,14 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
 
     // finalizeIndexRun.
     let t = std::time::Instant::now();
-    let discovered_set: HashSet<&str> = discovered.iter().map(String::as_str).collect();
-    for (file, _) in &existing {
-        if !discovered_set.contains(file.as_str()) {
-            delete_file(&tx, file)?;
-            deleted.add(file);
+    // Stale rows: only a whole-project run can tell (not a targeted list).
+    if project_scan {
+        let discovered_set: HashSet<&str> = discovered.iter().map(String::as_str).collect();
+        for (file, _) in &existing {
+            if !discovered_set.contains(file.as_str()) {
+                delete_file(&tx, file)?;
+                deleted.add(file);
+            }
         }
     }
     if deferred.len() > 0 {
@@ -695,6 +938,7 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         &tx,
         &project_root.to_string_lossy(),
         &changes,
+        project_scan,
     )?;
     // runRefBinding.
     let bind_all = get_meta(&tx, "relation_structure")? != structure_before;
@@ -718,7 +962,10 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
     };
     let relations_changed = relations_resolved || bindings_changed;
     set_meta(&tx, "ref_resolution_version", "2")?;
-    set_meta(&tx, "module_owner_version", "2")?;
+    // Only a run that saw every file records the module-owner version.
+    if project_scan {
+        set_meta(&tx, "module_owner_version", "2")?;
+    }
     set_meta(&tx, "relation_graph_version", "2")?;
     let changed_files = rewritten.len() + deleted.len();
     timing("incremental: relations + binding", t);
@@ -798,7 +1045,7 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         }
     }
     timing("incremental: git trust", t);
-    if changed_files > 0 || files_indexed >= 50 {
+    if (project_scan && changed_files > 0) || files_indexed >= 50 {
         tx.execute_batch("PRAGMA optimize")?;
     }
     let mut graph_stamp = get_meta(&tx, "graph_stamp")?.unwrap_or_default();
@@ -806,7 +1053,10 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         graph_stamp = format!("{}:{changed_files}", now_ms());
         set_meta(&tx, "graph_stamp", &graph_stamp)?;
     }
-    set_meta(&tx, "last_indexed", &now_ms().to_string())?;
+    // A targeted run that changed nothing (a watcher echo) leaves it alone.
+    if project_scan || changed_files > 0 {
+        set_meta(&tx, "last_indexed", &now_ms().to_string())?;
+    }
     // The commit is the publication: before it, readers see the previous
     // generation and a crash rolls everything back (WAL).
     super::fault_point("before-commit");
