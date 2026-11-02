@@ -177,7 +177,15 @@ fn absolutize(v: &Value, root: &Path) -> Value {
     }
 }
 
-async fn diff_fixture(c: &mut Client, name: &str, native: bool) -> (usize, Vec<String>) {
+/// `native`: the index under test is written by the native engine.
+/// `served_by`: the `backend` every answer must report (`native` for the
+/// native reader; the compatibility worker otherwise).
+async fn diff_fixture(
+    c: &mut Client,
+    name: &str,
+    native: bool,
+    served_by: &str,
+) -> (usize, Vec<String>) {
     let recorded: Value = serde_json::from_slice(
         &std::fs::read(
             repo()
@@ -218,8 +226,7 @@ async fn diff_fixture(c: &mut Client, name: &str, native: bool) -> (usize, Vec<S
             .await;
         let ok = match (&live, op.get("result"), op.get("error")) {
             (Ok(v), Some(expected), _) => {
-                // Every recorded operation is served by the native reader.
-                v["backend"] == "native"
+                v["backend"] == served_by
                     && normalize(&v["result"], &root_s, &index_s, "") == *expected
             }
             (Err(e), None, Some(expected)) => {
@@ -257,7 +264,7 @@ async fn diff_fixture(c: &mut Client, name: &str, native: bool) -> (usize, Vec<S
     (ops.len(), mismatches)
 }
 
-async fn start_daemon(home: &Path) -> (Daemon, Client) {
+async fn start_daemon(home: &Path, backend: &str) -> (Daemon, Client) {
     let engine = std::env::var("WRONGINDEX_TEST_ENGINE")
         .expect("set WRONGINDEX_TEST_ENGINE to a prepared WrongStack engine directory");
     let daemon = Daemon(
@@ -266,6 +273,8 @@ async fn start_daemon(home: &Path) -> (Daemon, Client) {
             .arg(home)
             .arg("--engine")
             .arg(engine)
+            .arg("--backend")
+            .arg(backend)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -286,7 +295,7 @@ async fn start_daemon(home: &Path) -> (Daemon, Client) {
 #[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
 async fn oracle_queries_match_through_the_daemon() {
     let tmp = tempfile::tempdir().unwrap();
-    let (_daemon, mut c) = start_daemon(&tmp.path().join("home")).await;
+    let (_daemon, mut c) = start_daemon(&tmp.path().join("home"), "auto").await;
 
     let mut fixtures: Vec<String> = std::fs::read_dir(repo().join("tests/fixtures/oracle"))
         .unwrap()
@@ -296,7 +305,7 @@ async fn oracle_queries_match_through_the_daemon() {
     assert!(fixtures.len() >= 8);
     let (mut total, mut all) = (0, Vec::new());
     for f in &fixtures {
-        let (n, m) = diff_fixture(&mut c, f, false).await;
+        let (n, m) = diff_fixture(&mut c, f, false, "native").await;
         eprintln!("{f}: {n} operations, {} mismatches", m.len());
         total += n;
         all.extend(m);
@@ -310,25 +319,46 @@ async fn oracle_queries_match_through_the_daemon() {
     eprintln!("all {total} oracle queries identical through the daemon");
 }
 
-/// WI-502 consumption gate: WrongStack itself reads the natively written
-/// index and answers every recorded query exactly as for its own index.
+fn oracle_fixtures() -> Vec<String> {
+    let mut fixtures: Vec<String> = std::fs::read_dir(repo().join("tests/fixtures/oracle"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    fixtures.sort();
+    assert!(fixtures.len() >= 8);
+    fixtures
+}
+
+/// Consumption gate (WI-502/WI-704): for every oracle fixture the index is
+/// written by the native engine, then WrongStack's own engine (the daemon's
+/// compatibility worker, `--backend legacy`) opens it and answers every
+/// recorded query exactly as for the index WrongStack wrote itself; and the
+/// native reader does too.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine) and bun"]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine), bun, and the toolchains of the fixtures"]
 async fn native_index_answers_oracle_queries_through_wrongstack() {
-    let tmp = tempfile::tempdir().unwrap();
-    let (_daemon, mut c) = start_daemon(&tmp.path().join("home")).await;
-    let (n, m) = diff_fixture(&mut c, "config-only", true).await;
+    let mut failures = Vec::new();
+    for (backend, served_by) in [("legacy", "legacy-bun-worker"), ("auto", "native")] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_daemon, mut c) = start_daemon(&tmp.path().join("home"), backend).await;
+        let mut total = 0;
+        for f in oracle_fixtures() {
+            let (n, m) = diff_fixture(&mut c, &f, true, served_by).await;
+            eprintln!(
+                "native {f} read by {served_by}: {n} operations, {} mismatches",
+                m.len()
+            );
+            total += n;
+            failures.extend(m);
+        }
+        eprintln!("native indexes read by {served_by}: {total} operations");
+    }
     assert!(
-        m.is_empty(),
-        "{} of {n} queries differ on the native index:
-{}",
-        m.len(),
-        m.join(
-            "
-"
-        )
+        failures.is_empty(),
+        "{} queries differ on native indexes:\n{}",
+        failures.len(),
+        failures.join("\n")
     );
-    eprintln!("native config-only: all {n} oracle queries identical");
 }
 
 #[test]
