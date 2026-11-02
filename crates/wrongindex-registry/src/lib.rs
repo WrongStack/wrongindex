@@ -387,6 +387,18 @@ impl Registry {
         self.get_project(project_id)
     }
 
+    /// Record which engine last wrote the project's index. Not a
+    /// configuration change: the revision (and so the write fence) stays.
+    pub fn set_backend(&mut self, project_id: &str, backend: Backend) -> Result<(), ErrorBody> {
+        self.conn
+            .execute(
+                "UPDATE projects SET backend = ?2 WHERE project_id = ?1",
+                params![project_id, backend.as_str()],
+            )
+            .map_err(db_err)?;
+        Ok(())
+    }
+
     /// Remove a registration. Source and index files are never deleted
     /// (INV-10); job history for the project is dropped with it.
     pub fn detach_project(&mut self, project_id: &str) -> Result<ProjectRecord, ErrorBody> {

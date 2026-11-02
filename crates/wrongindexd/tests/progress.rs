@@ -188,4 +188,6 @@ async fn a_native_run_reports_phases_and_oversized_files() {
         .await
         .unwrap();
     assert!(status.get("progress").is_none(), "{status}");
+    // The project records the engine that wrote it.
+    assert_eq!(status["project"]["backend"], "native", "{status}");
 }

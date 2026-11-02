@@ -60,6 +60,11 @@ const FRESHNESS = {
   unavailable: '✕ Unavailable',
   unknown: '? Unknown',
 };
+const BACKEND = {
+  native: 'WrongIndex native engine',
+  legacy: 'Compatibility worker (WrongStack engine)',
+  unsupported: 'Not written by WrongIndex yet',
+};
 const OWNERSHIP = {
   owned: 'Owned',
   unowned: 'Not owned',
@@ -347,7 +352,7 @@ function detailView() {
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
-      el('div', { class: 'k' }, 'Backend'), el('div', {}, p.backend),
+      el('div', { class: 'k' }, 'Written by'), el('div', {}, BACKEND[p.backend] ?? p.backend),
       el('div', { class: 'k' }, 'Checkout'), el('div', { class: 'mono' }, p.checkoutRoot),
       el('div', { class: 'k' }, 'Index directory'), el('div', { class: 'mono' }, p.indexDir),
       el('div', { class: 'k' }, 'Configuration revision'), el('div', {}, String(p.configurationRevision)),

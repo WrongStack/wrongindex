@@ -282,6 +282,8 @@ async fn execute(
                         // wrote or accepted.
                         shared.owners.clear_maintenance(project_id);
                         let generation = publish(shared, project_id, fence, stamp.clone()).await?;
+                        note_backend(shared, project_id, wrongindex_contracts::Backend::Native)
+                            .await;
                         return Ok(json!({
                             "backend": "native",
                             "native": detail,
@@ -371,6 +373,7 @@ async fn execute(
                     let mut out = result;
                     out["generation"] = json!(generation);
                     out["backend"] = json!("legacy-bun-worker");
+                    note_backend(shared, project_id, wrongindex_contracts::Backend::Legacy).await;
                     if let Some(why) = native_skipped {
                         out["nativeSkipped"] = json!(why);
                     }
@@ -382,6 +385,19 @@ async fn execute(
                 }
             }
         }
+    }
+}
+
+/// Remember the engine that last wrote this project's index (shown in
+/// project status). Best effort: a failure here never fails the job.
+async fn note_backend(
+    shared: &Arc<Shared>,
+    project_id: &str,
+    backend: wrongindex_contracts::Backend,
+) {
+    let pid = project_id.to_string();
+    if let Err(e) = shared.registry(move |r| r.set_backend(&pid, backend)).await {
+        warn!("backend_not_recorded", {"projectId": project_id, "error": e.to_string()});
     }
 }
 
