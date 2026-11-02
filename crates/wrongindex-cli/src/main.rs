@@ -1242,7 +1242,45 @@ async fn doctor_checks(root: &DataRoot) -> Vec<Value> {
         ),
         Err(e) => add("service_connect", "fail", e.to_string()),
     }
+    // Toolchains the native writer runs for some languages (parsing only).
+    for (name, programs, needed_for) in [
+        ("toolchain_python", &["python"][..], "Python files"),
+        (
+            "toolchain_go",
+            &["go"][..],
+            "Go files (a regex fallback is used without it)",
+        ),
+        (
+            "toolchain_bun_or_node",
+            &["bun", "node"][..],
+            "tree-sitter languages and TS/JS the in-process parser refuses",
+        ),
+    ] {
+        match programs.iter().find_map(|p| on_path(p)) {
+            Some(found) => add(name, "pass", found.display().to_string()),
+            None => add(
+                name,
+                "warn",
+                format!(
+                    "{} not on PATH; needed to index {needed_for}",
+                    programs.join(" or ")
+                ),
+            ),
+        }
+    }
     checks
+}
+
+/// First `<dir>/<name>.exe` (Windows) or `<dir>/<name>` on PATH.
+fn on_path(name: &str) -> Option<PathBuf> {
+    let exe = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|d| d.join(&exe))
+        .find(|p| p.is_file())
 }
 
 fn debug(action: DebugAction) -> Outcome {
