@@ -367,8 +367,12 @@ fn rebuild_is_a_no_op_without_changes_and_replaces_atomically_otherwise() {
         panic!("first run must write");
     };
     match rebuild(&root, &index).unwrap() {
-        Rebuild::Unchanged { graph_stamp } => {
-            assert_eq!(graph_stamp, Some(first.graph_stamp.clone()))
+        Rebuild::Unchanged {
+            graph_stamp,
+            symbols_indexed,
+        } => {
+            assert_eq!(graph_stamp, Some(first.graph_stamp.clone()));
+            assert_eq!(symbols_indexed, first.symbols_indexed);
         }
         other => panic!("expected no-op, got {other:?}"),
     }
@@ -664,10 +668,18 @@ fn enrichment_rows_survive_native_runs_as_they_do_wrongstack_runs() {
     ));
     assert_eq!(enrichment(&index), rows);
 
-    // A state the incremental writer does not take (SAGE memories present):
+    // A state the incremental writer does not take (a stale rank version):
     // a fresh file, published with the rows carried over.
     let (root, index, rows) = enriched_index(&base, "fresh");
-    std::fs::create_dir_all(root.join(".wrongstack/memories")).unwrap();
+    {
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        c.execute(
+            "UPDATE metadata SET value = '0' WHERE key = 'rank_version'",
+            [],
+        )
+        .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
     assert!(matches!(
         rebuild(&root, &index).unwrap(),
         Rebuild::Written(_)

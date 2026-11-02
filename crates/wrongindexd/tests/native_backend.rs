@@ -169,6 +169,10 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
     // 2. Nothing changed: no write, generation kept (INV-11).
     let job = run_job(&mut c, &pid, json!({"kind": "full"})).await;
     assert_eq!(job["result"]["native"]["outcome"], "unchanged", "{job}");
+    // Reported as WrongStack reports a no-op run: nothing indexed, every
+    // stored symbol counted.
+    assert_eq!(job["result"]["native"]["filesIndexed"], 0, "{job}");
+    assert_eq!(job["result"]["native"]["symbolsIndexed"], 10, "{job}");
     assert_eq!(job["result"]["generation"], 1);
 
     // 3. An edit, through an incremental request: new generation.

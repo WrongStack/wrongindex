@@ -12,6 +12,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - a consistent backup at every ownership transfer, and a `restore` job to bring one back;
   - refusal of indexes the native writer cannot reproduce (another schema version, extra schema objects);
   - WrongStack enrichment rows (`/codebase-map --enrich/--embed`) kept across native runs exactly as WrongStack's indexer keeps them.
+  - SAGE memory anchors of moved or renamed symbols healed in `.wrongstack/memories` as WrongStack's indexer heals them.
 - Watching: a per-project file watcher with debounced dirty sets, session leases and watch policies (`manual`, `session`, `pinned`, `disabled`).
   - A checkout root that disappears is reported as unavailable and nothing is deleted; watching resumes when the root returns.
   - After a suspend, every watched project is reconciled.
@@ -21,7 +22,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - watcher and edit jobs run as WrongStack's targeted runs over the changed paths only: a single-file edit on a 5,600-file project takes 0.25-0.45 s (a whole-project pass about 0.85 s);
   - TS/JS, Rust, JSON/YAML/TOML and the regex-extracted languages are parsed in-process;
   - Python, Go, the ten tree-sitter languages, and TS/JS the in-process parser refuses run WrongStack's own extraction programs (they need `python`, `go`, and Bun or Node.js). These programs only parse; the project's code is never run or built.
-- Reads: every index read operation is served natively and read-only (search, context, graphs, call hierarchies, stats).
+- Reads: every index read operation is served natively and read-only (search, context, graphs with WrongStack's SAGE memory and WrongTrace health decoration, call hierarchies, stats).
 - Compatibility worker (`--engine <WrongStack dir>`): runs WrongStack's own indexer for indexes the native writer leaves alone.
 - `wrongindex` CLI, with these commands:
   - `daemon start|status|stop`

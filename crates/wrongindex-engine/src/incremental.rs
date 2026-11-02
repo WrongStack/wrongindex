@@ -9,8 +9,9 @@
 //! `writer-deletion.ts`, `writer-refs.ts`, `graph-rank-pass.ts`.
 //!
 //! Only an index in the current steady state is updated here (every version
-//! marker current, no SAGE memories to heal, no vectors); anything else is
-//! left to the fresh rebuild.
+//! marker current, no vectors); anything else is left to the fresh rebuild.
+//! With `.wrongstack/memories` present the run also heals SAGE anchors of
+//! moved or renamed symbols, as WrongStack's does (see [`crate::sage`]).
 //!
 //! The targeted run (`runIndexer({ files })`, WrongStack's watcher/edit path)
 //! is the same pipeline over an explicit file list: directories expanded
@@ -68,7 +69,7 @@ pub struct Outcome {
 }
 
 /// Why this index is not updated in place (the caller rebuilds it fresh).
-fn steady_state(tx: &Connection, project_root: &Path) -> rusqlite::Result<Option<String>> {
+fn steady_state(tx: &Connection) -> rusqlite::Result<Option<String>> {
     let want: &[(&str, &str)] = &[
         ("relation_graph_version", "2"),
         ("ref_resolution_version", "2"),
@@ -84,9 +85,6 @@ fn steady_state(tx: &Connection, project_root: &Path) -> rusqlite::Result<Option
         if get_meta(tx, k)?.as_deref() != Some(*v) {
             return Ok(Some(format!("metadata {k} is not {v}")));
         }
-    }
-    if project_root.join(".wrongstack").join("memories").exists() {
-        return Ok(Some("SAGE memories would be healed".into()));
     }
     let has_vectors: i64 = tx.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'symbol_vectors'",
@@ -472,7 +470,7 @@ fn ref_names_targeting(
 
 /// Whether `db` is in the steady state [`update`] handles (`None`), or why
 /// not. Read through a query-only connection that leaves no WAL files.
-pub(super) fn applicable(project_root: &Path, db: &Path) -> rusqlite::Result<Option<String>> {
+pub(super) fn applicable(_project_root: &Path, db: &Path) -> rusqlite::Result<Option<String>> {
     if std::env::var("WRONGINDEX_NATIVE_INCREMENTAL").is_ok_and(|v| v == "0") {
         return Ok(Some("disabled by WRONGINDEX_NATIVE_INCREMENTAL=0".into()));
     }
@@ -481,7 +479,7 @@ pub(super) fn applicable(project_root: &Path, db: &Path) -> rusqlite::Result<Opt
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
     conn.pragma_update(None, "query_only", true)?;
-    steady_state(&conn, project_root)
+    steady_state(&conn)
 }
 
 /// One incremental whole-project run over `db`, an existing baseline index
@@ -744,8 +742,57 @@ fn failed_source(path: String, lang: &'static str) -> Source {
     }
 }
 
+/// `store.search('', { file })`: every symbol (the module owner excluded)
+/// whose path contains `file` - a LIKE substring match, case-insensitive for
+/// ASCII, in table order - as the heal snapshot reads it.
+fn heal_snapshot(
+    tx: &Connection,
+    file: &str,
+    out: &mut Vec<crate::sage::Snap>,
+) -> rusqlite::Result<()> {
+    let portable = file.replace('\\', "/");
+    let escaped: String = portable
+        .chars()
+        .flat_map(|c| match c {
+            '\\' | '%' | '_' => vec!['\\', c],
+            c => vec![c],
+        })
+        .collect();
+    let mut st = tx.prepare_cached(
+        "SELECT id, lang, kind, name, file, line, col, signature, doc_comment FROM symbols WHERE NOT (kind = 'mod' AND name = '<module>') AND replace(file, '\\', '/') LIKE ? ESCAPE '\\'",
+    )?;
+    let rows = st.query_map([format!("%{escaped}%")], |r| {
+        Ok(crate::sage::Snap {
+            kind: r.get(2)?,
+            name: r.get(3)?,
+            file: r.get(4)?,
+            signature: r.get(7)?,
+        })
+    })?;
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(())
+}
+
+/// `.wrongstack/memories` when it exists and stays inside the checkout
+/// (a link out of it is never followed: no heal then).
+fn memories_dir(project_root: &Path) -> Option<std::path::PathBuf> {
+    let dir = project_root.join(".wrongstack").join("memories");
+    let root = wrongindex_storage::wrongstack_paths::node_resolve(project_root)
+        .to_string_lossy()
+        .into_owned();
+    let containment = Containment::new(&root);
+    containment.check(&dir.to_string_lossy()).ok()?;
+    dir.is_dir().then_some(dir)
+}
+
 fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeError> {
     let t_all = std::time::Instant::now();
+    // `healSageAnchors`: never on a cleared run (this writer never clears).
+    let heal = memories_dir(project_root);
+    let mut prev_snap: Vec<crate::sage::Snap> = Vec::new();
+    let mut next_snap: Vec<crate::sage::Snap> = Vec::new();
     let mut conn = Connection::open_with_flags(
         db,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -756,7 +803,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     conn.pragma_update(None, "temp_store", "MEMORY")?;
     conn.set_prepared_statement_cache_capacity(256);
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-    if let Some(why) = steady_state(&tx, project_root)? {
+    if let Some(why) = steady_state(&tx)? {
         return Err(NativeError::Unsupported(format!(
             "the index changed state during the run ({why})"
         )));
@@ -927,6 +974,9 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
                 // A missing path in a targeted run is authoritative.
                 Item::Missing(path) => {
                     if meta.contains_key(path.as_str()) {
+                        if heal.is_some() {
+                            heal_snapshot(&tx, path, &mut prev_snap)?;
+                        }
                         delete_file(&tx, path)?;
                         deleted.add(path);
                     }
@@ -958,6 +1008,23 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
             }
         }
         if !entries.is_empty() {
+            if heal.is_some() {
+                for (f, _) in &entries {
+                    if meta.contains_key(f.path.as_str()) {
+                        heal_snapshot(&tx, &f.path, &mut prev_snap)?;
+                    }
+                }
+                for (f, syms) in &entries {
+                    for s in syms {
+                        next_snap.push(crate::sage::Snap {
+                            name: s.name.clone(),
+                            kind: s.kind.to_string(),
+                            file: f.path.clone(),
+                            signature: Some(s.signature.clone()),
+                        });
+                    }
+                }
+            }
             commit_batch(&tx, &entries, &mut deferred)?;
             for (_, syms) in &entries {
                 symbols_indexed += syms.len() as i64;
@@ -974,6 +1041,9 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
         let discovered_set: HashSet<&str> = discovered.iter().map(String::as_str).collect();
         for (file, _) in &existing {
             if !discovered_set.contains(file.as_str()) {
+                if heal.is_some() {
+                    heal_snapshot(&tx, file, &mut prev_snap)?;
+                }
                 delete_file(&tx, file)?;
                 deleted.add(file);
             }
@@ -1122,6 +1192,28 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     tx.commit()?;
     super::fault_point("after-commit");
     conn.close().map_err(|(_, e)| e)?;
+    // The heal, after the publication (WrongStack runs it just before its
+    // commit; here a failed commit never leaves anchors pointing at rows
+    // that were not published). Best effort, like WrongStack's.
+    let mut sage_healed = None;
+    if let Some(dir) = &heal
+        && !prev_snap.is_empty()
+        && !next_snap.is_empty()
+    {
+        let t = std::time::Instant::now();
+        let root = project_root.to_string_lossy();
+        let rel = |s: crate::sage::Snap| crate::sage::Snap {
+            file: crate::sage::snapshot_rel(&root, &s.file),
+            ..s
+        };
+        let prev: Vec<_> = prev_snap.into_iter().map(rel).collect();
+        let next: Vec<_> = next_snap.into_iter().map(rel).collect();
+        let moves = crate::sage::detect_moves(&prev, &next);
+        if !moves.is_empty() {
+            sage_healed = Some(crate::sage::remap(dir, &moves));
+        }
+        timing("incremental: SAGE anchors", t);
+    }
     timing("incremental", t_all);
     Ok(Outcome {
         report: Report {
@@ -1134,6 +1226,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
                 v.sort();
                 v
             },
+            sage_healed,
         },
         changed_files,
     })

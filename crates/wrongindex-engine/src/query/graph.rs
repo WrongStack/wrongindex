@@ -11,7 +11,6 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::path::Path;
 
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, params_from_iter};
@@ -526,32 +525,14 @@ fn decorate(
     Ok(())
 }
 
-/// `decorateGraphNodesWithMemories` reads SAGE memories and WrongTrace
-/// health from `<projectRoot>/.wrongstack`. That is not ported: when those
-/// sources exist the result could differ, so the op is reported as
-/// unsupported; when they are absent WrongStack's decoration is a no-op.
-fn check_memory_sources(args: &Value, nodes: &[Map<String, Value>]) -> Result<(), QueryError> {
-    if nodes.is_empty() {
-        return Ok(());
-    }
-    let Some(root) = args.get("projectRoot").and_then(Value::as_str) else {
-        return Ok(());
-    };
-    if root.is_empty() {
-        return Ok(());
-    }
-    let ws = Path::new(root).join(".wrongstack");
-    let sources = [
-        ws.join("memories").join("sage.db"),
-        ws.join("memories").join("memories.jsonl"),
-        ws.join("wrongtrace-health.json"),
-    ];
-    if sources.iter().any(|p| p.exists()) {
-        return Err(QueryError::Unsupported(
-            "graph memory/health decoration (.wrongstack sources present)".into(),
-        ));
-    }
-    Ok(())
+/// `decorateGraphNodesWithMemories(store.projectRoot, nodes)` (SAGE
+/// memories and WrongTrace health from `<projectRoot>/.wrongstack`).
+fn decorate_memories(args: &Value, nodes: &mut [Map<String, Value>]) -> Result<(), QueryError> {
+    let root = args
+        .get("projectRoot")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    super::ecosystem::decorate_with_memories(root, nodes)
 }
 
 fn graph(nodes: Vec<Map<String, Value>>, edges: Vec<Value>) -> Value {
@@ -852,7 +833,7 @@ pub fn file_graph(r: &Reader, args: &Value) -> Result<Value, QueryError> {
     let edges = materialize(em, "file");
     let mut out: Vec<Map<String, Value>> = nodes.entries.into_iter().map(|(_, n)| n).collect();
     decorate(c, &mut out, &pkg)?;
-    check_memory_sources(args, &out)?;
+    decorate_memories(args, &mut out)?;
     Ok(graph(out, edges))
 }
 
@@ -962,7 +943,7 @@ pub fn symbol_graph(r: &Reader, args: &Value) -> Result<Value, QueryError> {
         })
         .collect();
     decorate(c, &mut nodes, &pkg)?;
-    check_memory_sources(args, &nodes)?;
+    decorate_memories(args, &mut nodes)?;
     Ok(graph(nodes, edges))
 }
 

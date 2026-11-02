@@ -7,6 +7,7 @@
 //! (`tests/fixtures/oracle/*/queries.json`). Operations not ported yet return
 //! [`QueryError::Unsupported`] so a caller can fall back.
 
+mod ecosystem;
 mod graph;
 mod search;
 

@@ -1728,8 +1728,17 @@ fn native_keeps_enrichment_as_wrongstack_does() {
     failures.extend(incremental_round("enriched/edit", &root, &ws, &native));
     std::fs::remove_file(&first).unwrap();
     failures.extend(incremental_round("enriched/delete", &root, &ws, &native));
-    // A fresh native file (SAGE memories present) vs WrongStack in place.
-    std::fs::create_dir_all(root.join(".wrongstack/memories")).unwrap();
+    // A fresh native file (the native copy's rank version made stale, a
+    // state the incremental writer does not take) vs WrongStack in place.
+    {
+        let c = rusqlite::Connection::open(native.join("index.db")).unwrap();
+        c.execute(
+            "UPDATE metadata SET value = '0' WHERE key = 'rank_version'",
+            [],
+        )
+        .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
     write(
         &root,
         "packages/extra/src/added.ts",
@@ -2081,5 +2090,583 @@ fn native_targeted_matches_wrongstack_targeted() {
             ));
         }
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// One read op through WrongStack's own query path (`callInline`).
+fn wrongstack_query(op: &str, args: Value) -> Value {
+    let engine = std::env::var("WRONGINDEX_TEST_ENGINE").expect("WRONGINDEX_TEST_ENGINE");
+    let mut child = Command::new("bun")
+        .arg(repo().join("packages/legacy-worker/worker.ts"))
+        .arg("--engine")
+        .arg(engine)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("bun");
+    let mut stdin = child.stdin.take().unwrap();
+    let req = json!({"id": 1, "op": "query", "args": {"op": op, "args": args}});
+    writeln!(stdin, "{req}").unwrap();
+    stdin.flush().unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    drop(stdin);
+    let _ = child.wait();
+    let line = lone_surrogates_replaced(&line);
+    let v: Value = serde_json::from_str(&line).unwrap_or_else(|_| panic!("worker said: {line}"));
+    assert_eq!(v["ok"], true, "WrongStack query failed: {v}");
+    v["result"].clone()
+}
+
+/// `JSON.stringify` writes a lone surrogate (a UTF-16 slice through a pair)
+/// as a `\uD8xx` escape, which no Rust string can hold; the native reader
+/// writes U+FFFD there. Map WrongStack's escape to the same character.
+fn lone_surrogates_replaced(line: &str) -> String {
+    let hex = |s: &str| u16::from_str_radix(s, 16).ok();
+    let b = line.as_bytes();
+    let mut out = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < line.len() {
+        if b[i] == b'\\' && i + 1 < b.len() && b[i + 1] == b'\\' {
+            out.push_str(r"\\");
+            i += 2;
+            continue;
+        }
+        if b[i] == b'\\'
+            && line[i..].starts_with(r"\u")
+            && let Some(u) = line.get(i + 2..i + 6).and_then(hex)
+        {
+            let low_next = line.get(i + 6..i + 12).and_then(|n| {
+                n.strip_prefix(r"\u")
+                    .and_then(hex)
+                    .filter(|l| (0xDC00..=0xDFFF).contains(l))
+            });
+            if (0xD800..=0xDBFF).contains(&u) && low_next.is_some() {
+                out.push_str(&line[i..i + 12]);
+                i += 12;
+                continue;
+            }
+            if (0xD800..=0xDFFF).contains(&u) {
+                out.push_str(r"\ufffd");
+                i += 6;
+                continue;
+            }
+        }
+        let ch = line[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
+/// SAGE memories, JSONL memories and WrongTrace health for a checkout,
+/// including records WrongStack skips (malformed, archived, throwing).
+fn write_ecosystem_sources(root: &Path, extra_rows: usize) {
+    let mem = root.join(".wrongstack").join("memories");
+    std::fs::create_dir_all(&mem).unwrap();
+    let _ = std::fs::remove_file(mem.join("sage.db"));
+    let c = rusqlite::Connection::open(mem.join("sage.db")).unwrap();
+    c.execute_batch(
+        "CREATE TABLE memories (id TEXT PRIMARY KEY, data TEXT, kind TEXT, importance REAL, status TEXT);",
+    )
+    .unwrap();
+    let long = format!("{}😀tail", "x".repeat(279));
+    let abs_store = root
+        .join("packages/core/src/store.ts")
+        .to_string_lossy()
+        .into_owned();
+    let rows: Vec<(&str, Value, &str, f64, &str)> = vec![
+        (
+            "m1",
+            json!({"text": "User model notes", "anchors": [{"path": "packages/core/src/model/user.ts"}]}),
+            "fact",
+            0.9,
+            "active",
+        ),
+        (
+            "m2",
+            json!({"id": "m2", "kind": "decision", "text": "Users are entities", "anchors": [{"path": "packages/core/src/model/user.ts", "symbol": "User"}]}),
+            "fact",
+            0.8,
+            "active",
+        ),
+        (
+            "m3",
+            json!({"text": "Team caps members", "anchors": [{"symbol": " Team "}]}),
+            "fact",
+            0.7,
+            "active",
+        ),
+        (
+            "m4",
+            json!({"text": "capitalize is used for labels"}),
+            "fact",
+            0.6,
+            "active",
+        ),
+        (
+            "m5",
+            json!({"text": "old", "status": "archived", "anchors": [{"path": "packages/core/src/model/team.ts"}]}),
+            "fact",
+            0.95,
+            "active",
+        ),
+        (
+            "m6",
+            json!({"text": 42, "anchors": [{"path": "packages/core/src/model/team.ts"}]}),
+            "fact",
+            0.5,
+            "active",
+        ),
+        (
+            "m7",
+            json!({"text": "null anchor", "anchors": [null, {"path": "packages/core/src/model/team.ts"}]}),
+            "fact",
+            0.5,
+            "active",
+        ),
+        (
+            "m8",
+            json!({"text": "numeric path", "anchors": [{"path": 5}]}),
+            "fact",
+            0.5,
+            "active",
+        ),
+        (
+            "m10",
+            json!({"content": "\u{feff} content field for ids \u{a0}", "anchors": [{"path": "packages\\core\\src\\model\\ids.ts"}]}),
+            "note",
+            0.45,
+            "active",
+        ),
+        (
+            "m11",
+            json!({"text": long, "anchors": [{"path": "./packages/core/src/model/index.ts"}]}),
+            "fact",
+            0.44,
+            "active",
+        ),
+        (
+            "m12",
+            json!({"text": "absolute anchor", "anchors": [{"path": abs_store}]}),
+            "fact",
+            0.43,
+            "active",
+        ),
+        (
+            "m13",
+            json!({"text": "", "anchors": [{"path": "packages/core/src/store.ts"}]}),
+            "fact",
+            0.42,
+            "active",
+        ),
+        (
+            "m14",
+            json!({"text": "primitive anchors", "anchors": [5, "x", [1], {"path": "packages/core/src/util/strings.ts", "symbol": ""}]}),
+            "fact",
+            0.41,
+            "active",
+        ),
+        (
+            "m15",
+            json!({"text": "deleted row"}),
+            "fact",
+            0.99,
+            "deleted",
+        ),
+        (
+            "dup",
+            json!({"text": "Team duplicate from sqlite", "anchors": [{"symbol": "Team"}]}),
+            "fact",
+            0.3,
+            "active",
+        ),
+    ];
+    for (id, data, kind, imp, status) in rows {
+        c.execute(
+            "INSERT INTO memories VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![id, data.to_string(), kind, imp, status],
+        )
+        .unwrap();
+    }
+    c.execute(
+        "INSERT INTO memories VALUES ('m9', 'not json', 'fact', 0.5, 'active'), ('m16', '17', 'fact', 0.5, 'active'), ('m17', NULL, 'fact', 0.5, 'active')",
+        [],
+    )
+    .unwrap();
+    for i in 0..extra_rows {
+        c.execute(
+            "INSERT INTO memories VALUES (?1, ?2, 'fact', ?3, 'active')",
+            rusqlite::params![
+                format!("x{i}"),
+                json!({"text": format!("extra note {i}"), "anchors": [{"path": "packages/core/src/store.ts"}]}).to_string(),
+                0.2 - (i as f64) / 1000.0
+            ],
+        )
+        .unwrap();
+    }
+    drop(c);
+    let jsonl = [
+        json!({"id": "dup", "text": "Team duplicate from jsonl", "anchors": [{"symbol": "Team"}]}).to_string(),
+        json!({"text": "jsonl store note", "anchors": [{"path": "packages/core/src/store.ts"}]}).to_string(),
+        "   ".into(),
+        "{broken".into(),
+        "null".into(),
+        "7".into(),
+        json!({"text": "jsonl about Store class"}).to_string(),
+        json!({"kind": "warning", "text": "archived jsonl", "status": "archived", "anchors": [{"symbol": "Store"}]}).to_string(),
+    ];
+    std::fs::write(
+        mem.join("memories.jsonl"),
+        format!("\u{feff}{}\n", jsonl.join("\n")),
+    )
+    .unwrap();
+    let health = json!({"files": [
+        {"file_path": "packages/core/src/model/user.ts", "health_score": 40},
+        {"file": root.join("packages/core/src/model/team.ts").to_string_lossy(), "health_score": "30", "lock_owner": "agent-1"},
+        {"path": "packages\\core\\src\\store.ts", "healthScore": 90, "recentThrashingCount": 3},
+        {"file_path": "packages/core/src/util/strings.ts", "health_score": 95},
+        {"file_path": "packages/core/src/model/ids.ts", "is_locked": true, "lockOwner": "agent-2", "health_score": "abc"},
+        {"file_path": "packages/core/src/model/user.ts", "health_score": 10},
+        5,
+        "packages/core/src/index.ts",
+        null,
+        {"file_path": "packages/core/src/index.ts", "health_score": 1}
+    ]});
+    std::fs::write(
+        root.join(".wrongstack").join("wrongtrace-health.json"),
+        health.to_string(),
+    )
+    .unwrap();
+}
+
+/// `decorateGraphNodesWithMemories` against WrongStack: the CodeMap file and
+/// symbol graphs of a project with SAGE memories, JSONL memories and
+/// WrongTrace health, read by WrongStack and by the native reader from the
+/// same index, are identical - before and past the 20-memory cap.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE and bun"]
+fn native_graph_memory_decoration_matches_wrongstack() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("project");
+    scenario_npm_monorepo(&root);
+    let index = base.join("idx");
+    wrongstack_index(&root, &index);
+    let reader = wrongindex_engine::query::Reader::open(&index).unwrap();
+    let mut failures = Vec::new();
+    let mut decorated = 0;
+    for extra in [0usize, 30] {
+        write_ecosystem_sources(&root, extra);
+        let common = json!({"projectRoot": root, "indexDir": index});
+        let mut calls: Vec<(&str, Value)> = Vec::new();
+        let packages = wrongstack_query("packageGraph", common.clone());
+        for n in packages["nodes"].as_array().unwrap() {
+            let mut a = common.clone();
+            a["packageFilter"] = n["package"].clone();
+            calls.push(("fileGraph", a));
+        }
+        for f in source_files(&root) {
+            let mut a = common.clone();
+            a["fileFilter"] = json!(f);
+            calls.push(("symbolGraph", a));
+        }
+        for (op, args) in calls {
+            let want = wrongstack_query(op, args.clone());
+            let got = reader
+                .call(op, &args)
+                .unwrap_or_else(|e| panic!("{op} {args}: native: {e}"));
+            decorated += want["nodes"].as_array().map_or(0, |n| {
+                n.iter()
+                    .filter(|n| n.get("memoryCount").is_some() || n.get("healthScore").is_some())
+                    .count()
+            });
+            if want != got {
+                failures.push(format!(
+                    "extra={extra} {op} {}:\n  want {want}\n  got  {got}",
+                    args.get("packageFilter")
+                        .or(args.get("fileFilter"))
+                        .unwrap()
+                ));
+            }
+        }
+    }
+    eprintln!(
+        "decorated nodes compared: {decorated}; differences: {}",
+        failures.len()
+    );
+    assert!(
+        decorated > 10,
+        "the sources decorated too little to prove anything"
+    );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// SAGE memories anchored to symbols the heal rounds move or rename, with
+/// record shapes that exercise `JSON.stringify` (integer keys, number forms,
+/// a lone surrogate, U+2028) and records WrongStack leaves alone.
+fn write_heal_memories(root: &Path) {
+    let mem = root.join(".wrongstack").join("memories");
+    std::fs::create_dir_all(&mem).unwrap();
+    let c = rusqlite::Connection::open(mem.join("sage.db")).unwrap();
+    c.execute_batch(
+        "CREATE TABLE memories (id TEXT PRIMARY KEY, data TEXT, kind TEXT, importance REAL, status TEXT);",
+    )
+    .unwrap();
+    let rows: [(&str, &str, &str); 8] = [
+        (
+            "h1",
+            r#"{"text":"makeId builds ids","anchors":[{"path":"packages/core/src/model/ids.ts","symbol":"makeId"}],"importance":0.50,"2":"x","1":"y"}"#,
+            "active",
+        ),
+        (
+            "h2",
+            r#"{"anchors":[{"symbol":" pad ","path":"packages\\core\\src\\util\\strings.ts"}],"text":"pad zero-fills","meta":{"n":1e2,"f":1.25e-7}}"#,
+            "active",
+        ),
+        (
+            "h3",
+            r#"{"text":"Store keeps items","anchors":[{"path":"packages/core/src/store.ts","symbol":"Store"},{"path":"packages/core/src/store.ts","symbol":"createStore"},{"path":"packages/core/src/store.ts"}]}"#,
+            "active",
+        ),
+        (
+            "h4",
+            r#"{"text":"Team doc 😀   \ud800","anchors":[{"path":"packages/core/src/model/team.ts","symbol":"Team"}]}"#,
+            "active",
+        ),
+        (
+            "h5",
+            r#"{"text":"unrelated","anchors":[{"path":"packages/core/src/index.ts","symbol":"util"}]}"#,
+            "active",
+        ),
+        (
+            "h6",
+            r#"{"text":"throws","anchors":[{"path":"packages/core/src/model/ids.ts","symbol":"makeId"},null]}"#,
+            "active",
+        ),
+        (
+            "h7",
+            r#"{"text":"archived row","anchors":[{"path":"packages/core/src/util/strings.ts","symbol":"pad"}]}"#,
+            "archived",
+        ),
+        (
+            "h8",
+            r#"{"text":"capitalize helper","anchors":[{"path":"packages/core/src/util/strings.ts","symbol":"capitalize"}],"tags":["a",1,true,null]}"#,
+            "active",
+        ),
+    ];
+    for (id, data, status) in rows {
+        c.execute(
+            "INSERT INTO memories VALUES (?1, ?2, 'fact', 0.5, ?3)",
+            rusqlite::params![id, data, status],
+        )
+        .unwrap();
+    }
+    drop(c);
+    let jsonl = [
+        "\u{feff}{\"id\":\"j1\",\"text\":\"jsonl makeId\",\"anchors\":[{\"path\":\"./packages/core/src/model/ids.ts\",\"symbol\":\"makeId\"}]}",
+        "  {\"text\":\"jsonl Store\",\"anchors\":[{\"symbol\":\"Store\",\"path\":\"packages/core/src/store.ts\"}],\"10\":1,\"9\":2}  ",
+        "",
+        "   ",
+        "{broken",
+        "null",
+        "{\"text\":\"untouched\",\"anchors\":[{\"path\":\"x.ts\",\"symbol\":\"y\"}],\"n\":1.0}",
+        "{\"text\":\"jsonl Squad\",\"anchors\":[{\"path\":\"packages/core/src/model/team.ts\",\"symbol\":\"Team\"}]}",
+    ];
+    std::fs::write(mem.join("memories.jsonl"), jsonl.join("\n")).unwrap();
+}
+
+fn sage_state(root: &Path) -> (Vec<(String, String)>, Vec<u8>) {
+    let mem = root.join(".wrongstack").join("memories");
+    let c = rusqlite::Connection::open_with_flags(
+        mem.join("sage.db"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    let rows = c
+        .prepare("SELECT id, data FROM memories ORDER BY id")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    (rows, std::fs::read(mem.join("memories.jsonl")).unwrap())
+}
+
+/// One heal edit, applied identically to both checkouts; returns the
+/// targeted list (relative paths) or `None` for a whole-project run.
+type HealRound = (&'static str, Box<dyn Fn(&Path) -> Option<Vec<String>>>);
+
+fn heal_rounds() -> Vec<HealRound> {
+    let rewrite = |root: &Path, rel: &str, from: &str, to: &str| {
+        let p = root.join(rel);
+        let t = std::fs::read_to_string(&p).unwrap();
+        assert!(t.contains(from), "{rel}: {from}");
+        std::fs::write(&p, t.replacen(from, to, 1)).unwrap();
+    };
+    vec![
+        (
+            "move-across-files",
+            Box::new(move |root: &Path| {
+                rewrite(
+                    root,
+                    "packages/core/src/model/ids.ts",
+                    "export function makeId(raw: string): Id {\n  return raw as Id;\n}\n",
+                    "",
+                );
+                write(
+                    root,
+                    "packages/core/src/model/make-id.ts",
+                    "import type { Id } from './ids';\n\nexport function makeId(raw: string): Id {\n  return raw as Id;\n}\n",
+                );
+                None
+            }),
+        ),
+        (
+            "rename-in-file",
+            Box::new(move |root: &Path| {
+                rewrite(
+                    root,
+                    "packages/core/src/util/strings.ts",
+                    "export function pad(s: string, n = 2): string {",
+                    "export function padLeft(s: string, n = 2): string {",
+                );
+                rewrite(
+                    root,
+                    "packages/core/src/util/strings.ts",
+                    "export const capitalize = (s: string)",
+                    "export const upperFirst = (s: string)",
+                );
+                None
+            }),
+        ),
+        (
+            "delete-and-recreate",
+            Box::new(|root: &Path| {
+                let from = root.join("packages/core/src/store.ts");
+                let t = std::fs::read_to_string(&from).unwrap();
+                std::fs::remove_file(&from).unwrap();
+                write(root, "packages/core/src/storage.ts", &t);
+                None
+            }),
+        ),
+        (
+            "targeted-rename",
+            Box::new(move |root: &Path| {
+                rewrite(
+                    root,
+                    "packages/core/src/model/team.ts",
+                    "export class Team implements Named {",
+                    "export class Squad implements Named {",
+                );
+                Some(vec!["packages/core/src/model/team.ts".into()])
+            }),
+        ),
+        (
+            "targeted-move-back",
+            Box::new(|root: &Path| {
+                let from = root.join("packages/core/src/storage.ts");
+                let t = std::fs::read_to_string(&from).unwrap();
+                std::fs::remove_file(&from).unwrap();
+                write(root, "packages/core/src/store.ts", &t);
+                Some(vec![
+                    "packages/core/src/storage.ts".into(),
+                    "packages/core/src/store.ts".into(),
+                ])
+            }),
+        ),
+    ]
+}
+
+/// WI-512 SAGE healing against WrongStack: two identical checkouts with SAGE
+/// memories; WrongStack indexes one, the native writer the other (in place,
+/// whole-project and targeted), through moves, renames and recreated files.
+/// The indexes are logically identical and the healed `sage.db` rows and
+/// `memories.jsonl` bytes are identical.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE and bun"]
+fn native_heals_sage_anchors_as_wrongstack_does() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let (ra, rb) = (
+        base.join("a").join("project"),
+        base.join("b").join("project"),
+    );
+    for r in [&ra, &rb] {
+        scenario_npm_monorepo(r);
+        write_heal_memories(r);
+    }
+    let (ia, ib) = (base.join("a").join("idx"), base.join("b").join("idx"));
+    wrongstack_index(&ra, &ia);
+    wrongstack_index(&rb, &ib);
+    // `relation_structure` hashes the absolute root, which differs between
+    // the two checkouts (it does between two WrongStack runs too).
+    let mut v = Volatile {
+        rewrite: vec![(
+            rb.to_string_lossy().into_owned(),
+            ra.to_string_lossy().into_owned(),
+        )],
+        ..Volatile::logical()
+    };
+    v.metadata_keys.push("relation_structure");
+    let compare = |label: &str, failures: &mut Vec<String>| {
+        let want = dump(&ia.join("index.db"), &v).unwrap();
+        let got = dump(&ib.join("index.db"), &v).unwrap();
+        failures.extend(
+            diff(&want, &got, 8)
+                .into_iter()
+                .map(|l| format!("{label}: index: {l}")),
+        );
+        let (sa, ja) = sage_state(&ra);
+        let (sb, jb) = sage_state(&rb);
+        for (x, y) in sa.iter().zip(&sb) {
+            if x != y {
+                failures.push(format!(
+                    "{label}: sage.db {}:\n  want {}\n  got  {}",
+                    x.0, x.1, y.1
+                ));
+            }
+        }
+        if ja != jb {
+            failures.push(format!(
+                "{label}: memories.jsonl:\n  want {}\n  got  {}",
+                String::from_utf8_lossy(&ja),
+                String::from_utf8_lossy(&jb)
+            ));
+        }
+    };
+    let mut failures = Vec::new();
+    compare("initial", &mut failures);
+    let before = sage_state(&ra);
+    for (round, edit) in heal_rounds() {
+        let ta = edit(&ra);
+        let tb = edit(&rb);
+        let n = match (&ta, &tb) {
+            (Some(ta), Some(tb)) => {
+                wrongstack_index_with(&ra, &ia, Some(ta));
+                wrongindex_engine::native::update_files(&rb, &ib, tb)
+            }
+            _ => {
+                wrongstack_index(&ra, &ia);
+                wrongindex_engine::native::rebuild(&rb, &ib)
+            }
+        }
+        .unwrap_or_else(|e| panic!("{round}: native: {e}"));
+        let outcome = serde_json::to_value(&n).unwrap();
+        eprintln!("{round}: native {outcome}");
+        if outcome["outcome"] != "updated" {
+            failures.push(format!("{round}: not updated in place: {outcome}"));
+        }
+        compare(round, &mut failures);
+    }
+    let after = sage_state(&ra);
+    assert_ne!(
+        before, after,
+        "WrongStack healed nothing: the rounds prove nothing"
+    );
+    eprintln!("sage.db rows now: {:?}", after.0);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

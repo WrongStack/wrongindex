@@ -378,6 +378,144 @@ pub fn locale_compare(a: &str, b: &str) -> Ordering {
     a.cmp(b)
 }
 
+// ─── platform paths (graph decoration, SAGE anchors) ─────────────────────────
+
+/// `posixIndexPath` (`writer-helpers.ts`): backslashes to slashes, a
+/// leading `./` removed.
+pub fn index_posix(file: &str) -> String {
+    let p = file.replace('\\', "/");
+    match p.strip_prefix("./") {
+        Some(rest) => rest.to_string(),
+        None => p,
+    }
+}
+
+/// `path.isAbsolute` of the running platform (win32 rules on Windows).
+pub fn node_is_absolute(p: &str) -> bool {
+    let b = p.as_bytes();
+    if cfg!(windows) {
+        match b {
+            [] => false,
+            [b'/' | b'\\', ..] => true,
+            [d, b':', b'/' | b'\\', ..] if d.is_ascii_alphabetic() => true,
+            _ => false,
+        }
+    } else {
+        b.first() == Some(&b'/')
+    }
+}
+
+fn node_resolve_str(p: &str) -> String {
+    wrongindex_storage::wrongstack_paths::node_resolve(std::path::Path::new(p))
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// `path.relative(from, to)` of the running platform: Node's win32
+/// algorithm on Windows (case-insensitive, `\\` separators), posix elsewhere.
+pub fn node_relative(from: &str, to: &str) -> String {
+    let (from_orig, to_orig) = (node_resolve_str(from), node_resolve_str(to));
+    if from_orig == to_orig {
+        return String::new();
+    }
+    if !cfg!(windows) {
+        let f: Vec<&str> = from_orig.split('/').filter(|s| !s.is_empty()).collect();
+        let t: Vec<&str> = to_orig.split('/').filter(|s| !s.is_empty()).collect();
+        let common = f.iter().zip(&t).take_while(|(a, b)| a == b).count();
+        let mut out: Vec<&str> = vec![".."; f.len() - common];
+        out.extend(&t[common..]);
+        return out.join("/");
+    }
+    let lower = |s: &str| -> Vec<char> {
+        s.chars()
+            .map(|c| {
+                let mut l = c.to_lowercase();
+                match (l.next(), l.next()) {
+                    (Some(x), None) => x,
+                    _ => c,
+                }
+            })
+            .collect()
+    };
+    let (from, to) = (lower(&from_orig), lower(&to_orig));
+    let to_chars: Vec<char> = to_orig.chars().collect();
+    if from == to {
+        return String::new();
+    }
+    let bs = '\\';
+    let mut from_start = 0;
+    while from_start < from.len() && from[from_start] == bs {
+        from_start += 1;
+    }
+    let mut from_end = from.len();
+    while from_end > from_start + 1 && from[from_end - 1] == bs {
+        from_end -= 1;
+    }
+    let from_len = from_end - from_start;
+    let mut to_start = 0;
+    while to_start < to.len() && to[to_start] == bs {
+        to_start += 1;
+    }
+    let mut to_end = to.len();
+    while to_end > to_start + 1 && to[to_end - 1] == bs {
+        to_end -= 1;
+    }
+    let to_len = to_end - to_start;
+    let length = from_len.min(to_len);
+    let mut last_common_sep: isize = -1;
+    let mut i = 0;
+    while i < length {
+        let c = from[from_start + i];
+        if c != to[to_start + i] {
+            break;
+        } else if c == bs {
+            last_common_sep = i as isize;
+        }
+        i += 1;
+    }
+    let slice = |a: usize, b: usize| -> String { to_chars[a.min(b)..b].iter().collect() };
+    if i != length {
+        if last_common_sep == -1 {
+            return to_orig;
+        }
+    } else {
+        if to_len > length {
+            if to[to_start + i] == bs {
+                return slice(to_start + i + 1, to_end);
+            }
+            if i == 2 {
+                return slice(to_start + i, to_end);
+            }
+        }
+        if from_len > length {
+            if from[from_start + i] == bs {
+                last_common_sep = i as isize;
+            } else if i == 2 {
+                last_common_sep = 3;
+            }
+        }
+        if last_common_sep == -1 {
+            last_common_sep = 0;
+        }
+    }
+    let mut out = String::new();
+    let mut k = from_start + (last_common_sep as usize) + 1;
+    while k <= from_end {
+        if k == from_end || from[k] == bs {
+            out.push_str(if out.is_empty() { ".." } else { "\\.." });
+        }
+        k += 1;
+    }
+    let mut ts = to_start + last_common_sep as usize;
+    if !out.is_empty() {
+        return format!("{out}{}", slice(ts, to_end));
+    }
+    if ts < to_chars.len() && to_chars[ts] == bs {
+        ts += 1;
+    }
+    slice(ts, to_end)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

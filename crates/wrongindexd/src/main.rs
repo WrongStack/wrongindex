@@ -124,9 +124,17 @@ fn rebuild_reply(
 ) -> serde_json::Value {
     use wrongindex_engine::native::{NativeError, Rebuild};
     match r {
-        Ok(Rebuild::Unchanged { graph_stamp }) => serde_json::json!({
+        Ok(Rebuild::Unchanged {
+            graph_stamp,
+            symbols_indexed,
+        }) => serde_json::json!({
             "ok": true,
-            "result": {"outcome": "unchanged", "graphStamp": graph_stamp},
+            "result": {
+                "outcome": "unchanged",
+                "graphStamp": graph_stamp,
+                "filesIndexed": 0,
+                "symbolsIndexed": symbols_indexed,
+            },
         }),
         Ok(Rebuild::Updated {
             report,

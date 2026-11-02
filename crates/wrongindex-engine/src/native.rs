@@ -161,6 +161,10 @@ pub struct Report {
     /// no rows; the run went on without them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub oversized_files: Vec<String>,
+    /// SAGE memories whose anchors an in-place run healed (moved or renamed
+    /// symbols), as WrongStack's indexer does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sage_healed: Option<crate::sage::Remapped>,
 }
 
 struct FileRow {
@@ -777,6 +781,9 @@ pub enum Rebuild {
     /// kept, as WrongStack does for a no-op run.
     Unchanged {
         graph_stamp: Option<String>,
+        /// What WrongStack's no-op run reports: every file skipped, so no
+        /// file indexed and the stored symbols counted.
+        symbols_indexed: usize,
     },
     Written(Report),
     /// Updated in place, incrementally (WrongStack's non-forced run).
@@ -824,9 +831,13 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
                 files,
                 graph_stamp,
                 git_blobs,
+                symbols,
                 ..
             } if files == first.hashes() && !first.stamps_differ(&git_blobs) => {
-                return Ok(Rebuild::Unchanged { graph_stamp });
+                return Ok(Rebuild::Unchanged {
+                    graph_stamp,
+                    symbols_indexed: symbols,
+                });
             }
             Existing::Baseline {
                 carry_enrichment, ..
@@ -1072,6 +1083,8 @@ enum Existing {
         graph_stamp: Option<String>,
         /// `files.git_blob` per file.
         git_blobs: std::collections::HashMap<String, String>,
+        /// `SUM(files.symbol_count)`.
+        symbols: usize,
         /// The enrichment tables hold rows WrongStack's run would keep: its
         /// indexer never writes them (`/codebase-map --enrich/--embed` own
         /// them) and only a relation-graph version change clears them, with
@@ -1177,12 +1190,15 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
         == Some("2");
     let mut files: Vec<(String, String)> = Vec::new();
     let mut git_blobs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut symbols: i64 = 0;
     {
-        let mut st = conn.prepare("SELECT file, content_hash, git_blob FROM files")?;
+        let mut st =
+            conn.prepare("SELECT file, content_hash, git_blob, symbol_count FROM files")?;
         let mut rows = st.query([])?;
         while let Some(r) = rows.next()? {
             let file: String = r.get(0)?;
             let blob: Option<String> = r.get(2)?;
+            symbols += r.get::<_, Option<i64>>(3)?.unwrap_or(0);
             git_blobs.insert(file.clone(), blob.unwrap_or_default());
             files.push((file, r.get(1)?));
         }
@@ -1199,6 +1215,7 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
         files,
         graph_stamp,
         git_blobs,
+        symbols: symbols.max(0) as usize,
         carry_enrichment: enriched && graph_current,
     })
 }
@@ -1493,6 +1510,7 @@ fn index_once(
         symbols_indexed: (next_id - 1) as usize,
         graph_stamp,
         oversized_files,
+        sage_healed: None,
     })
 }
 

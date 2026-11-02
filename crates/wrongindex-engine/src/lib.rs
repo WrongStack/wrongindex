@@ -23,6 +23,7 @@ pub mod rank;
 pub mod relations;
 pub mod resolver;
 pub mod rows;
+pub mod sage;
 pub mod unicode;
 
 #[cfg(test)]
