@@ -8,3 +8,7 @@ node_modules/
 .dfmt/
 /crates/wrongindex-desktop/gen/
 /crates/wrongindex-desktop/binaries/
+
+# Per-user agent tooling (never committed)
+/.claude/
+/.dfmt/
