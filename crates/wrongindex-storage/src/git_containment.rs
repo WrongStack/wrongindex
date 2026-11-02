@@ -127,11 +127,18 @@ pub fn resolve_links_locally(p: &Path) -> Result<PathBuf, String> {
     }
 }
 
-/// Read a file through its link-free local path; `Ok(None)` when it does
-/// not exist or is not readable as text.
+/// Read a file through its link-free local path. `Ok(None)` only when it
+/// does not exist; any other read failure or non-UTF-8 content fails the
+/// vet (fail closed: Git may read bytes this code would have skipped).
 fn read_local(p: &Path) -> Result<Option<String>, String> {
     let real = resolve_links_locally(p)?;
-    Ok(std::fs::read_to_string(real).ok())
+    match std::fs::read(&real) {
+        Ok(bytes) => String::from_utf8(bytes)
+            .map(Some)
+            .map_err(|_| format!("{} (not UTF-8; cannot vet)", real.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{} (unreadable: {e})", real.display())),
+    }
 }
 
 /// A path value from Git metadata, relative to `base`: its local, link-free
@@ -157,7 +164,7 @@ fn git_dir_of(dot_git: &Path) -> Result<Option<PathBuf>, String> {
     if m.is_dir() {
         return Ok(Some(real));
     }
-    let Ok(text) = std::fs::read_to_string(&real) else {
+    let Some(text) = read_local(&real)? else {
         return Ok(None);
     };
     let line = text.trim();
@@ -249,29 +256,6 @@ fn vet_tree_links(gd: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Git's C-style unquoting of an alternates line.
-fn unquote(v: &str) -> String {
-    let Some(inner) = v.strip_prefix('"').and_then(|s| s.strip_suffix('"')) else {
-        return v.to_string();
-    };
-    let mut out = String::new();
-    let mut chars = inner.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(n) = chars.next() {
-                out.push(match n {
-                    'n' => '\n',
-                    't' => '\t',
-                    other => other,
-                });
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// `objects/info/alternates`, recursively (Git follows chains too).
 fn vet_alternates(objects: &Path, depth: usize) -> Result<(), String> {
     let Some(text) = read_local(&objects.join("info").join("alternates"))? else {
@@ -282,7 +266,12 @@ fn vet_alternates(objects: &Path, depth: usize) -> Result<(), String> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let alt = vet_value(&unquote(line), objects)?;
+        if line.starts_with('"') {
+            // C-quoted: rather than re-implement Git's unquoting (and risk
+            // a differential), refuse.
+            return Err(format!("{} (quoted alternate: {line})", objects.display()));
+        }
+        let alt = vet_value(line, objects)?;
         if depth >= MAX_CHAIN {
             return Err(format!("{} (alternates chain too long)", alt.display()));
         }
@@ -317,7 +306,8 @@ fn config_entries(file: &Path) -> Result<Option<Vec<(String, String)>>, String> 
     if !out.status.success() {
         return Err(format!("{} (Git cannot parse it)", file.display()));
     }
-    let text = String::from_utf8_lossy(&out.stdout);
+    let text = String::from_utf8(out.stdout)
+        .map_err(|_| format!("{} (config is not UTF-8; cannot vet)", file.display()))?;
     Ok(Some(
         text.split('\0')
             .filter(|e| !e.is_empty())
@@ -464,6 +454,12 @@ mod tests {
                 "objects/info/alternates",
                 "\"\\\\\\\\attacker.invalid\\\\objects\"\n",
             ),
+            // Octal escapes Git decodes (\057 is '/'): any quoted line is
+            // refused.
+            (
+                "objects/info/alternates",
+                "\"\\057\\057attacker.invalid/objects\"\n",
+            ),
             ("commondir", "//attacker.invalid/common\n"),
         ];
         for (file, body) in cases {
@@ -475,6 +471,29 @@ mod tests {
                 "{file} {body:?}: {r:?}"
             );
         }
+    }
+
+    #[test]
+    fn non_utf8_metadata_fails_the_vet() {
+        // (A comment Git skips needs no vetting: only what Git reports
+        // counts.)
+        let cases: [(&str, &[u8]); 3] = [
+            ("commondir", b"../../x\xff\n"),
+            ("objects/info/alternates", b"\xff\xfe../o\n"),
+            ("config", b"[include]\n\tpath = ../x\xff\n"),
+        ];
+        for (file, body) in cases {
+            let (_t, root, gd) = checkout();
+            std::fs::write(gd.join(file), body).unwrap();
+            let r = vet_checkout(&root, true);
+            assert!(r.is_err(), "{file} {body:?}: {r:?}");
+        }
+        // A `.git` file that is not UTF-8.
+        let (_t, root, _gd) = checkout();
+        let wt = root.parent().unwrap().join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), b"gitdir: ../p/.git\xff\n").unwrap();
+        assert!(vet_checkout(&wt, false).is_err());
     }
 
     #[test]
