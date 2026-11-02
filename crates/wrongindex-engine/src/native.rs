@@ -157,6 +157,10 @@ pub struct Report {
     pub files_empty: usize,
     pub symbols_indexed: usize,
     pub graph_stamp: String,
+    /// Files over the 5 MiB read limit (`readBatchFiles` per-file errors):
+    /// no rows; the run went on without them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub oversized_files: Vec<String>,
 }
 
 struct FileRow {
@@ -333,9 +337,25 @@ impl Scan {
 }
 
 /// Phase timings on stderr when `WRONGINDEX_NATIVE_TIMINGS` is set.
-fn timing(phase: &str, since: std::time::Instant) {
+pub(crate) fn timing(phase: &str, since: std::time::Instant) {
+    let ms = since.elapsed().as_millis();
     if std::env::var_os("WRONGINDEX_NATIVE_TIMINGS").is_some() {
-        eprintln!("native: {phase} {} ms", since.elapsed().as_millis());
+        eprintln!("native: {phase} {ms} ms");
+    }
+    progress_line(serde_json::json!({"phase": phase, "done": true, "ms": ms as u64}));
+}
+
+/// A phase starting (see [`progress_line`]).
+pub(crate) fn stage(phase: &str) {
+    progress_line(serde_json::json!({"phase": phase}));
+}
+
+/// Progress for the supervising daemon: one JSON object per stderr line
+/// (`{"wiProgress": {...}}`) when `WRONGINDEX_NATIVE_PROGRESS` is set. Names
+/// and timings only - never paths or source text.
+fn progress_line(v: serde_json::Value) {
+    if std::env::var_os("WRONGINDEX_NATIVE_PROGRESS").is_some() {
+        eprintln!("{}", serde_json::json!({ "wiProgress": v }));
     }
 }
 
@@ -345,6 +365,7 @@ fn scan(
     project_root: &Path,
     trusted: &std::collections::HashMap<String, (String, String)>,
 ) -> Result<Scan, NativeError> {
+    stage("discover");
     let t = std::time::Instant::now();
     let d = wrongindex_discovery::discover(project_root, &[]);
     timing("discover", t);
@@ -454,6 +475,7 @@ fn parse_in_process(src: &Source) -> Result<Option<Parsed>, NativeError> {
 /// its file's position, so the outcome does not depend on scheduling.
 fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
     let Scan { files, git } = scan;
+    progress_line(serde_json::json!({"phase": "parse", "files": files.len()}));
     let n = files.len();
     let mut parsed: Vec<Option<Parsed>> = (0..n).map(|_| None).collect();
     let mut routes: Vec<Route> = files.iter().map(|f| route_of(f.lang)).collect();
@@ -1146,6 +1168,7 @@ fn index_once(
         Some(scan) => parse_scan(scan)?,
         None => collect(project_root)?,
     };
+    stage("write");
     let t_write = std::time::Instant::now();
     std::fs::create_dir_all(index_dir)?;
     let mut conn = Connection::open(db_path)?;
@@ -1339,6 +1362,11 @@ fn index_once(
     write_stat1(&tx)?;
     timing("write: stat1", t);
     let written = files.iter().filter(|f| !f.failed).count();
+    let oversized_files: Vec<String> = files
+        .iter()
+        .filter(|f| f.failed)
+        .map(|f| f.path.clone())
+        .collect();
     let changed = written;
     let graph_stamp = format!("{}:{changed}", now_ms());
     set_meta(&tx, "graph_stamp", &graph_stamp)?;
@@ -1354,6 +1382,7 @@ fn index_once(
         files_empty,
         symbols_indexed: (next_id - 1) as usize,
         graph_stamp,
+        oversized_files,
     })
 }
 

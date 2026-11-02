@@ -17,6 +17,7 @@ use wrongindex_contracts::{ErrorBody, ErrorCode, JobKind, JobRecord, JobState, O
 
 use crate::server::{Backend, Shared};
 use crate::{info, warn};
+use wrongindex_registry::now_ms;
 
 /// Fallback poll interval; admission normally wakes the worker immediately.
 const IDLE_POLL: Duration = Duration::from_secs(5);
@@ -117,7 +118,16 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
     running.state = JobState::Running;
     crate::events::job_event(&shared, "job.started", &running);
     let job_id = job.job_id.clone();
+    if let Ok(mut p) = shared.progress.lock() {
+        p.insert(
+            job.project_id.clone(),
+            serde_json::json!({"jobId": job_id, "phase": "starting", "atMs": now_ms()}),
+        );
+    }
     let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
+    if let Ok(mut p) = shared.progress.lock() {
+        p.remove(&job.project_id);
+    }
     let ok = outcome.is_ok();
     let id = job_id.clone();
     match shared.registry(move |r| r.complete_job(&id, outcome)).await {
@@ -413,11 +423,27 @@ async fn run_native(
         .await;
     let started = std::time::Instant::now();
     let memory_mb = shared.settings.get().native_memory_mb;
+    let (s2, pid) = (shared.clone(), project.project_id.clone());
+    let on_progress = move |mut step: serde_json::Value| {
+        let job_id = s2
+            .progress
+            .lock()
+            .ok()
+            .and_then(|p| p.get(&pid).map(|v| v["jobId"].clone()))
+            .unwrap_or_default();
+        step["jobId"] = job_id;
+        step["atMs"] = json!(now_ms());
+        if let Ok(mut p) = s2.progress.lock() {
+            p.insert(pid.clone(), step.clone());
+        }
+        s2.events.publish("job.progress", Some(&pid), step);
+    };
     let r = rebuild_in_child(
         &project.checkout_root,
         &project.index_dir,
         replace,
         memory_mb,
+        on_progress,
     )
     .await;
     let ms = started.elapsed().as_millis() as u64;
@@ -446,6 +472,7 @@ async fn rebuild_in_child(
     index_dir: &str,
     replace: bool,
     memory_mb: u64,
+    on_progress: impl Fn(serde_json::Value) + Send + 'static,
 ) -> Result<serde_json::Value, NativeOutcome> {
     let exe = std::env::current_exe()
         .map_err(|e| NativeOutcome::Failed(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
@@ -459,21 +486,47 @@ async fn rebuild_in_child(
     .arg(index_dir)
     .stdin(std::process::Stdio::null())
     .stdout(std::process::Stdio::piped())
-    .stderr(std::process::Stdio::null())
+    .stderr(std::process::Stdio::piped())
+    .env("WRONGINDEX_NATIVE_PROGRESS", "1")
     .kill_on_drop(true);
     if memory_mb > 0 {
         cmd.env("WRONGINDEX_NATIVE_MEMORY_MB", memory_mb.to_string());
     }
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    let child = cmd.spawn().map_err(|e| {
+    let mut child = cmd.spawn().map_err(|e| {
         NativeOutcome::Failed(ErrorBody::new(
             ErrorCode::Internal,
             format!("cannot start the native indexer: {e}"),
         ))
     })?;
+    // Progress lines on stderr; anything else there is drained and dropped
+    // (the pipe must never fill and stall the child).
+    let progress_reader = child.stderr.take().map(|stderr| {
+        tokio::spawn(async move {
+            use tokio::io::AsyncBufReadExt;
+            let mut lines = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line.len() > 4096 || !line.starts_with("{\"wiProgress\"") {
+                    continue;
+                }
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line)
+                    && v["wiProgress"].is_object()
+                {
+                    on_progress(v["wiProgress"].clone());
+                }
+            }
+        })
+    });
     let out = match tokio::time::timeout(NATIVE_RUN_DEADLINE, child.wait_with_output()).await {
-        Ok(Ok(o)) => o,
+        Ok(Ok(o)) => {
+            // Every progress line is handled before the run is reported
+            // finished (the job's progress entry is cleared after that).
+            if let Some(reader) = progress_reader {
+                let _ = tokio::time::timeout(Duration::from_secs(5), reader).await;
+            }
+            o
+        }
         Ok(Err(e)) => {
             return Err(NativeOutcome::Failed(ErrorBody::new(
                 ErrorCode::Internal,

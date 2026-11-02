@@ -89,6 +89,8 @@ pub struct Shared {
     pub events: crate::events::EventBus,
     pub backend: Backend,
     pub settings: crate::settings::Store,
+    /// Phase of the job running per project (native engine runs).
+    pub progress: Mutex<std::collections::HashMap<String, Value>>,
 }
 
 impl Shared {
@@ -225,6 +227,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         events: crate::events::EventBus::new(instance_id.clone()),
         backend: cfg.backend,
         settings: crate::settings::Store::load(&cfg.root.path().join("settings.json")),
+        progress: Mutex::new(std::collections::HashMap::new()),
     });
     shared.apply_settings();
     let info = EndpointInfo {
@@ -636,6 +639,11 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
         generation: publication.generation,
         last_indexed_ms: publication.last_index_ms,
         last_error: ws.last_error.clone().or(publication.last_error.clone()),
+        progress: shared
+            .progress
+            .lock()
+            .ok()
+            .and_then(|p| p.get(&pid).cloned()),
     })
 }
 

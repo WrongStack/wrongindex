@@ -60,7 +60,12 @@ async fn project_detail(bridge: State<'_, Bridge>, project_id: String) -> Res {
     let status = bridge.project(&project_id).await?;
     let jobs = bridge.jobs(Some(&project_id), 25).await?;
     let ownership = bridge.ownership(&project_id).await?;
-    Ok(json!({"status": status, "jobs": jobs["jobs"], "ownership": ownership}))
+    let backups = bridge
+        .backups(&project_id)
+        .await
+        .map(|b| b["backups"].clone())
+        .unwrap_or_else(|_| json!([]));
+    Ok(json!({"status": status, "jobs": jobs["jobs"], "ownership": ownership, "backups": backups}))
 }
 
 #[tauri::command]

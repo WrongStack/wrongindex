@@ -49,6 +49,17 @@ impl From<CallError> for UiError {
     }
 }
 
+/// A backup file name as `index.backups` lists them (no path parts).
+fn is_backup_name(name: &str) -> bool {
+    name.starts_with("index-")
+        && name.ends_with(".db")
+        && name.len() < 120
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+        && !name.contains("..")
+}
+
 /// Project actions the UI may request. Anything else is rejected here, before
 /// it reaches the daemon.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +73,10 @@ pub enum ProjectAction {
     /// Maintenance: claim (admitting an index the regular claim refuses) and
     /// queue a `rebuild` job that keeps the old file as a backup.
     Rebuild,
+    /// Replace the index with a named backup (`index.backups`).
+    Restore(String),
+    /// Queue a failed or canceled write job again, same kind and paths.
+    Retry(String),
 }
 
 impl ProjectAction {
@@ -73,6 +88,16 @@ impl ProjectAction {
             "reconcile" => Self::Reconcile,
             "remove" => Self::Remove,
             "rebuild" => Self::Rebuild,
+            "restore" => Self::Restore(
+                arg.filter(|a| is_backup_name(a))
+                    .ok_or_else(|| UiError::new("INVALID_REQUEST", "restore needs a backup name"))?
+                    .to_string(),
+            ),
+            "retry" => Self::Retry(
+                arg.filter(|a| a.starts_with("j_") && a.len() < 80)
+                    .ok_or_else(|| UiError::new("INVALID_REQUEST", "retry needs a job id"))?
+                    .to_string(),
+            ),
             "policy" => Self::Policy(arg.and_then(WatchPolicy::parse).ok_or_else(|| {
                 UiError::new(
                     "INVALID_REQUEST",
@@ -97,6 +122,12 @@ impl ProjectAction {
             Self::Reconcile => (method::INDEX_REQUEST, json!({"kind": "reconcile"})),
             Self::Remove => (method::PROJECT_DETACH, json!({})),
             Self::Rebuild => (method::INDEX_REQUEST, json!({"kind": "rebuild"})),
+            Self::Restore(name) => (
+                method::INDEX_REQUEST,
+                json!({"kind": "restore", "backup": name}),
+            ),
+            // Resolved against the job record in `Bridge::project_action`.
+            Self::Retry(_) => (method::INDEX_REQUEST, json!({})),
             Self::Policy(p) => (
                 method::PROJECT_CONFIGURE,
                 json!({"watchPolicy": p.as_str()}),
@@ -208,8 +239,25 @@ impl Bridge {
         project_id: &str,
         action: &ProjectAction,
     ) -> Result<Value, UiError> {
-        let (m, params) = action.request();
+        let (m, mut params) = action.request();
         let mut c = self.client().await?;
+        if let ProjectAction::Retry(job_id) = action {
+            // Only this project's finished write jobs, re-queued as they were.
+            let job = c
+                .call_raw(method::JOB_GET, None, json!({"jobId": job_id}), None)
+                .await?;
+            let kind = job["kind"].as_str().unwrap_or_default();
+            if job["projectId"] != json!(project_id)
+                || !matches!(kind, "full" | "incremental" | "reconcile")
+                || !matches!(job["state"].as_str(), Some("failed" | "canceled"))
+            {
+                return Err(UiError::new(
+                    "INVALID_REQUEST",
+                    "only a failed or canceled index job of this project can be retried",
+                ));
+            }
+            params = json!({"kind": kind, "paths": job["params"]["paths"].clone()});
+        }
         if *action == ProjectAction::Rebuild {
             // Idempotent when this service already owns the index.
             c.call_raw(
@@ -283,6 +331,14 @@ impl Bridge {
                 json!({"settings": patch, "expectedRevision": expected_revision}),
                 None,
             )
+            .await?)
+    }
+
+    pub async fn backups(&self, project_id: &str) -> Result<Value, UiError> {
+        Ok(self
+            .client()
+            .await?
+            .call_raw(method::INDEX_BACKUPS, Some(project_id), json!({}), None)
             .await?)
     }
 
@@ -438,6 +494,26 @@ impl Bridge {
 mod tests {
     use super::*;
     use wrongindex_contracts::{ErrorBody, ErrorCode};
+
+    #[test]
+    fn restore_and_retry_accept_only_plain_names() {
+        let r = ProjectAction::parse("restore", Some("index-0001793632279460-e2.db")).unwrap();
+        assert_eq!(
+            r.request().1,
+            json!({"kind": "restore", "backup": "index-0001793632279460-e2.db"})
+        );
+        for bad in [
+            None,
+            Some(r"..\index.db"),
+            Some("index-1/../x.db"),
+            Some("other.db"),
+        ] {
+            assert!(ProjectAction::parse("restore", bad).is_err(), "{bad:?}");
+        }
+        assert!(ProjectAction::parse("retry", Some("j_abc")).is_ok());
+        assert!(ProjectAction::parse("retry", Some("abc")).is_err());
+        assert!(ProjectAction::parse("retry", None).is_err());
+    }
 
     #[test]
     fn actions_map_to_fixed_methods() {

@@ -609,6 +609,7 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
         })
         .collect();
 
+    super::stage("write");
     let t_write = std::time::Instant::now();
     let mut rewritten = Ordered::default();
     let mut added = Ordered::default();
@@ -819,6 +820,11 @@ pub(super) fn update(project_root: &Path, db: &Path, scan: Scan) -> Result<Outco
             files_empty,
             symbols_indexed: symbols_indexed as usize,
             graph_stamp,
+            oversized_files: {
+                let mut v: Vec<String> = failed.into_iter().collect();
+                v.sort();
+                v
+            },
         },
         changed_files,
     })

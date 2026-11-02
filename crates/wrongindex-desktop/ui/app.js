@@ -347,7 +347,9 @@ function detailView() {
       el('div', { class: 'k' }, 'Index directory'), el('div', { class: 'mono' }, p.indexDir),
       el('div', { class: 'k' }, 'Configuration revision'), el('div', {}, String(p.configurationRevision)),
       s.lastError ? el('div', { class: 'k' }, 'Last error') : null,
-      s.lastError ? el('div', { class: 'error' }, s.lastError) : null),
+      s.lastError ? el('div', { class: 'error' }, s.lastError, el('div', { class: 'note' }, nextAction(s.lastError))) : null,
+      s.progress ? el('div', { class: 'k' }, 'Running now') : null,
+      s.progress ? el('div', { role: 'status' }, progressText(s.progress)) : null),
     el('h2', {}, 'Actions'),
     el('div', { class: 'row' },
       owned
@@ -381,6 +383,8 @@ function detailView() {
         toast(`Policy applied by the service: ${policy.value}.`);
         await refresh();
       } }, 'Apply')),
+    filesAndErrors(d, id),
+    backupsPanel(d, p),
     searchPanel(p),
     el('h2', {}, 'Jobs'),
     jobsTable(d.jobs ?? []),
@@ -390,6 +394,100 @@ function detailView() {
       el('tbody', {}, journal.map((j) => el('tr', {},
         el('td', {}, when(j.atMs)), el('td', {}, String(j.epoch ?? '')),
         el('td', {}, j.phase ?? ''), el('td', { class: 'mono' }, j.oldOwner ?? '—'), el('td', { class: 'mono' }, j.newOwner ?? '—'))))) : null);
+}
+
+const PHASES = {
+  starting: 'Starting',
+  discover: 'Finding files',
+  parse: 'Parsing',
+  write: 'Writing the index',
+};
+
+function progressText(pr) {
+  const base = String(pr.phase || '').split(':')[0];
+  const label = PHASES[pr.phase] ?? PHASES[base] ?? pr.phase;
+  const files = pr.files ? ` (${pr.files} files)` : '';
+  const done = pr.done ? ` — finished in ${pr.ms} ms` : '…';
+  return `${label}${files}${done} · ${ago(pr.atMs)}`;
+}
+
+/** A plain next step for an error message (compatibility §, plan 2.4). */
+function nextAction(message) {
+  const m = String(message);
+  if (/checkout root .*unavailable|root is unavailable/.test(m)) return 'Restore or reconnect the project folder; watching resumes by itself.';
+  if (/owned by|OWNER_CONFLICT|ownership/.test(m)) return 'Another process owns this index. Release it there, or claim it here.';
+  if (/newer WrongStack|schema version|PROFILE_UNSUPPORTED/.test(m)) return 'Update WrongIndex, or use Rebuild index (the current file is kept).';
+  if (/enrichment data|extra schema|outside the baseline/.test(m)) return 'This index carries data only WrongStack maintains; the compatibility worker handles it.';
+  if (/disk|space|DISK_FULL/i.test(m)) return 'Free disk space, then retry.';
+  if (/access|denied|permission/i.test(m)) return 'Fix access to the folder, then retry.';
+  return 'Retry the job; if it keeps failing, export diagnostics.';
+}
+
+function filesAndErrors(d, id) {
+  const jobs = d.jobs ?? [];
+  const lastWrite = jobs.find((j) => ['full', 'incremental', 'reconcile', 'rebuild'].includes(j.kind));
+  const oversized = jobs
+    .map((j) => j.result?.native?.oversizedFiles ?? [])
+    .find((l) => l.length) ?? [];
+  const failed = jobs.filter((j) => (j.state === 'failed' || j.state === 'canceled') && ['full', 'incremental', 'reconcile'].includes(j.kind));
+  // Identical failures count once.
+  const groups = new Map();
+  for (const j of failed) {
+    const key = j.error ? `${j.error.code}: ${j.error.message}` : j.state;
+    const g = groups.get(key) ?? { key, count: 0, latest: j };
+    g.count += 1;
+    groups.set(key, g);
+  }
+  const recovered = lastWrite && lastWrite.state === 'succeeded';
+  const rows = [...groups.values()];
+  return el('div', {},
+    el('h2', {}, 'Files and errors'),
+    !rows.length && !oversized.length
+      ? el('div', { class: 'empty' }, 'No file or job errors in the recent jobs.')
+      : null,
+    oversized.length
+      ? el('div', {},
+        el('p', {}, `${oversized.length} file(s) over the 5 MiB read limit were left out (as WrongStack does). Shrinking or splitting them brings them back on the next run.`),
+        el('ul', { class: 'mono' }, oversized.slice(0, 50).map((f) => el('li', {}, f))))
+      : null,
+    rows.length
+      ? el('table', {},
+        el('thead', {}, el('tr', {}, ...['Error', 'Times', 'Latest', 'Next step', ''].map((h) => el('th', { scope: 'col' }, h)))),
+        el('tbody', {}, rows.map((g) => el('tr', {},
+          el('td', { class: recovered ? '' : 'error' }, g.key, recovered ? el('div', { class: 'note' }, 'Recovered: a later run succeeded.') : null),
+          el('td', {}, String(g.count)),
+          el('td', {}, when(g.latest.completedAtMs)),
+          el('td', { class: 'note' }, nextAction(g.key)),
+          el('td', {}, el('button', { class: 'btn subtle', onclick: async () => {
+            await call('project_action', { projectId: id, action: 'retry', arg: g.latest.jobId });
+            toast('Job queued again.');
+            await refresh();
+          } }, 'Retry'))))))
+      : null);
+}
+
+function backupsPanel(d, p) {
+  const list = d.backups ?? [];
+  if (!list.length) return null;
+  return el('div', {},
+    el('h2', {}, 'Index backups'),
+    el('p', { class: 'note' }, 'Taken each time the service took ownership of this index.'),
+    el('table', {},
+      el('thead', {}, el('tr', {}, ...['Backup', 'Taken', 'Size', ''].map((h) => el('th', { scope: 'col' }, h)))),
+      el('tbody', {}, list.map((b) => el('tr', {},
+        el('td', { class: 'mono' }, b.name),
+        el('td', {}, when(b.modifiedAtMs)),
+        el('td', {}, `${(b.bytes / 1024 / 1024).toFixed(1)} MiB`),
+        el('td', {}, el('button', { class: 'btn subtle', disabled: d.status.ownership !== 'owned', title: d.status.ownership === 'owned' ? null : 'Claim ownership first', onclick: async () => {
+          const ok = await confirmDialog(
+            'Restore this backup?',
+            `The index of ${p.displayName} is replaced with ${b.name}. The current index is first saved as another backup, so nothing is lost. Clients see the restored generation.`,
+            'Restore');
+          if (!ok) return;
+          await call('project_action', { projectId: p.projectId, action: 'restore', arg: b.name });
+          toast('Restore queued; the current index is backed up first.');
+          await refresh();
+        } }, 'Restore…')))))));
 }
 
 function searchPanel(p) {
@@ -463,6 +561,14 @@ function jobSummary(j) {
   const r = j.result;
   if (!r) return '';
   if (r.verdict) return `verdict ${r.verdict}`;
+  if (r.restoredFrom) return `restored · generation ${r.generation}`;
+  if (r.native) {
+    const n = r.native;
+    const what = n.outcome === 'unchanged' ? 'unchanged'
+      : n.outcome === 'updated' ? `${n.changedFiles ?? 0} changed file(s)`
+        : `${n.filesIndexed ?? 0} files`;
+    return `generation ${r.generation} · ${what}${n.durationMs ? ` · ${duration(n.durationMs)}` : ''}`;
+  }
   if (r.generation !== undefined) return `generation ${r.generation} · ${r.filesIndexed ?? '?'} files`;
   return '';
 }

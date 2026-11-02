@@ -428,6 +428,10 @@ pub struct ProjectStatus {
     pub last_indexed_ms: Option<i64>,
     #[serde(default)]
     pub last_error: Option<String>,
+    /// The running job's current phase, while one runs on the native
+    /// engine (`{jobId, phase, done?, ms?, files?, atMs}`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
