@@ -229,8 +229,9 @@ pub async fn acquire(
     let attempt = match attempt {
         Ok(guard) => {
             let dir = index_dir.clone();
+            let keep = shared.settings.get().backup_keep;
             match tokio::task::spawn_blocking(move || {
-                wrongindex_storage::backup::snapshot(&dir, epoch)
+                wrongindex_storage::backup::snapshot(&dir, epoch, keep)
             })
             .await
             {

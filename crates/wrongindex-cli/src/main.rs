@@ -73,6 +73,11 @@ enum Command {
         #[command(subcommand)]
         action: DiagnosticsAction,
     },
+    /// Read or change service settings (applied live, persisted).
+    Settings {
+        #[command(subcommand)]
+        action: SettingsAction,
+    },
     /// Follow the service event stream (Ctrl+C to stop).
     Events {
         /// Only events for this project (daemon-wide events are kept).
@@ -239,6 +244,19 @@ enum DiagnosticsAction {
 }
 
 #[derive(Debug, Subcommand)]
+enum SettingsAction {
+    /// Show the applied settings, their revision and the defaults.
+    Get,
+    /// Change settings: `key=value` pairs (camelCase keys, e.g.
+    /// `parallelJobs=4 paused=true`). Unknown keys and out-of-range values
+    /// are refused and nothing changes.
+    Set {
+        #[arg(required = true)]
+        pairs: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum JobAction {
     Status {
         job_id: String,
@@ -332,6 +350,7 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        Command::Settings { action } => settings(&root, action, json).await,
         Command::Diagnostics {
             action:
                 DiagnosticsAction::Export {
@@ -1282,4 +1301,61 @@ fn inspect(path: &Path, json: bool) -> Outcome {
         v if v.write_admissible() => exit_code::SUCCESS,
         _ => exit_code::INCOMPATIBLE_PROFILE,
     })
+}
+
+/// `key=value` pairs to a settings patch; values are JSON when they parse
+/// as JSON (numbers, booleans), else strings.
+fn settings_patch(pairs: &[String]) -> Result<serde_json::Value, String> {
+    let mut patch = serde_json::Map::new();
+    for pair in pairs {
+        let Some((k, v)) = pair.split_once('=') else {
+            return Err(format!("expected key=value, got '{pair}'"));
+        };
+        let value = serde_json::from_str(v).unwrap_or_else(|_| json!(v));
+        patch.insert(k.trim().to_string(), value);
+    }
+    Ok(serde_json::Value::Object(patch))
+}
+
+async fn settings(root: &DataRoot, action: SettingsAction, json: bool) -> Outcome {
+    let mut c = connect(root).await?;
+    let snap = match action {
+        SettingsAction::Get => {
+            c.call_raw(method::SETTINGS_GET, None, json!({}), None)
+                .await?
+        }
+        SettingsAction::Set { pairs } => {
+            let patch = settings_patch(&pairs).map_err(|m| fail(exit_code::INVALID_INPUT, m))?;
+            c.call_raw(method::SETTINGS_SET, None, json!({"settings": patch}), None)
+                .await?
+        }
+    };
+    if json {
+        print_json(&snap);
+    } else {
+        println!("revision {}", snap["revision"]);
+        if let Some(obj) = snap["settings"].as_object() {
+            for (k, v) in obj {
+                let default = &snap["defaults"][k];
+                if v == default {
+                    println!("  {k} = {v}");
+                } else {
+                    println!("  {k} = {v}  (default {default})");
+                }
+            }
+        }
+    }
+    Ok(exit_code::SUCCESS)
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+
+    #[test]
+    fn pairs_become_a_typed_patch() {
+        let p = settings_patch(&["parallelJobs=4".into(), "paused=true".into()]).unwrap();
+        assert_eq!(p, json!({"parallelJobs": 4, "paused": true}));
+        assert!(settings_patch(&["nokey".into()]).is_err());
+    }
 }

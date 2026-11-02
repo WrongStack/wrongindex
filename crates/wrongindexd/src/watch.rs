@@ -90,7 +90,9 @@ pub struct Supervisor {
     projects: Mutex<HashMap<String, ProjectWatch>>,
     leases: Mutex<HashMap<String, Lease>>,
     tx: mpsc::Sender<WatchMsg>,
-    pub cfg: DebounceConfig,
+    cfg: Mutex<DebounceConfig>,
+    grace: Mutex<Duration>,
+    paused: AtomicBool,
 }
 
 impl Supervisor {
@@ -101,10 +103,32 @@ impl Supervisor {
                 projects: Mutex::new(HashMap::new()),
                 leases: Mutex::new(HashMap::new()),
                 tx,
-                cfg: DebounceConfig::default(),
+                cfg: Mutex::new(DebounceConfig::default()),
+                grace: Mutex::new(LAST_CLIENT_GRACE),
+                paused: AtomicBool::new(false),
             },
             rx,
         )
+    }
+
+    /// Apply service settings (debounce, grace, pause).
+    pub fn configure(&self, s: &wrongindex_contracts::DaemonSettings) {
+        if let Ok(mut c) = self.cfg.lock() {
+            c.debounce = Duration::from_millis(s.watch_debounce_ms);
+            c.max_wait = Duration::from_millis(s.watch_max_wait_ms);
+        }
+        if let Ok(mut g) = self.grace.lock() {
+            *g = Duration::from_secs(s.session_grace_seconds);
+        }
+        self.paused.store(s.paused, Ordering::SeqCst);
+    }
+
+    fn debounce(&self) -> DebounceConfig {
+        self.cfg.lock().map(|c| *c).unwrap_or_default()
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
     }
 
     // ── sessions ────────────────────────────────────────────────────────────
@@ -148,7 +172,7 @@ impl Supervisor {
             && let Ok(mut p) = self.projects.lock()
         {
             p.entry(project_id.to_string()).or_default().grace_until =
-                Some(Instant::now() + LAST_CLIENT_GRACE);
+                Some(Instant::now() + self.grace.lock().map(|g| *g).unwrap_or(LAST_CLIENT_GRACE));
         }
     }
 
@@ -305,7 +329,7 @@ impl Supervisor {
         // Directories and vanished paths go through WrongStack's targeted
         // expansion (a renamed/deleted directory arrives as one event).
         if is_dir || !full.exists() || lang::is_indexable(&full_s) {
-            w.dirty.mark(full_s, now, &self.cfg);
+            w.dirty.mark(full_s, now, &self.debounce());
         }
     }
 
@@ -578,7 +602,12 @@ async fn settle_finished(shared: &Arc<Shared>) {
 }
 
 async fn dispatch_ready(shared: &Arc<Shared>) {
+    // Paused: batches keep waiting (freshness stays pending, never current).
+    if shared.watch.is_paused() {
+        return;
+    }
     let now = Instant::now();
+    let cfg = shared.watch.debounce();
     let ready: Vec<(String, Batch)> = shared
         .watch
         .projects
@@ -586,9 +615,7 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
         .map(|g| {
             g.iter()
                 .filter(|(_, w)| {
-                    w.watcher.is_some()
-                        && w.inflight.is_none()
-                        && w.dirty.ready(now, &shared.watch.cfg)
+                    w.watcher.is_some() && w.inflight.is_none() && w.dirty.ready(now, &cfg)
                 })
                 .filter_map(|(pid, w)| w.dirty.take().map(|b| (pid.clone(), b)))
                 .collect()

@@ -69,6 +69,20 @@ async fn recent_jobs(bridge: State<'_, Bridge>) -> Res {
 }
 
 #[tauri::command]
+async fn service_settings(bridge: State<'_, Bridge>) -> Res {
+    bridge.settings().await
+}
+
+#[tauri::command]
+async fn set_service_settings(
+    bridge: State<'_, Bridge>,
+    patch: Value,
+    expected_revision: Option<u64>,
+) -> Res {
+    bridge.set_settings(patch, expected_revision).await
+}
+
+#[tauri::command]
 async fn cancel_job(bridge: State<'_, Bridge>, job_id: String) -> Res {
     bridge.cancel_job(&job_id).await
 }
@@ -263,6 +277,8 @@ fn main() {
             export_diagnostics,
             autostart_status,
             set_autostart,
+            service_settings,
+            set_service_settings,
             start_service,
             stop_service,
         ])
@@ -276,10 +292,25 @@ fn main() {
         })
         .setup(move |app| {
             let open = MenuItem::with_id(app, "open", "Open WrongIndex", true, None::<&str>)?;
+            let pause = MenuItem::with_id(
+                app,
+                "pause",
+                "Pause Background Indexing",
+                true,
+                None::<&str>,
+            )?;
+            let resume = MenuItem::with_id(
+                app,
+                "resume",
+                "Resume Background Indexing",
+                true,
+                None::<&str>,
+            )?;
             let stop = MenuItem::with_id(app, "stop", "Stop Index Service...", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Desktop", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&open, &sep, &stop, &quit])?;
+            let sep2 = PredefinedMenuItem::separator(app)?;
+            let menu = Menu::with_items(app, &[&open, &sep, &pause, &resume, &sep2, &stop, &quit])?;
             let mut tray = TrayIconBuilder::with_id("wrongindex")
                 .tooltip("WrongIndex")
                 .menu(&menu)
@@ -290,6 +321,23 @@ fn main() {
                     "stop" => {
                         show_main(app);
                         let _ = app.emit("wi://confirm-stop", json!({}));
+                    }
+                    "pause" | "resume" => {
+                        let paused = event.id().as_ref() == "pause";
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let bridge = app.state::<Bridge>();
+                            let r = bridge.set_settings(json!({"paused": paused}), None).await;
+                            // The window learns the applied state from the
+                            // reply (or the failure), never from the click.
+                            let _ = app.emit(
+                                "wi://settings",
+                                match r {
+                                    Ok(v) => v,
+                                    Err(e) => json!({"error": e}),
+                                },
+                            );
+                        });
                     }
                     "quit" => app.exit(0),
                     _ => {}

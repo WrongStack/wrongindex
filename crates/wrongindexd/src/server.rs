@@ -88,9 +88,18 @@ pub struct Shared {
     pub watch: crate::watch::Supervisor,
     pub events: crate::events::EventBus,
     pub backend: Backend,
+    pub settings: crate::settings::Store,
 }
 
 impl Shared {
+    /// Push the current settings into the running parts (watcher timing,
+    /// session grace, pause); the worker and native runs read them per use.
+    pub fn apply_settings(&self) {
+        let s = self.settings.get();
+        self.watch.configure(&s);
+        self.wake_worker.notify_one();
+    }
+
     /// Run a registry operation on the blocking pool; SQLite work never runs
     /// on the async reactor.
     pub async fn registry<T, F>(self: &Arc<Self>, f: F) -> Result<T, ErrorBody>
@@ -215,7 +224,9 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         watch: watch_supervisor,
         events: crate::events::EventBus::new(instance_id.clone()),
         backend: cfg.backend,
+        settings: crate::settings::Store::load(&cfg.root.path().join("settings.json")),
     });
+    shared.apply_settings();
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
         daemon_instance_id: instance_id.clone(),
@@ -717,12 +728,14 @@ async fn dispatch_inner(
                     json!({
                         "backend": "native",
                         "selection": shared.backend.as_str(),
-                        "writes": "projects whose files are all TypeScript/JavaScript (ts, tsx, js, jsx), JSON, YAML, Rust or regex-extracted languages (md, toml, html, css, sql, proto, graphql, scala, vue, svelte, dart, lua, r, zig, haskell, other) (full runs; no-op when unchanged; TS/JS files with syntax errors or ambiguous script-level await are refused)",
+                        "writes": "every WrongStack language (Python and Go through their toolchains, tree-sitter languages through bun or node); fresh builds, in-place incremental runs and no-ops as WrongStack; indexes with enrichment data, extra schema or another version are left to the compatibility worker",
                         "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),
                     json!({"engineHello": shared.engine.hello().await}).to_string(),
                 ],
+                paused: shared.settings.get().paused,
+                settings_revision: shared.settings.snapshot()["revision"].as_u64().unwrap_or(0),
             })
         }
         method::DAEMON_SHUTDOWN => {
@@ -1008,6 +1021,32 @@ async fn dispatch_inner(
             .await
             .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
             Ok(json!({ "projectId": project.project_id, "backups": backups }))
+        }
+        method::SETTINGS_GET => Ok(shared.settings.snapshot()),
+        method::SETTINGS_SET => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct SetParams {
+                settings: Value,
+                #[serde(default)]
+                expected_revision: Option<u64>,
+            }
+            let p: SetParams = parse(req.params)?;
+            let s2 = shared.clone();
+            let snap = tokio::task::spawn_blocking(move || {
+                s2.settings.set(&p.settings, p.expected_revision)
+            })
+            .await
+            .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?
+            .map_err(|m| ErrorBody::new(ErrorCode::InvalidRequest, m))?;
+            shared.apply_settings();
+            info!("settings_changed", {"revision": snap["revision"], "client": client});
+            shared.events.publish(
+                "settings.changed",
+                None,
+                json!({"revision": snap["revision"]}),
+            );
+            Ok(snap)
         }
         method::JOB_CANCEL => {
             let p: JobGetParams = parse(req.params)?;

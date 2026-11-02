@@ -206,6 +206,8 @@ pub mod method {
     pub const INDEX_CHECK: &str = "index.check";
     pub const INDEX_QUERY: &str = "index.query";
     pub const INDEX_BACKUPS: &str = "index.backups";
+    pub const SETTINGS_GET: &str = "settings.get";
+    pub const SETTINGS_SET: &str = "settings.set";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
     pub const JOB_CANCEL: &str = "job.cancel";
@@ -571,6 +573,74 @@ pub struct Health {
     pub running_jobs: usize,
     pub sqlite_version: String,
     pub backend_inventory: Vec<String>,
+    /// Background indexing paused by the `paused` setting.
+    #[serde(default)]
+    pub paused: bool,
+    /// Revision of the applied settings.
+    #[serde(default)]
+    pub settings_revision: u64,
+}
+
+/// Service settings (WI-405), applied live by the daemon and persisted in
+/// `<data-root>/settings.json`. Unknown keys are refused.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+pub struct DaemonSettings {
+    /// Quiet period after the last file event before a watcher batch runs.
+    pub watch_debounce_ms: u64,
+    /// Longest a pending watcher batch waits under continuous edits.
+    pub watch_max_wait_ms: u64,
+    /// How long a `session` project stays watched after its last client.
+    pub session_grace_seconds: u64,
+    /// Index jobs running at once (one per project).
+    pub parallel_jobs: usize,
+    /// Memory cap for one native indexing run in MiB; 0 = automatic
+    /// (a quarter of physical memory, at least 2 GiB).
+    pub native_memory_mb: u64,
+    /// Index backups kept per project (taken at each ownership transfer).
+    pub backup_keep: usize,
+    /// Background indexing paused: watcher batches wait (freshness is not
+    /// current); explicit requests and queries still run.
+    pub paused: bool,
+}
+
+impl Default for DaemonSettings {
+    fn default() -> Self {
+        Self {
+            watch_debounce_ms: 400,
+            watch_max_wait_ms: 2_000,
+            session_grace_seconds: 120,
+            parallel_jobs: 2,
+            native_memory_mb: 0,
+            backup_keep: 3,
+            paused: false,
+        }
+    }
+}
+
+impl DaemonSettings {
+    /// Range checks; the message names the first offending setting.
+    pub fn validate(&self) -> Result<(), String> {
+        let range = |name: &str, v: u64, lo: u64, hi: u64| {
+            if v < lo || v > hi {
+                Err(format!("{name} must be between {lo} and {hi} (got {v})"))
+            } else {
+                Ok(())
+            }
+        };
+        range("watchDebounceMs", self.watch_debounce_ms, 100, 10_000)?;
+        range("watchMaxWaitMs", self.watch_max_wait_ms, 500, 60_000)?;
+        if self.watch_max_wait_ms < self.watch_debounce_ms {
+            return Err("watchMaxWaitMs must not be shorter than watchDebounceMs".into());
+        }
+        range("sessionGraceSeconds", self.session_grace_seconds, 0, 3_600)?;
+        range("parallelJobs", self.parallel_jobs as u64, 1, 8)?;
+        if self.native_memory_mb != 0 {
+            range("nativeMemoryMb", self.native_memory_mb, 512, 1_048_576)?;
+        }
+        range("backupKeep", self.backup_keep as u64, 1, 20)?;
+        Ok(())
+    }
 }
 
 /// Discovery metadata written atomically to `<data-root>/runtime/endpoint.json`.

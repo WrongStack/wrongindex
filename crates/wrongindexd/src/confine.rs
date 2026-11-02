@@ -13,7 +13,7 @@
 
 /// Memory cap for the whole child tree: `WRONGINDEX_NATIVE_MEMORY_MB` (at
 /// least 256), else a quarter of physical memory (two jobs may run at once,
-/// see `worker::PARALLEL_JOBS`), at least 2 GiB.
+/// see the `parallelJobs` setting), at least 2 GiB.
 #[cfg(windows)]
 fn memory_cap() -> usize {
     use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};

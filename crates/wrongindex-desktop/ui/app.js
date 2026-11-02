@@ -18,7 +18,22 @@ const state = {
   diag: { redact: true, preview: null, busy: false },
   // Settings: sign-in start state as last read from the system.
   autostart: null,
+  // Service settings as last applied by the daemon (never a local guess).
+  service: null,
+  serviceDraft: null,
+  serviceBusy: false,
 };
+
+// Service settings shown in Settings, with their units and ranges (the
+// daemon validates again and is the authority).
+const SERVICE_FIELDS = [
+  { key: 'parallelJobs', label: 'Index jobs at once', unit: '', min: 1, max: 8, note: 'One per project; more uses more CPU and memory.' },
+  { key: 'nativeMemoryMb', label: 'Memory per indexing run', unit: 'MiB', min: 0, max: 1048576, note: '0 = automatic (a quarter of physical memory, at least 2 GiB).' },
+  { key: 'watchDebounceMs', label: 'Wait after the last edit', unit: 'ms', min: 100, max: 10000 },
+  { key: 'watchMaxWaitMs', label: 'Longest wait under continuous edits', unit: 'ms', min: 500, max: 60000 },
+  { key: 'sessionGraceSeconds', label: 'Keep watching after the last client', unit: 's', min: 0, max: 3600 },
+  { key: 'backupKeep', label: 'Index backups kept per project', unit: '', min: 1, max: 20 },
+];
 const ACTIVITY_CAP = 200;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -523,6 +538,69 @@ function diagnosticsExport() {
       el('tbody', {}, cats.map((c) => el('tr', {}, el('td', {}, c.category), el('td', {}, `${(c.bytes / 1024).toFixed(1)} KiB`))))) : null);
 }
 
+function serviceSettingsSection() {
+  const sv = state.service;
+  if (!sv) {
+    invoke('service_settings')
+      .then((r) => { state.service = r; state.serviceDraft = { ...r.settings }; render(true); })
+      .catch((e) => { state.service = { error: errText(e) }; render(true); });
+    return el('p', { class: 'note' }, 'Reading service settings…');
+  }
+  if (sv.error) return el('p', { class: 'error' }, `Service settings are unavailable: ${sv.error}`);
+  const d = state.serviceDraft;
+  const changed = Object.keys(d).filter((k) => d[k] !== sv.settings[k]);
+  const save = async (patch) => {
+    state.serviceBusy = true;
+    render(true);
+    try {
+      // Only the daemon's reply is shown: a refused change keeps the
+      // applied values on screen.
+      const r = await call('set_service_settings', { patch, expectedRevision: sv.revision });
+      state.service = r;
+      state.serviceDraft = { ...r.settings };
+      toast('Settings applied.');
+    } catch {
+      state.service = null;
+    } finally {
+      state.serviceBusy = false;
+      render(true);
+    }
+  };
+  const pause = el('input', {
+    type: 'checkbox', id: 'svc-paused', checked: !!sv.settings.paused, disabled: state.serviceBusy,
+    onchange: (e) => save({ paused: e.target.checked }),
+  });
+  const rows = SERVICE_FIELDS.map((f) => {
+    const id = `svc-${f.key}`;
+    const input = el('input', {
+      type: 'number', id, min: f.min, max: f.max, step: 1, value: d[f.key],
+      'aria-describedby': f.note ? `${id}-note` : null,
+      oninput: (e) => { state.serviceDraft[f.key] = e.target.value === '' ? '' : Number(e.target.value); },
+      onchange: () => render(true),
+    });
+    const isDefault = sv.settings[f.key] === sv.defaults[f.key];
+    return el('div', { class: 'field' },
+      el('label', { for: id }, f.label),
+      el('div', { class: 'row' }, input, f.unit ? el('span', { class: 'note' }, f.unit) : null,
+        isDefault ? null : el('span', { class: 'note' }, `default ${sv.defaults[f.key]}`)),
+      f.note ? el('p', { class: 'note', id: `${id}-note` }, f.note) : null);
+  });
+  return el('div', {},
+    el('div', { class: 'row' }, pause, el('label', { for: 'svc-paused' }, 'Pause background indexing')),
+    el('p', { class: 'note' }, 'While paused, edits wait and projects are not shown as current. Searches and explicit index requests still run.'),
+    el('div', { class: 'fields' }, rows),
+    el('div', { class: 'row' },
+      el('button', {
+        class: 'btn', disabled: state.serviceBusy || changed.length === 0,
+        onclick: () => save(Object.fromEntries(changed.map((k) => [k, state.serviceDraft[k]]))),
+      }, 'Apply'),
+      el('button', {
+        class: 'btn subtle', disabled: state.serviceBusy || changed.length === 0,
+        onclick: () => { state.serviceDraft = { ...sv.settings }; render(true); },
+      }, 'Discard changes'),
+      el('span', { class: 'note' }, `Revision ${sv.revision}`)));
+}
+
 function settingsView() {
   const a = state.autostart;
   if (!a) {
@@ -549,14 +627,16 @@ function settingsView() {
     a.error ? el('p', { class: 'error' }, a.error) : null,
     a.enabled && !a.matchesThisInstall
       ? el('p', { class: 'error' }, `The sign-in entry points to another copy: ${a.command}. Turn the option off and on to use this one.`)
-      : null);
+      : null,
+    el('h2', {}, 'Index service'),
+    serviceSettingsSection());
 }
 
 // ─── navigation ─────────────────────────────────────────────────────────────
 
 function go(view) {
   state.view = view;
-  if (view === 'settings') state.autostart = null;
+  if (view === 'settings') { state.autostart = null; state.service = null; }
   if (view !== 'projects') { state.selected = null; state.detail = null; }
   render();
   document.getElementById('main').focus();
@@ -623,6 +703,13 @@ listen('wi://event', (e) => {
 listen('wi://resync', () => scheduleRefresh());
 listen('wi://connection', () => scheduleRefresh());
 listen('wi://confirm-stop', () => stopService());
+listen('wi://settings', (e) => {
+  if (e.payload && e.payload.error) { toast(errText(e.payload.error), true); return; }
+  state.service = e.payload;
+  state.serviceDraft = e.payload ? { ...e.payload.settings } : null;
+  toast(e.payload && e.payload.settings.paused ? 'Background indexing paused.' : 'Background indexing resumed.');
+  scheduleRefresh();
+});
 
 // Relative times and uptime stay honest without events.
 setInterval(() => { if (!document.hidden) scheduleRefresh(); }, 15000);

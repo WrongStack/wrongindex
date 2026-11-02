@@ -1,5 +1,5 @@
 //! Durable job execution. Jobs are claimed from the registry in admission
-//! order, up to `PARALLEL_JOBS` at once and one per project; completion is recorded before it becomes observable via `job.get`.
+//! order, up to the `parallelJobs` setting at once and one per project; completion is recorded before it becomes observable via `job.get`.
 //!
 //! `check` jobs inspect the project's `index.db` read-only. Write jobs run on
 //! the native engine when it supports the project (`--backend auto|native`)
@@ -20,12 +20,6 @@ use crate::{info, warn};
 
 /// Fallback poll interval; admission normally wakes the worker immediately.
 const IDLE_POLL: Duration = Duration::from_secs(5);
-
-/// Jobs run at once. At most one per project, so a slow or hostile project
-/// occupies one slot and every other project still progresses in the other
-/// (security review WI-604). Native runs are separate confined processes;
-/// compatibility-worker calls still serialize on the one WrongStack worker.
-pub const PARALLEL_JOBS: usize = 2;
 
 /// Projects with a job in flight; removed when the job's task ends (also
 /// on panic).
@@ -68,7 +62,8 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             break;
         }
         let mut started = false;
-        if running.len() < PARALLEL_JOBS {
+        let parallel = shared.settings.get().parallel_jobs.max(1);
+        if running.len() < parallel {
             let queued = match shared.registry(|r| r.queued_jobs()).await {
                 Ok(q) => q,
                 Err(e) => {
@@ -77,7 +72,7 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
                 }
             };
             let in_flight = busy.lock().map(|b| b.clone()).unwrap_or_default();
-            for job in pick(queued, &in_flight, PARALLEL_JOBS - running.len()) {
+            for job in pick(queued, &in_flight, parallel - running.len()) {
                 let job_id = job.job_id.clone();
                 let claimed = {
                     let id = job_id.clone();
@@ -417,7 +412,14 @@ async fn run_native(
         .release_store(&project.checkout_root, &project.index_dir)
         .await;
     let started = std::time::Instant::now();
-    let r = rebuild_in_child(&project.checkout_root, &project.index_dir, replace).await;
+    let memory_mb = shared.settings.get().native_memory_mb;
+    let r = rebuild_in_child(
+        &project.checkout_root,
+        &project.index_dir,
+        replace,
+        memory_mb,
+    )
+    .await;
     let ms = started.elapsed().as_millis() as u64;
     match r {
         Ok(outcome) => {
@@ -443,6 +445,7 @@ async fn rebuild_in_child(
     root: &str,
     index_dir: &str,
     replace: bool,
+    memory_mb: u64,
 ) -> Result<serde_json::Value, NativeOutcome> {
     let exe = std::env::current_exe()
         .map_err(|e| NativeOutcome::Failed(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
@@ -458,6 +461,9 @@ async fn rebuild_in_child(
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::null())
     .kill_on_drop(true);
+    if memory_mb > 0 {
+        cmd.env("WRONGINDEX_NATIVE_MEMORY_MB", memory_mb.to_string());
+    }
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     let child = cmd.spawn().map_err(|e| {

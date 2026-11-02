@@ -11,6 +11,7 @@ mod events;
 mod log;
 mod ownership;
 mod server;
+mod settings;
 mod watch;
 mod worker;
 

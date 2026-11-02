@@ -83,6 +83,9 @@ td.path { font-family: Consolas, monospace; font-size: 12px; word-break: break-a
 .mono { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
 input[type=text], select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
 input[type=text] { min-width: 420px; flex: 1; }
+input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); width: 140px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 12px 0; }
+.field label { display: block; margin-bottom: 4px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; background: var(--panel); border: 1px dashed var(--line); border-radius: 8px; }
 .note { color: var(--muted); font-size: 12px; margin: 6px 0; }
 .error { color: var(--bad); }

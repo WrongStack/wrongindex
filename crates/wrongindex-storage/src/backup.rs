@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 
 pub const BACKUP_DIR: &str = ".wrongindex-backups";
-/// Backups kept per index.
+/// Backups kept per index by default (the `backupKeep` setting).
 pub const KEEP: usize = 3;
 
 #[derive(Debug, thiserror::Error)]
@@ -65,7 +65,7 @@ fn is_unreadable(e: &rusqlite::Error) -> bool {
 }
 
 /// Snapshot `<index_dir>/index.db`; `None` when there is no database yet.
-pub fn snapshot(index_dir: &Path, epoch: i64) -> Result<Option<PathBuf>, BackupError> {
+pub fn snapshot(index_dir: &Path, epoch: i64, keep: usize) -> Result<Option<PathBuf>, BackupError> {
     let db = index_dir.join("index.db");
     if !db.is_file() {
         return Ok(None);
@@ -103,7 +103,7 @@ pub fn snapshot(index_dir: &Path, epoch: i64) -> Result<Option<PathBuf>, BackupE
         }
     }
     std::fs::rename(&tmp, &target)?;
-    for old in list(index_dir).into_iter().skip(KEEP) {
+    for old in list(index_dir).into_iter().skip(keep.max(1)) {
         let _ = std::fs::remove_file(old);
     }
     Ok(Some(target))
@@ -143,7 +143,8 @@ pub fn restore(
             return Err(BackupError::Busy(PathBuf::from(p).display().to_string()));
         }
     }
-    let previous = snapshot(index_dir, epoch)?;
+    // The replaced file is kept even beyond the usual retention.
+    let previous = snapshot(index_dir, epoch, usize::MAX)?;
     let staged = index_dir.join(format!(".wrongindex-restore-{}.db", now_ms()));
     std::fs::copy(&source, &staged)?;
     if let Err(e) = std::fs::rename(&staged, &db) {
@@ -193,18 +194,18 @@ mod tests {
     fn snapshot_is_consistent_while_open_and_keeps_the_newest() {
         let tmp = tempfile::tempdir().unwrap();
         assert!(
-            snapshot(tmp.path(), 1).unwrap().is_none(),
+            snapshot(tmp.path(), 1, KEEP).unwrap().is_none(),
             "no database yet"
         );
         make_db(tmp.path(), 5);
         // A writer still holds the WAL database open: the copy sees its commits.
         let live = rusqlite::Connection::open(tmp.path().join("index.db")).unwrap();
         live.execute("INSERT INTO t VALUES (99)", []).unwrap();
-        let b = snapshot(tmp.path(), 1).unwrap().unwrap();
+        let b = snapshot(tmp.path(), 1, KEEP).unwrap().unwrap();
         assert_eq!(count(&b), 6);
         for e in 2..6 {
             std::thread::sleep(std::time::Duration::from_millis(2));
-            snapshot(tmp.path(), e).unwrap();
+            snapshot(tmp.path(), e, KEEP).unwrap();
         }
         assert_eq!(list(tmp.path()).len(), KEEP);
         drop(live);
@@ -214,7 +215,7 @@ mod tests {
     fn an_unreadable_file_is_backed_up_byte_for_byte() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("index.db"), b"not a database").unwrap();
-        let b = snapshot(tmp.path(), 1).unwrap().unwrap();
+        let b = snapshot(tmp.path(), 1, KEEP).unwrap().unwrap();
         assert_eq!(std::fs::read(b).unwrap(), b"not a database");
     }
 
@@ -222,7 +223,7 @@ mod tests {
     fn restore_replaces_the_database_and_keeps_the_previous_one() {
         let tmp = tempfile::tempdir().unwrap();
         make_db(tmp.path(), 3);
-        let b = snapshot(tmp.path(), 1).unwrap().unwrap();
+        let b = snapshot(tmp.path(), 1, KEEP).unwrap().unwrap();
         make_db(tmp.path(), 10);
         let name = b.file_name().unwrap().to_str().unwrap().to_string();
         // Another connection open: refused.

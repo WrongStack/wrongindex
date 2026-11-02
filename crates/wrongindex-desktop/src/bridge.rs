@@ -252,6 +252,40 @@ impl Bridge {
             .await?)
     }
 
+    pub async fn settings(&self) -> Result<Value, UiError> {
+        Ok(self
+            .client()
+            .await?
+            .call_raw(method::SETTINGS_GET, None, json!({}), None)
+            .await?)
+    }
+
+    /// Apply a settings patch. The daemon validates, persists and applies it
+    /// before answering; the reply is the applied snapshot, so the UI never
+    /// shows a value the service refused.
+    pub async fn set_settings(
+        &self,
+        patch: Value,
+        expected_revision: Option<u64>,
+    ) -> Result<Value, UiError> {
+        if !patch.is_object() {
+            return Err(UiError::new(
+                "INVALID_REQUEST",
+                "settings must be an object",
+            ));
+        }
+        Ok(self
+            .client()
+            .await?
+            .call_raw(
+                method::SETTINGS_SET,
+                None,
+                json!({"settings": patch, "expectedRevision": expected_revision}),
+                None,
+            )
+            .await?)
+    }
+
     pub async fn ownership(&self, project_id: &str) -> Result<Value, UiError> {
         Ok(self
             .client()
