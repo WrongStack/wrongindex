@@ -208,6 +208,7 @@ pub mod method {
     pub const INDEX_BACKUPS: &str = "index.backups";
     pub const SETTINGS_GET: &str = "settings.get";
     pub const SETTINGS_SET: &str = "settings.set";
+    pub const DAEMON_METRICS: &str = "daemon.metrics";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
     pub const JOB_CANCEL: &str = "job.cancel";

@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use serde_json::{Value, json};
 
 /// The log file is rotated (single `.1` backup) when it exceeds this size.
-const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
+pub const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 
 static SINK: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 

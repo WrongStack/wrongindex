@@ -73,6 +73,9 @@ enum Command {
         #[command(subcommand)]
         action: DiagnosticsAction,
     },
+    /// Job outcomes, durations, native phase timings and enforced limits
+    /// since the service started.
+    Metrics,
     /// Read or change service settings (applied live, persisted).
     Settings {
         #[command(subcommand)]
@@ -351,6 +354,18 @@ async fn run(cli: Cli) -> Outcome {
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
         Command::Settings { action } => settings(&root, action, json).await,
+        Command::Metrics => {
+            let mut c = connect(&root).await?;
+            let m = c
+                .call_raw(method::DAEMON_METRICS, None, json!({}), None)
+                .await?;
+            if json {
+                print_json(&m);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&m).unwrap_or_default());
+            }
+            Ok(exit_code::SUCCESS)
+        }
         Command::Diagnostics {
             action:
                 DiagnosticsAction::Export {

@@ -124,7 +124,17 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
             serde_json::json!({"jobId": job_id, "phase": "starting", "atMs": now_ms()}),
         );
     }
+    let started = std::time::Instant::now();
     let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
+    shared.metrics.job_finished(
+        job.kind.as_str(),
+        if outcome.is_ok() {
+            "succeeded"
+        } else {
+            "failed"
+        },
+        started.elapsed().as_millis() as u64,
+    );
     if let Ok(mut p) = shared.progress.lock() {
         p.remove(&job.project_id);
     }
@@ -433,6 +443,11 @@ async fn run_native(
             .unwrap_or_default();
         step["jobId"] = job_id;
         step["atMs"] = json!(now_ms());
+        if step["done"] == true
+            && let (Some(phase), Some(ms)) = (step["phase"].as_str(), step["ms"].as_u64())
+        {
+            s2.metrics.phase(phase, ms);
+        }
         if let Ok(mut p) = s2.progress.lock() {
             p.insert(pid.clone(), step.clone());
         }

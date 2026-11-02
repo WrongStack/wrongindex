@@ -194,7 +194,11 @@ pub async fn collect(root: &DataRoot, project: Option<&str>, doctor: Vec<Value>)
                 .call_raw(method::DAEMON_HEALTH, None, json!({}), None)
                 .await
                 .unwrap_or_else(|e| json!({"error": e.to_string()}));
-            bundle["service"] = json!({"running": true, "health": health});
+            let metrics = c
+                .call_raw(method::DAEMON_METRICS, None, json!({}), None)
+                .await
+                .unwrap_or_else(|e| json!({"error": e.to_string()}));
+            bundle["service"] = json!({"running": true, "health": health, "metrics": metrics});
             let list = c
                 .call_raw(method::PROJECT_LIST, None, json!({}), None)
                 .await;

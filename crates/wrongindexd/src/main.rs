@@ -9,6 +9,7 @@ mod dirty;
 mod engine;
 mod events;
 mod log;
+mod metrics;
 mod ownership;
 mod server;
 mod settings;

@@ -91,6 +91,7 @@ pub struct Shared {
     pub settings: crate::settings::Store,
     /// Phase of the job running per project (native engine runs).
     pub progress: Mutex<std::collections::HashMap<String, Value>>,
+    pub metrics: crate::metrics::Metrics,
 }
 
 impl Shared {
@@ -228,6 +229,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         backend: cfg.backend,
         settings: crate::settings::Store::load(&cfg.root.path().join("settings.json")),
         progress: Mutex::new(std::collections::HashMap::new()),
+        metrics: crate::metrics::Metrics::default(),
     });
     shared.apply_settings();
     let info = EndpointInfo {
@@ -1031,6 +1033,34 @@ async fn dispatch_inner(
             Ok(json!({ "projectId": project.project_id, "backups": backups }))
         }
         method::SETTINGS_GET => Ok(shared.settings.snapshot()),
+        method::DAEMON_METRICS => {
+            let (queued, running) = shared
+                .registry(|r| {
+                    Ok((
+                        r.count_jobs(JobState::Queued)?,
+                        r.count_jobs(JobState::Running)?,
+                    ))
+                })
+                .await?;
+            let settings = shared.settings.get();
+            let mut m = shared.metrics.snapshot();
+            m["since"] = json!(shared.started_at_ms);
+            m["queue"] = json!({"queued": queued, "running": running});
+            m["connections"] = json!(shared.connections.load(Ordering::SeqCst));
+            m["eventSeq"] = json!(shared.events.current_seq());
+            // The bounds the service enforces (quotas).
+            m["limits"] = json!({
+                "maxQueuedJobs": MAX_QUEUED_JOBS,
+                "maxFrameBytes": wrongindex_contracts::MAX_FRAME_BYTES,
+                "maxDirtyPathsPerProject": crate::dirty::DebounceConfig::default().cap,
+                "maxLogBytes": crate::log::MAX_LOG_BYTES,
+                "maxIndexFileBytes": wrongindex_engine::native::MAX_INDEX_FILE_BYTES,
+                "parallelJobs": settings.parallel_jobs,
+                "nativeMemoryMb": settings.native_memory_mb,
+                "backupKeep": settings.backup_keep,
+            });
+            Ok(m)
+        }
         method::SETTINGS_SET => {
             #[derive(Deserialize)]
             #[serde(rename_all = "camelCase")]

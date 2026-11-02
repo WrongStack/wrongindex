@@ -170,6 +170,18 @@ async fn a_native_run_reports_phases_and_oversized_files() {
         "{phases:?}"
     );
 
+    // Measured: the job and its native phases are counted.
+    let m = c
+        .call_raw(method::DAEMON_METRICS, None, json!({}), None)
+        .await
+        .unwrap();
+    assert_eq!(m["jobs"]["full"]["succeeded"], 1, "{m}");
+    assert!(
+        m["nativePhases"]["discover"]["count"].as_u64() >= Some(1),
+        "{m}"
+    );
+    assert_eq!(m["limits"]["maxIndexFileBytes"], 5 * 1024 * 1024);
+
     // Nothing is left behind once the job has finished.
     let status = c
         .call_raw(method::PROJECT_GET, Some(&pid), json!({}), None)
