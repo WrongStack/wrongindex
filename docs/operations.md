@@ -87,6 +87,18 @@ While the service owns an index, it is the only writer.
 - **Restore**: `wrongindex index <id> --restore <name> --wait` replaces the index with that backup. It needs ownership, and no other process may have the database open. The replaced file is backed up first.
 - **Maintenance rebuild**: `wrongindex index <id> --rebuild --wait` (desktop: Rebuild index…) writes a fresh index even over one the regular writer refuses. The previous file is kept as `index.db.wrongindex-backup-<time>`. An index written by a newer WrongStack is never replaced.
 
+### Engine per project
+
+`wrongindex project backend <id> auto|native|legacy` (desktop: Engine) chooses the engine that writes the project's index:
+
+| Choice | Behaviour |
+|---|---|
+| `auto` (default) | Follow the service's `--backend`: native when the index can be reproduced natively, otherwise the compatibility worker (if configured) |
+| `native` | Native engine only, never the worker |
+| `legacy` | The compatibility worker (WrongStack's own engine) only; needs `--engine` |
+
+A choice the service cannot honour is refused and nothing changes. Switching fences off work admitted for the old engine and, for an owned project, queues a reconciliation with the new engine.
+
 ## 6. WrongStack integration
 
 WrongStack selects the service with `indexing.service` in its user config (not settable from a repository config) or `WRONGSTACK_INDEX_SERVICE`:

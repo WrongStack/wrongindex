@@ -274,8 +274,15 @@ async fn execute(
             })?;
 
             let replace = kind == JobKind::Rebuild;
+            let backend = match shared.backend_for(project.backend_preference) {
+                Ok(b) => b,
+                Err(e) => {
+                    record_failure(shared, project_id, &e.message).await;
+                    return Err(e);
+                }
+            };
             let mut native_skipped: Option<String> = None;
-            if shared.backend != Backend::Legacy {
+            if backend != Backend::Legacy {
                 match run_native(shared, &project, replace).await {
                     Ok((stamp, detail)) => {
                         // The index is now a baseline index the native writer
@@ -292,9 +299,7 @@ async fn execute(
                         }));
                     }
                     Err(NativeOutcome::Unsupported(why))
-                        if !replace
-                            && shared.backend == Backend::Auto
-                            && shared.engine.configured() =>
+                        if !replace && backend == Backend::Auto && shared.engine.configured() =>
                     {
                         native_skipped = Some(why);
                     }
@@ -349,7 +354,7 @@ async fn execute(
                     return Err(ErrorBody::new(ErrorCode::ProfileUnsupported, msg));
                 }
             }
-            if replace && shared.backend == Backend::Legacy {
+            if replace && backend == Backend::Legacy {
                 return Err(ErrorBody::new(
                     ErrorCode::NotImplemented,
                     "a maintenance rebuild needs the native engine (--backend auto or native)",

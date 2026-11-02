@@ -77,6 +77,8 @@ pub enum ProjectAction {
     Restore(String),
     /// Queue a failed or canceled write job again, same kind and paths.
     Retry(String),
+    /// The engine that writes this project's index.
+    Backend(wrongindex_contracts::BackendPreference),
 }
 
 impl ProjectAction {
@@ -97,6 +99,12 @@ impl ProjectAction {
                 arg.filter(|a| a.starts_with("j_") && a.len() < 80)
                     .ok_or_else(|| UiError::new("INVALID_REQUEST", "retry needs a job id"))?
                     .to_string(),
+            ),
+            "backend" => Self::Backend(
+                arg.and_then(wrongindex_contracts::BackendPreference::parse)
+                    .ok_or_else(|| {
+                        UiError::new("INVALID_REQUEST", "backend must be auto, native, or legacy")
+                    })?,
             ),
             "policy" => Self::Policy(arg.and_then(WatchPolicy::parse).ok_or_else(|| {
                 UiError::new(
@@ -131,6 +139,10 @@ impl ProjectAction {
             Self::Policy(p) => (
                 method::PROJECT_CONFIGURE,
                 json!({"watchPolicy": p.as_str()}),
+            ),
+            Self::Backend(b) => (
+                method::PROJECT_CONFIGURE,
+                json!({"backendPreference": b.as_str()}),
             ),
         }
     }
@@ -525,10 +537,19 @@ mod tests {
             ("remove", None, method::PROJECT_DETACH),
             ("rebuild", None, method::INDEX_REQUEST),
             ("policy", Some("pinned"), method::PROJECT_CONFIGURE),
+            ("backend", Some("native"), method::PROJECT_CONFIGURE),
         ];
         for (a, arg, m) in cases {
             assert_eq!(ProjectAction::parse(a, arg).unwrap().request().0, m, "{a}");
         }
+        assert!(ProjectAction::parse("backend", Some("bun")).is_err());
+        assert_eq!(
+            ProjectAction::parse("backend", Some("legacy"))
+                .unwrap()
+                .request()
+                .1,
+            json!({"backendPreference": "legacy"})
+        );
         assert_eq!(
             ProjectAction::parse("reconcile", None).unwrap().request().1,
             json!({"kind": "reconcile"})

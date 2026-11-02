@@ -11,10 +11,10 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{Notify, watch};
 use wrongindex_contracts::{
-    AuthRequest, AuthResponse, BASELINE_PROFILE_ID, EndpointInfo, ErrorBody, ErrorCode, Health,
-    Hello, IndexRequestParams, JobAdmission, JobKind, JobState, Limits, MAX_FRAME_BYTES,
-    PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectStatus, RegisterProjectParams, RegisterProjectResult,
-    Request, Response, WatchPolicy, method,
+    AuthRequest, AuthResponse, BASELINE_PROFILE_ID, BackendPreference, EndpointInfo, ErrorBody,
+    ErrorCode, Health, Hello, IndexRequestParams, JobAdmission, JobKind, JobState, Limits,
+    MAX_FRAME_BYTES, PROTOCOL_MAJOR, PROTOCOL_MINOR, ProjectStatus, RegisterProjectParams,
+    RegisterProjectResult, Request, Response, WatchPolicy, method,
 };
 use wrongindex_ipc::endpoint::{generate_token, token_eq};
 use wrongindex_ipc::frame::{FrameError, read_body, read_header, write_frame};
@@ -95,6 +95,25 @@ pub struct Shared {
 }
 
 impl Shared {
+    /// The engine for a project: its preference within what this service
+    /// runs (`--backend`). A preference the service cannot honour is an
+    /// error, never a silent switch to the other engine.
+    pub fn backend_for(&self, pref: BackendPreference) -> Result<Backend, ErrorBody> {
+        match (self.backend, pref) {
+            (b, BackendPreference::Auto) => Ok(b),
+            (Backend::Legacy, BackendPreference::Native) => Err(ErrorBody::new(
+                ErrorCode::NotImplemented,
+                "the project asks for the native engine, but this service runs with --backend legacy",
+            )),
+            (Backend::Native, BackendPreference::Legacy) => Err(ErrorBody::new(
+                ErrorCode::NotImplemented,
+                "the project asks for the compatibility worker, but this service runs with --backend native",
+            )),
+            (_, BackendPreference::Native) => Ok(Backend::Native),
+            (_, BackendPreference::Legacy) => Ok(Backend::Legacy),
+        }
+    }
+
     /// Push the current settings into the running parts (watcher timing,
     /// session grace, pause); the worker and native runs read them per use.
     pub fn apply_settings(&self) {
@@ -938,9 +957,10 @@ async fn dispatch_inner(
             args["indexDir"] = json!(project.index_dir);
             // Native read first (read-only connection, never mutates the
             // index); operations it has not ported fall back to the worker.
+            let backend = shared.backend_for(project.backend_preference)?;
             let mut native_skipped = None;
             let mut served = None;
-            if shared.backend != Backend::Legacy {
+            if backend != Backend::Legacy {
                 let (dir, op, a2) = (
                     std::path::PathBuf::from(&project.index_dir),
                     q.op.clone(),
@@ -955,7 +975,7 @@ async fn dispatch_inner(
                 match r {
                     Ok(v) => served = Some((v, "native")),
                     Err(QueryError::Unsupported(why))
-                        if shared.backend == Backend::Auto && shared.engine.configured() =>
+                        if backend == Backend::Auto && shared.engine.configured() =>
                     {
                         native_skipped = Some(why);
                     }
@@ -1115,18 +1135,76 @@ async fn dispatch_inner(
             #[derive(Deserialize)]
             #[serde(rename_all = "camelCase")]
             struct ConfigureParams {
-                watch_policy: WatchPolicy,
+                #[serde(default)]
+                watch_policy: Option<WatchPolicy>,
+                #[serde(default)]
+                backend_preference: Option<BackendPreference>,
             }
             let p: ConfigureParams = parse(req.params)?;
-            let project = shared
-                .registry(move |r| r.configure_project(&pid, p.watch_policy))
+            if p.watch_policy.is_none() && p.backend_preference.is_none() {
+                return Err(ErrorBody::new(
+                    ErrorCode::InvalidRequest,
+                    "nothing to configure: give watchPolicy and/or backendPreference",
+                ));
+            }
+            if let Some(pref) = p.backend_preference {
+                // Refuse before changing anything.
+                shared.backend_for(pref)?;
+            }
+            let (pid2, policy, pref) = (pid.clone(), p.watch_policy, p.backend_preference);
+            let before = shared
+                .registry({
+                    let pid = pid.clone();
+                    move |r| r.get_project(&pid)
+                })
                 .await?;
+            let project = shared
+                .registry(move |r| {
+                    if let Some(policy) = policy {
+                        r.configure_project(&pid2, policy)?;
+                    }
+                    match pref {
+                        Some(pref) => r.set_backend_preference(&pid2, pref),
+                        None => r.get_project(&pid2),
+                    }
+                })
+                .await?;
+            if pref.is_some_and(|p| p != before.backend_preference) {
+                // Engine switch (WI-600): the revision moved, so work admitted
+                // for the old engine is fenced off and a running job's result
+                // is not published. The compatibility worker closes its handle
+                // on the index; an owned project then reconciles with the new
+                // engine under the new fence.
+                shared
+                    .engine
+                    .release_store(&project.checkout_root, &project.index_dir)
+                    .await;
+                let p2 = project.project_id.clone();
+                let queued = shared
+                    .registry(move |r| {
+                        let fence = r.fence(&p2)?;
+                        let params = json!({"kind": "reconcile", "paths": [], "fence": fence});
+                        r.admit_job(&p2, JobKind::Reconcile, &params, "backend-switch", None)
+                    })
+                    .await;
+                match queued {
+                    Ok(a) => {
+                        shared.wake_worker.notify_one();
+                        crate::events::job_event(shared, "job.queued", &a.job);
+                    }
+                    // Not owned: the next claim reconciles anyway.
+                    Err(e) if e.code == ErrorCode::OwnerConflict => {}
+                    Err(e) => return Err(e),
+                }
+                info!("backend_preference_changed", {"projectId": project.project_id, "from": before.backend_preference.as_str(), "to": project.backend_preference.as_str()});
+            }
             info!("project_configured", {"projectId": project.project_id, "watchPolicy": project.watch_policy.as_str(), "revision": project.configuration_revision});
             shared.events.publish(
                 "project.configured",
                 Some(&project.project_id),
                 json!({
                     "watchPolicy": project.watch_policy.as_str(),
+                    "backendPreference": project.backend_preference.as_str(),
                     "configurationRevision": project.configuration_revision,
                 }),
             );

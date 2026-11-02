@@ -250,6 +250,37 @@ pub mod method {
 
 // ─── Domain DTOs ────────────────────────────────────────────────────────────
 
+/// Which engine writes a project's index (WI-600). `auto` follows the
+/// service's `--backend`; `native` never falls back to the compatibility
+/// worker; `legacy` always uses it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BackendPreference {
+    #[default]
+    Auto,
+    Native,
+    Legacy,
+}
+
+impl BackendPreference {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BackendPreference::Auto => "auto",
+            BackendPreference::Native => "native",
+            BackendPreference::Legacy => "legacy",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "auto" => BackendPreference::Auto,
+            "native" => BackendPreference::Native,
+            "legacy" => BackendPreference::Legacy,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WatchPolicy {
@@ -404,6 +435,9 @@ pub struct ProjectRecord {
     pub backend: Backend,
     pub configuration_revision: i64,
     pub registered_at_ms: i64,
+    /// Engine choice for this project (WI-600).
+    #[serde(default)]
+    pub backend_preference: BackendPreference,
 }
 
 /// Separate state dimensions (architecture §4). M1 only populates the subset it

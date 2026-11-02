@@ -60,6 +60,11 @@ const FRESHNESS = {
   unavailable: '✕ Unavailable',
   unknown: '? Unknown',
 };
+const ENGINE = {
+  auto: 'Automatic (follow the service)',
+  native: 'Native engine only',
+  legacy: 'Compatibility worker (WrongStack engine)',
+};
 const BACKEND = {
   native: 'WrongIndex native engine',
   legacy: 'Compatibility worker (WrongStack engine)',
@@ -340,6 +345,8 @@ function detailView() {
   const policy = el('select', { 'aria-label': 'Watch policy' },
     ...['manual', 'session', 'pinned', 'disabled'].map((v) => el('option', { value: v, selected: v === p.watchPolicy }, POLICY[v])));
   const owned = s.ownership === 'owned';
+  const engine = el('select', { id: 'engine-choice' },
+    ...['auto', 'native', 'legacy'].map((v) => el('option', { value: v, selected: v === (p.backendPreference ?? 'auto') }, ENGINE[v])));
   const journal = d.ownership?.journal ?? [];
   return el('section', {},
     el('button', { class: 'btn subtle back', onclick: () => { state.selected = null; state.detail = null; render(); } }, '← All projects'),
@@ -391,6 +398,14 @@ function detailView() {
       el('button', { class: 'btn subtle', onclick: async () => {
         await call('project_action', { projectId: id, action: 'policy', arg: policy.value });
         toast(`Policy applied by the service: ${policy.value}.`);
+        await refresh();
+      } }, 'Apply')),
+    el('div', { class: 'row', style: 'margin-top:8px' },
+      el('label', { for: 'engine-choice' }, 'Engine '), engine,
+      el('button', { class: 'btn subtle', onclick: async () => {
+        if (engine.value === (p.backendPreference ?? 'auto')) return;
+        await call('project_action', { projectId: id, action: 'backend', arg: engine.value });
+        toast(`Engine choice applied by the service: ${ENGINE[engine.value]}. ${owned ? 'A reconciliation with it is queued.' : ''}`);
         await refresh();
       } }, 'Apply')),
     filesAndErrors(d, id),

@@ -185,6 +185,13 @@ enum ProjectAction {
     Unpin {
         id: String,
     },
+    /// Choose the engine that writes this project's index: auto (follow the
+    /// service), native, or legacy (the compatibility worker). Switching
+    /// fences off work admitted for the old engine and reconciles.
+    Backend {
+        id: String,
+        preference: String,
+    },
     /// Set the watch policy: session, pinned, manual, or disabled.
     Policy {
         id: String,
@@ -835,6 +842,32 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                     "{id}: claimed{} (epoch {})",
                     if maintenance { " for maintenance" } else { "" },
                     v["ownerEpoch"]
+                );
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        ProjectAction::Backend { id, preference } => {
+            if wrongindex_contracts::BackendPreference::parse(&preference).is_none() {
+                return Err(fail(
+                    exit_code::INVALID_INPUT,
+                    "backend must be auto, native, or legacy",
+                ));
+            }
+            let v = c
+                .call_raw(
+                    method::PROJECT_CONFIGURE,
+                    Some(&id),
+                    json!({"backendPreference": preference}),
+                    None,
+                )
+                .await?;
+            if json {
+                print_json(&v);
+            } else {
+                println!(
+                    "{id}: engine {} (configuration revision {}); a reconciliation is queued when the project is owned",
+                    v["backendPreference"].as_str().unwrap_or("?"),
+                    v["configurationRevision"]
                 );
             }
             Ok(exit_code::SUCCESS)

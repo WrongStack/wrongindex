@@ -13,13 +13,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use serde_json::Value;
 use wrongindex_contracts::{
-    BASELINE_PROFILE_ID, Backend, ErrorBody, ErrorCode, JobKind, JobRecord, JobState, OwnerFence,
-    Ownership, OwnershipStatus, ProjectRecord, RegisterProjectParams, WatchPolicy,
+    BASELINE_PROFILE_ID, Backend, BackendPreference, ErrorBody, ErrorCode, JobKind, JobRecord,
+    JobState, OwnerFence, Ownership, OwnershipStatus, ProjectRecord, RegisterProjectParams,
+    WatchPolicy,
 };
 
 pub use identity::{PathIdentity, resolve_identity};
 
-pub const REGISTRY_SCHEMA_VERSION: i64 = 3;
+pub const REGISTRY_SCHEMA_VERSION: i64 = 4;
 
 /// Idempotency receipts expire after this long.
 pub const RECEIPT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -119,6 +120,13 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
     ALTER TABLE project_runtime ADD COLUMN last_graph_stamp TEXT;
     ALTER TABLE project_runtime ADD COLUMN last_index_ms INTEGER;
     ALTER TABLE project_runtime ADD COLUMN last_index_error TEXT;
+    "#,
+    ),
+    (
+        4,
+        "per-project backend preference",
+        r#"
+    ALTER TABLE projects ADD COLUMN backend_preference TEXT NOT NULL DEFAULT 'auto';
     "#,
     ),
 ];
@@ -300,10 +308,11 @@ impl Registry {
             repository_identity: p.repository_identity.clone(),
             compatibility_profile: BASELINE_PROFILE_ID.to_string(),
             watch_policy: p.watch_policy,
-            // M1 has no indexing backend attached yet.
+            // Not written by WrongIndex yet (`set_backend` records the writer).
             backend: Backend::Unsupported,
             configuration_revision: 1,
             registered_at_ms: now_ms(),
+            backend_preference: BackendPreference::Auto,
         };
         tx.execute(
             "INSERT INTO projects (project_id, display_name, checkout_root, canonical_checkout_key,
@@ -376,6 +385,31 @@ impl Registry {
                 "UPDATE projects SET watch_policy = ?2, configuration_revision = configuration_revision + 1
                  WHERE project_id = ?1",
                 params![project_id, watch_policy.as_str()],
+            )
+            .map_err(db_err)?;
+        if n == 0 {
+            return Err(ErrorBody::new(
+                ErrorCode::ProjectNotFound,
+                format!("no project '{project_id}'"),
+            ));
+        }
+        self.get_project(project_id)
+    }
+
+    /// Change the project's engine choice. A configuration change: the
+    /// revision moves, so work admitted under the old choice is fenced off
+    /// (INV-14) and a running job's result is not published.
+    pub fn set_backend_preference(
+        &mut self,
+        project_id: &str,
+        preference: BackendPreference,
+    ) -> Result<ProjectRecord, ErrorBody> {
+        let n = self
+            .conn
+            .execute(
+                "UPDATE projects SET backend_preference = ?2, configuration_revision = configuration_revision + 1
+                 WHERE project_id = ?1",
+                params![project_id, preference.as_str()],
             )
             .map_err(db_err)?;
         if n == 0 {
@@ -1088,11 +1122,12 @@ struct Transition<'a> {
 
 const PROJECT_COLUMNS: &str = "project_id, display_name, checkout_root, canonical_checkout_key, \
     index_dir, canonical_index_key, repository_identity, compatibility_profile, watch_policy, \
-    backend, configuration_revision, registered_at_ms";
+    backend, configuration_revision, registered_at_ms, backend_preference";
 
 fn project_from_row(r: &Row<'_>) -> rusqlite::Result<ProjectRecord> {
     let policy: String = r.get(8)?;
     let backend: String = r.get(9)?;
+    let preference: String = r.get(12)?;
     Ok(ProjectRecord {
         project_id: r.get(0)?,
         display_name: r.get(1)?,
@@ -1104,6 +1139,7 @@ fn project_from_row(r: &Row<'_>) -> rusqlite::Result<ProjectRecord> {
         compatibility_profile: r.get(7)?,
         watch_policy: WatchPolicy::parse(&policy).unwrap_or(WatchPolicy::Disabled),
         backend: Backend::parse(&backend).unwrap_or(Backend::Unsupported),
+        backend_preference: BackendPreference::parse(&preference).unwrap_or_default(),
         configuration_revision: r.get(10)?,
         registered_at_ms: r.get(11)?,
     })
