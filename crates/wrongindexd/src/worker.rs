@@ -184,16 +184,13 @@ async fn execute(
             })?;
 
             let replace = kind == JobKind::Rebuild;
-            if replace && shared.backend == Backend::Legacy {
-                return Err(ErrorBody::new(
-                    ErrorCode::NotImplemented,
-                    "a maintenance rebuild needs the native engine (--backend auto or native)",
-                ));
-            }
             let mut native_skipped: Option<String> = None;
             if shared.backend != Backend::Legacy {
                 match run_native(shared, &project, replace).await {
                     Ok((stamp, detail)) => {
+                        // The index is now a baseline index the native writer
+                        // wrote or accepted.
+                        shared.owners.clear_maintenance(project_id);
                         let generation = publish(shared, project_id, fence, stamp.clone()).await?;
                         return Ok(json!({
                             "backend": "native",
@@ -236,6 +233,35 @@ async fn execute(
                 );
                 record_failure(shared, project_id, &msg).await;
                 return Err(ErrorBody::new(ErrorCode::Forbidden, msg));
+            }
+            if !replace && shared.owners.maintenance_pending(project_id) {
+                // Claimed for maintenance over an index the regular
+                // admission refused: WrongStack's worker may write it only
+                // once it is admissible again (normally after a rebuild).
+                // The native writer has its own stricter gate.
+                let db = Path::new(&project.index_dir).join("index.db");
+                let inspection =
+                    tokio::task::spawn_blocking(move || wrongindex_storage::inspect_index(&db))
+                        .await
+                        .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+                if inspection.write_admissible
+                    || inspection.verdict == wrongindex_storage::Verdict::Missing
+                {
+                    shared.owners.clear_maintenance(project_id);
+                } else {
+                    let msg = format!(
+                        "index verdict is {:?}: claimed for maintenance; run a rebuild (index --rebuild) before regular indexing",
+                        inspection.verdict
+                    );
+                    record_failure(shared, project_id, &msg).await;
+                    return Err(ErrorBody::new(ErrorCode::ProfileUnsupported, msg));
+                }
+            }
+            if replace && shared.backend == Backend::Legacy {
+                return Err(ErrorBody::new(
+                    ErrorCode::NotImplemented,
+                    "a maintenance rebuild needs the native engine (--backend auto or native)",
+                ));
             }
             let mut args = json!({
                 "projectRoot": project.checkout_root,

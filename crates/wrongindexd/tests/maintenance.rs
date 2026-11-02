@@ -44,9 +44,14 @@ fn copy_dir(src: &Path, dst: &Path) {
 }
 
 async fn start(home: &Path) -> (Daemon, Client) {
+    start_with(home, &["--backend", "auto"]).await
+}
+
+async fn start_with(home: &Path, extra: &[&str]) -> (Daemon, Client) {
     let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
         .arg("--data-root")
         .arg(home)
+        .args(extra)
         .env_remove("WRONGINDEX_ENGINE")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -162,6 +167,77 @@ async fn a_refused_index_is_replaced_only_by_an_explicit_rebuild_and_kept_as_bac
     let job = try_job(&mut c, &pid, json!({"kind": "full"})).await;
     assert_eq!(job["state"], "succeeded", "{job}");
     assert_eq!(job["result"]["native"]["outcome"], "unchanged", "{job}");
+}
+
+/// A maintenance claim must not let WrongStack's own engine write into the
+/// index the regular admission refused (it would migrate or rewrite it
+/// without a backup): regular write jobs on the compatibility path re-run
+/// admission until a rebuild made the index admissible (security review
+/// WI-604, "maintenance ownership outlives the rebuild").
+#[tokio::test(flavor = "multi_thread")]
+async fn a_maintenance_claim_does_not_open_the_index_to_the_compatibility_worker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    // An engine configuration that cannot start: reaching it would fail with
+    // a different error than the admission gate.
+    let none = base.join("no-engine");
+    let none = none.to_string_lossy();
+    let (_d, mut c) = start_with(
+        &base.join("home"),
+        &[
+            "--backend",
+            "legacy",
+            "--engine",
+            &none,
+            "--engine-worker",
+            &format!("{none}/worker.ts"),
+            "--bun",
+            &format!("{none}/bun.exe"),
+        ],
+    )
+    .await;
+    let root = base.join("cfg");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join("cfg-index");
+    std::fs::create_dir_all(&index).unwrap();
+    let garbage = b"this is not a sqlite database".to_vec();
+    std::fs::write(index.join("index.db"), &garbage).unwrap();
+    let reg = c
+        .call_raw(
+            method::PROJECT_REGISTER,
+            None,
+            json!({"checkoutRoot": root, "indexDir": index}),
+            None,
+        )
+        .await
+        .unwrap();
+    let pid = reg["project"]["projectId"].as_str().unwrap().to_string();
+    c.call_raw(
+        method::OWNERSHIP_ACQUIRE,
+        Some(&pid),
+        json!({"maintenance": true}),
+        None,
+    )
+    .await
+    .unwrap();
+    for params in [
+        json!({"kind": "full"}),
+        json!({"kind": "incremental", "paths": [root.join("package.json")]}),
+        json!({"kind": "reconcile"}),
+    ] {
+        let kind = params["kind"].clone();
+        let job = try_job(&mut c, &pid, params).await;
+        assert_eq!(job["state"], "failed", "{kind}: {job}");
+        assert_eq!(job["error"]["code"], "PROFILE_UNSUPPORTED", "{kind}: {job}");
+        assert!(
+            job["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("claimed for maintenance"),
+            "{kind}: {job}"
+        );
+    }
+    assert_eq!(std::fs::read(index.join("index.db")).unwrap(), garbage);
 }
 
 #[tokio::test(flavor = "multi_thread")]

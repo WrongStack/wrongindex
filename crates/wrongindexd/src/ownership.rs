@@ -6,7 +6,7 @@
 //! long as this daemon owns the index; the OS drops it if the daemon dies,
 //! and startup recovery never trusts a previous instance's recorded state.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -31,6 +31,11 @@ pub struct Owners {
     /// not end a concurrent write's protection.
     runs: Mutex<HashMap<String, usize>>,
     run_done: Notify,
+    /// Projects claimed for maintenance over an index the regular admission
+    /// refuses. Until a maintenance rebuild succeeds, other write jobs
+    /// re-run admission first (the claim must not let the compatibility
+    /// worker write into such an index). Cleared on release.
+    maintenance: Mutex<HashSet<String>>,
 }
 
 /// Held for the duration of one write run; dropping it ends the run.
@@ -108,6 +113,25 @@ impl Owners {
         }
     }
 
+    pub fn maintenance_pending(&self, project_id: &str) -> bool {
+        self.maintenance
+            .lock()
+            .map(|m| m.contains(project_id))
+            .unwrap_or(true)
+    }
+
+    pub fn clear_maintenance(&self, project_id: &str) {
+        if let Ok(mut m) = self.maintenance.lock() {
+            m.remove(project_id);
+        }
+    }
+
+    fn mark_maintenance(&self, project_id: &str) {
+        if let Ok(mut m) = self.maintenance.lock() {
+            m.insert(project_id.to_string());
+        }
+    }
+
     pub fn holds(&self, project_id: &str) -> bool {
         self.guards
             .lock()
@@ -144,6 +168,11 @@ pub async fn acquire(
     let pid = project_id.to_string();
     let project = shared.registry(move |r| r.get_project(&pid)).await?;
     if shared.owners.holds(project_id) {
+        // Re-claiming for maintenance while already owning: the caller
+        // intends a rebuild; regular writes re-check admission until then.
+        if maintenance {
+            shared.owners.mark_maintenance(project_id);
+        }
         let pid = project_id.to_string();
         return shared.registry(move |r| r.ownership_status(&pid)).await;
     }
@@ -154,9 +183,8 @@ pub async fn acquire(
     let inspection = tokio::task::spawn_blocking(move || wrongindex_storage::inspect_index(&db))
         .await
         .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
-    let admitted = inspection.write_admissible
-        || inspection.verdict == Verdict::Missing
-        || (maintenance && inspection.verdict != Verdict::NewerOrUnknownSchema);
+    let regular = inspection.write_admissible || inspection.verdict == Verdict::Missing;
+    let admitted = regular || (maintenance && inspection.verdict != Verdict::NewerOrUnknownSchema);
     if !admitted {
         return Err(ErrorBody::new(
             ErrorCode::ProfileUnsupported,
@@ -206,7 +234,10 @@ pub async fn acquire(
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Ok(evidence)))
                 .await?;
             shared.owners.insert(project_id, guard);
-            info!("ownership_acquired", {"projectId": project_id, "epoch": epoch});
+            if !regular {
+                shared.owners.mark_maintenance(project_id);
+            }
+            info!("ownership_acquired", {"projectId": project_id, "epoch": epoch, "maintenance": !regular});
             shared.events.publish(
                 "ownership.changed",
                 Some(project_id),
@@ -269,6 +300,7 @@ pub async fn release(
         return Ok(status);
     };
     let epoch = guard.info().epoch;
+    shared.owners.clear_maintenance(project_id);
     // No run is in flight (take_when_idle); close the engine's pooled handle
     // before the lock is handed back so no handle outlives ownership.
     let pid = project_id.to_string();
