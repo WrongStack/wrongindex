@@ -129,3 +129,50 @@ fn a_run_dying_at_the_publication_boundary_never_leaves_a_partial_index() {
     assert_eq!(staging_dirs(&index), 0);
     assert_complete(&index);
 }
+
+/// A maintenance rebuild dying between moving the old file aside and
+/// publishing the new one leaves no `index.db` and the backup; the next run
+/// writes a fresh index and the backup is still there.
+#[test]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "the fault hook exists in debug builds only"
+)]
+fn a_maintenance_rebuild_dying_between_its_renames_keeps_the_backup() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let index = tmp.path().join("index");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    std::fs::create_dir_all(&index).unwrap();
+    let garbage = b"not an index".to_vec();
+    std::fs::write(index.join("index.db"), &garbage).unwrap();
+
+    let out = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
+        .arg("--native-rebuild-replace")
+        .arg(&root)
+        .arg(&index)
+        .env("WRONGINDEX_NATIVE_FAULT", "between-backup-and-publish")
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "the fault must abort the run");
+    assert!(!index.join("index.db").exists());
+    let backups: Vec<PathBuf> = std::fs::read_dir(&index)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("index.db.wrongindex-backup-")
+        })
+        .collect();
+    assert_eq!(backups.len(), 1, "{backups:?}");
+    assert_eq!(std::fs::read(&backups[0]).unwrap(), garbage);
+
+    let next = rebuild(&root, &index, None).expect("recovery run");
+    assert_eq!(next["result"]["outcome"], "written", "{next}");
+    assert_complete(&index);
+    assert_eq!(std::fs::read(&backups[0]).unwrap(), garbage);
+    assert_eq!(staging_dirs(&index), 0);
+}

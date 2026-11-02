@@ -443,6 +443,11 @@ pub enum JobKind {
     Incremental,
     Full,
     Reconcile,
+    /// Maintenance: replace an index the regular writer refuses (unreadable,
+    /// another schema, extra data) with a fresh one, keeping the old file as
+    /// a backup next to it. Native engine only; needs maintenance ownership
+    /// or ordinary ownership.
+    Rebuild,
 }
 
 impl JobKind {
@@ -452,6 +457,7 @@ impl JobKind {
             JobKind::Incremental => "incremental",
             JobKind::Full => "full",
             JobKind::Reconcile => "reconcile",
+            JobKind::Rebuild => "rebuild",
         }
     }
 
@@ -461,6 +467,7 @@ impl JobKind {
             "incremental" => JobKind::Incremental,
             "full" => JobKind::Full,
             "reconcile" => JobKind::Reconcile,
+            "rebuild" => JobKind::Rebuild,
             _ => return None,
         })
     }
@@ -621,6 +628,7 @@ mod tests {
             JobKind::Incremental,
             JobKind::Full,
             JobKind::Reconcile,
+            JobKind::Rebuild,
         ] {
             assert_eq!(JobKind::parse(k.as_str()), Some(k));
         }

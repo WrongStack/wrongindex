@@ -118,7 +118,17 @@ impl Owners {
 }
 
 /// Acquire ownership of a project's index for this daemon instance.
-pub async fn acquire(shared: &Arc<Shared>, project_id: &str) -> Result<OwnershipStatus, ErrorBody> {
+///
+/// `maintenance` (explicit user request only) admits an index the regular
+/// admission refuses - unreadable, not an index, another older schema,
+/// divergent - so that a maintenance `rebuild` job may replace it while
+/// keeping it as a backup. A newer or unknown schema is refused even then:
+/// replacing it would downgrade data a newer WrongStack wrote.
+pub async fn acquire(
+    shared: &Arc<Shared>,
+    project_id: &str,
+    maintenance: bool,
+) -> Result<OwnershipStatus, ErrorBody> {
     let pid = project_id.to_string();
     let project = shared.registry(move |r| r.get_project(&pid)).await?;
     if shared.owners.holds(project_id) {
@@ -132,13 +142,23 @@ pub async fn acquire(shared: &Arc<Shared>, project_id: &str) -> Result<Ownership
     let inspection = tokio::task::spawn_blocking(move || wrongindex_storage::inspect_index(&db))
         .await
         .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
-    if !(inspection.write_admissible || inspection.verdict == Verdict::Missing) {
+    let admitted = inspection.write_admissible
+        || inspection.verdict == Verdict::Missing
+        || (maintenance && inspection.verdict != Verdict::NewerOrUnknownSchema);
+    if !admitted {
         return Err(ErrorBody::new(
             ErrorCode::ProfileUnsupported,
-            format!(
-                "index verdict is {:?}; ownership refused and the index left untouched",
-                inspection.verdict
-            ),
+            if inspection.verdict == Verdict::NewerOrUnknownSchema {
+                format!(
+                    "index verdict is {:?}: written by a newer WrongStack; update WrongIndex. The index is left untouched",
+                    inspection.verdict
+                )
+            } else {
+                format!(
+                    "index verdict is {:?}; ownership refused and the index left untouched (a maintenance claim allows a rebuild that keeps it as a backup)",
+                    inspection.verdict
+                )
+            },
         ));
     }
 
@@ -168,6 +188,7 @@ pub async fn acquire(shared: &Arc<Shared>, project_id: &str) -> Result<Ownership
             let evidence = json!({
                 "lock": index_dir.join(wrongindex_storage::owner_lock::LOCK_FILE).display().to_string(),
                 "verdict": inspection.verdict,
+                "maintenance": maintenance,
             });
             let status = shared
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Ok(evidence)))
@@ -281,7 +302,8 @@ pub async fn release_all_for_shutdown(shared: &Arc<Shared>) {
 pub async fn restore(shared: &Arc<Shared>, desired: Vec<String>) -> Value {
     let mut out = Vec::new();
     for pid in desired {
-        let result = acquire(shared, &pid).await;
+        // A maintenance claim is never restored: it was one explicit request.
+        let result = acquire(shared, &pid, false).await;
         out.push(json!({
             "projectId": pid,
             "ok": result.is_ok(),

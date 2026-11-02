@@ -59,6 +59,9 @@ pub enum ProjectAction {
     Reconcile,
     Remove,
     Policy(WatchPolicy),
+    /// Maintenance: claim (admitting an index the regular claim refuses) and
+    /// queue a `rebuild` job that keeps the old file as a backup.
+    Rebuild,
 }
 
 impl ProjectAction {
@@ -69,6 +72,7 @@ impl ProjectAction {
             "check" => Self::Check,
             "reconcile" => Self::Reconcile,
             "remove" => Self::Remove,
+            "rebuild" => Self::Rebuild,
             "policy" => Self::Policy(arg.and_then(WatchPolicy::parse).ok_or_else(|| {
                 UiError::new(
                     "INVALID_REQUEST",
@@ -92,6 +96,7 @@ impl ProjectAction {
             Self::Check => (method::INDEX_CHECK, json!({})),
             Self::Reconcile => (method::INDEX_REQUEST, json!({"kind": "reconcile"})),
             Self::Remove => (method::PROJECT_DETACH, json!({})),
+            Self::Rebuild => (method::INDEX_REQUEST, json!({"kind": "rebuild"})),
             Self::Policy(p) => (
                 method::PROJECT_CONFIGURE,
                 json!({"watchPolicy": p.as_str()}),
@@ -204,11 +209,18 @@ impl Bridge {
         action: &ProjectAction,
     ) -> Result<Value, UiError> {
         let (m, params) = action.request();
-        Ok(self
-            .client()
-            .await?
-            .call_raw(m, Some(project_id), params, None)
-            .await?)
+        let mut c = self.client().await?;
+        if *action == ProjectAction::Rebuild {
+            // Idempotent when this service already owns the index.
+            c.call_raw(
+                method::OWNERSHIP_ACQUIRE,
+                Some(project_id),
+                json!({"maintenance": true}),
+                None,
+            )
+            .await?;
+        }
+        Ok(c.call_raw(m, Some(project_id), params, None).await?)
     }
 
     pub async fn project(&self, project_id: &str) -> Result<Value, UiError> {
@@ -401,6 +413,7 @@ mod tests {
             ("check", None, method::INDEX_CHECK),
             ("reconcile", None, method::INDEX_REQUEST),
             ("remove", None, method::PROJECT_DETACH),
+            ("rebuild", None, method::INDEX_REQUEST),
             ("policy", Some("pinned"), method::PROJECT_CONFIGURE),
         ];
         for (a, arg, m) in cases {

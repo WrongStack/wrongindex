@@ -99,7 +99,7 @@ async fn execute(
             serde_json::to_value(inspection)
                 .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))
         }
-        JobKind::Full | JobKind::Incremental | JobKind::Reconcile => {
+        JobKind::Full | JobKind::Incremental | JobKind::Reconcile | JobKind::Rebuild => {
             let params = params.unwrap_or_default();
             let fence: OwnerFence =
                 serde_json::from_value(params["fence"].clone()).map_err(|_| {
@@ -120,9 +120,16 @@ async fn execute(
                 )
             })?;
 
+            let replace = kind == JobKind::Rebuild;
+            if replace && shared.backend == Backend::Legacy {
+                return Err(ErrorBody::new(
+                    ErrorCode::NotImplemented,
+                    "a maintenance rebuild needs the native engine (--backend auto or native)",
+                ));
+            }
             let mut native_skipped: Option<String> = None;
             if shared.backend != Backend::Legacy {
-                match run_native(shared, &project).await {
+                match run_native(shared, &project, replace).await {
                     Ok((stamp, detail)) => {
                         let generation = publish(shared, project_id, fence, stamp.clone()).await?;
                         return Ok(json!({
@@ -133,7 +140,9 @@ async fn execute(
                         }));
                     }
                     Err(NativeOutcome::Unsupported(why))
-                        if shared.backend == Backend::Auto && shared.engine.configured() =>
+                        if !replace
+                            && shared.backend == Backend::Auto
+                            && shared.engine.configured() =>
                     {
                         native_skipped = Some(why);
                     }
@@ -192,6 +201,7 @@ enum NativeOutcome {
 async fn run_native(
     shared: &Arc<Shared>,
     project: &wrongindex_contracts::ProjectRecord,
+    replace: bool,
 ) -> Result<(Option<String>, serde_json::Value), NativeOutcome> {
     // The compatibility worker may hold a pooled handle on this index; close
     // it so the native swap is not refused for our own reader.
@@ -200,7 +210,7 @@ async fn run_native(
         .release_store(&project.checkout_root, &project.index_dir)
         .await;
     let started = std::time::Instant::now();
-    let r = rebuild_in_child(&project.checkout_root, &project.index_dir).await;
+    let r = rebuild_in_child(&project.checkout_root, &project.index_dir, replace).await;
     let ms = started.elapsed().as_millis() as u64;
     match r {
         Ok(outcome) => {
@@ -222,17 +232,25 @@ const NATIVE_RUN_DEADLINE: Duration = Duration::from_secs(30 * 60);
 /// hostile file can overflow the stack, which aborts a process and cannot be
 /// caught. Isolation confines that to the child; the project is then treated
 /// as unsupported (the compatibility worker can still take it in `auto`).
-async fn rebuild_in_child(root: &str, index_dir: &str) -> Result<serde_json::Value, NativeOutcome> {
+async fn rebuild_in_child(
+    root: &str,
+    index_dir: &str,
+    replace: bool,
+) -> Result<serde_json::Value, NativeOutcome> {
     let exe = std::env::current_exe()
         .map_err(|e| NativeOutcome::Failed(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
     let mut cmd = tokio::process::Command::new(exe);
-    cmd.arg("--native-rebuild")
-        .arg(root)
-        .arg(index_dir)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
+    cmd.arg(if replace {
+        "--native-rebuild-replace"
+    } else {
+        "--native-rebuild"
+    })
+    .arg(root)
+    .arg(index_dir)
+    .stdin(std::process::Stdio::null())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::null())
+    .kill_on_drop(true);
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     let child = cmd.spawn().map_err(|e| {

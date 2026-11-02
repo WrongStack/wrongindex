@@ -155,6 +155,11 @@ enum ProjectAction {
     /// Take exclusive ownership of the project's index for this service.
     Claim {
         id: String,
+        /// Also admit an index the regular claim refuses (unreadable, another
+        /// schema, extra data) so that `index <id> --rebuild` can replace it,
+        /// keeping the old file as a backup. A newer schema is still refused.
+        #[arg(long)]
+        maintenance: bool,
     },
     /// Release ownership of the project's index.
     Release {
@@ -187,6 +192,9 @@ struct IndexArgs {
     check: bool,
     #[arg(long, conflicts_with = "check")]
     reconcile: bool,
+    /// Maintenance: replace the index with a fresh one even when the regular
+    /// writer refuses it; the previous file is kept as
+    /// `index.db.wrongindex-backup-<ms>`. Native engine only.
     #[arg(long, conflicts_with_all = ["check", "reconcile"])]
     rebuild: bool,
     /// Full run through the indexing engine (unchanged files are skipped).
@@ -770,9 +778,27 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
             }
             Ok(exit_code::SUCCESS)
         }
-        ProjectAction::Claim { id }
-        | ProjectAction::Release { id }
-        | ProjectAction::Owner { id } => {
+        ProjectAction::Claim { id, maintenance } => {
+            let v = c
+                .call_raw(
+                    method::OWNERSHIP_ACQUIRE,
+                    Some(&id),
+                    json!({"maintenance": maintenance}),
+                    None,
+                )
+                .await?;
+            if json {
+                print_json(&v);
+            } else {
+                println!(
+                    "{id}: claimed{} (epoch {})",
+                    if maintenance { " for maintenance" } else { "" },
+                    v["ownerEpoch"]
+                );
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        ProjectAction::Release { id } | ProjectAction::Owner { id } => {
             let (m, verb) = match &action_kind {
                 OwnerVerb::Claim => (method::OWNERSHIP_ACQUIRE, "claimed"),
                 OwnerVerb::Release => (method::OWNERSHIP_RELEASE, "released"),
@@ -858,7 +884,9 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
 // ─── index / job ────────────────────────────────────────────────────────────
 
 async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
-    let kind = if args.rebuild || args.full {
+    let kind = if args.rebuild {
+        "rebuild"
+    } else if args.full {
         "full"
     } else if !args.paths.is_empty() {
         "incremental"

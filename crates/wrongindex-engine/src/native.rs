@@ -733,6 +733,63 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     result
 }
 
+/// Outcome of [`rebuild_replacing`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Replaced {
+    #[serde(flatten)]
+    pub report: Report,
+    /// Where the previous `index.db` was kept (`None` when there was none).
+    pub backup: Option<String>,
+}
+
+/// Maintenance rebuild: write a fresh index whatever the existing file is,
+/// and keep that file as `index.db.wrongindex-backup-<ms>` next to it.
+///
+/// The new index is complete in its staging directory before anything is
+/// moved; the old file is renamed (never deleted) and the new one renamed
+/// into place. A run dying between the two renames leaves no `index.db`
+/// and the backup, which the next run treats as a fresh index. Refused while
+/// the old file has WAL/shared-memory files (another connection may use it).
+pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replaced, NativeError> {
+    let db = index_dir.join("index.db");
+    sweep_staging(index_dir);
+    let busy = |db: &Path| -> Result<(), NativeError> {
+        for suffix in ["-wal", "-shm"] {
+            let mut p = db.as_os_str().to_owned();
+            p.push(suffix);
+            if Path::new(&p).exists() {
+                return Err(NativeError::Busy(format!(
+                    "{} exists",
+                    PathBuf::from(p).display()
+                )));
+            }
+        }
+        Ok(())
+    };
+    busy(&db)?;
+    let first = scan(project_root)?;
+    let staging = index_dir.join(format!(
+        ".wrongindex-staging-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let result = (|| {
+        let report = index_fresh_from(project_root, &staging, Some(first))?;
+        busy(&db)?;
+        let mut backup = None;
+        if db.exists() {
+            let to = index_dir.join(format!("index.db.wrongindex-backup-{}", now_ms()));
+            std::fs::rename(&db, &to)?;
+            backup = Some(to.display().to_string());
+        }
+        fault_point("between-backup-and-publish");
+        std::fs::rename(staging.join("index.db"), &db)?;
+        Ok(Replaced { report, backup })
+    })();
+    let _ = std::fs::remove_dir_all(&staging);
+    result
+}
+
 /// Remove `.wrongindex-staging-*` directories left by runs that died.
 fn sweep_staging(index_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(index_dir) else {

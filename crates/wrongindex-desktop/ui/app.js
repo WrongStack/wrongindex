@@ -342,6 +342,16 @@ function detailView() {
       el('button', { class: 'btn subtle', disabled: !owned, title: owned ? null : 'Claim ownership first', onclick: act('reconcile', null, 'Reconciliation queued.') }, 'Reconcile'),
       el('button', { class: 'btn subtle', onclick: () => call('open_folder', { projectId: id }) }, 'Open folder'),
       el('button', { class: 'btn subtle', onclick: async () => {
+        const ok = await confirmDialog(
+          'Rebuild index?',
+          `A fresh index of ${p.displayName} is written from the source files and replaces the current one, even if it is unreadable, from another WrongStack version, or carries extra data. The current file is kept next to it as index.db.wrongindex-backup-<time> in ${p.indexDir}; nothing is deleted. Use this when regular indexing refuses the existing index.`,
+          'Rebuild');
+        if (!ok) return;
+        await call('project_action', { projectId: id, action: 'rebuild' });
+        toast('Maintenance rebuild queued; the previous index will be kept as a backup.');
+        await refresh();
+      } }, 'Rebuild index…'),
+      el('button', { class: 'btn subtle', onclick: async () => {
         const ok = await confirmDialog('Remove registration?', `${p.displayName} will no longer be watched or indexed by WrongIndex. The source folder and the index at ${p.indexDir} are kept.`, 'Remove');
         if (!ok) return;
         await call('project_action', { projectId: id, action: 'remove' });

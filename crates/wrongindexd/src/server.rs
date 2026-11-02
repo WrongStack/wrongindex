@@ -1059,7 +1059,8 @@ async fn dispatch_inner(
         }
         method::OWNERSHIP_ACQUIRE => {
             let pid = require_project(&req)?;
-            to_value(crate::ownership::acquire(shared, &pid).await?)
+            let maintenance = req.params["maintenance"].as_bool().unwrap_or(false);
+            to_value(crate::ownership::acquire(shared, &pid, maintenance).await?)
         }
         method::OWNERSHIP_RELEASE => {
             let pid = require_project(&req)?;

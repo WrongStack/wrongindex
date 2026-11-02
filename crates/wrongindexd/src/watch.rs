@@ -437,7 +437,7 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
         }
         // Watching implies writing: take ownership first.
         if !shared.owners.holds(&p.project_id)
-            && let Err(e) = crate::ownership::acquire(shared, &p.project_id).await
+            && let Err(e) = crate::ownership::acquire(shared, &p.project_id, false).await
         {
             set_failure(shared, &p.project_id, format!("ownership: {e}"));
             continue;

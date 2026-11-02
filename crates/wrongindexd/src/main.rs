@@ -54,6 +54,34 @@ pub const EXIT_ALREADY_RUNNING: u8 = 3;
 
 /// `wrongindexd --native-rebuild <root> <index-dir>`: one isolated native run
 /// for the daemon (see `worker::rebuild_in_child`). Prints a single JSON reply.
+/// `wrongindexd --native-rebuild-replace <root> <index-dir>`: one isolated
+/// maintenance rebuild (fresh index, previous file kept as a backup).
+fn native_replace_child(root: &str, index_dir: &str) -> ExitCode {
+    use wrongindex_engine::native::{NativeError, rebuild_replacing};
+    let reply = match rebuild_replacing(std::path::Path::new(root), std::path::Path::new(index_dir))
+    {
+        Ok(replaced) => {
+            let mut r = serde_json::to_value(&replaced).unwrap_or_default();
+            r["outcome"] = serde_json::json!("replaced");
+            serde_json::json!({"ok": true, "result": r})
+        }
+        Err(e) => {
+            let kind = match &e {
+                NativeError::Unsupported(_) => "unsupported",
+                NativeError::Busy(_) => "busy",
+                _ => "error",
+            };
+            let message = match &e {
+                NativeError::Unsupported(m) | NativeError::Busy(m) => m.clone(),
+                other => other.to_string(),
+            };
+            serde_json::json!({"ok": false, "kind": kind, "message": message})
+        }
+    };
+    println!("{reply}");
+    ExitCode::SUCCESS
+}
+
 fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
     use wrongindex_engine::native::{NativeError, Rebuild, rebuild};
     let reply = match rebuild(std::path::Path::new(root), std::path::Path::new(index_dir)) {
@@ -85,6 +113,9 @@ fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
+    if raw.get(1).map(String::as_str) == Some("--native-rebuild-replace") && raw.len() == 4 {
+        return native_replace_child(&raw[2], &raw[3]);
+    }
     if raw.get(1).map(String::as_str) == Some("--native-rebuild") && raw.len() == 4 {
         return native_rebuild_child(&raw[2], &raw[3]);
     }
