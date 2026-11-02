@@ -156,9 +156,11 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
         .iter()
         .filter(|f| {
             std::fs::symlink_metadata(f).is_ok_and(|m| m.file_type().is_symlink())
-                && std::fs::canonicalize(f).map_or(true, |real| {
-                    let real = strip_verbatim(&real);
-                    let key = comparable(&real);
+                // Resolved by reading link targets: a link to a share is
+                // never opened (WI-604) and counts as outside.
+                && wrongindex_storage::git_containment::resolve_links_locally(Path::new(f))
+                    .map_or(true, |real| {
+                    let key = comparable(&real.to_string_lossy());
                     key != root_key
                         && !key.starts_with(&format!("{root_key}{}", std::path::MAIN_SEPARATOR))
                 })
@@ -213,6 +215,7 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
     })
 }
 
+#[cfg(test)]
 fn strip_verbatim(p: &Path) -> String {
     let s = p.to_string_lossy().into_owned();
     if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {

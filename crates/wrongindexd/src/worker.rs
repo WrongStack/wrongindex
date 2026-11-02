@@ -159,6 +159,22 @@ async fn execute(
                 }
             }
 
+            // WrongStack's own engine follows Git metadata wherever it
+            // points; never hand it a checkout whose metadata names a share
+            // (WI-604; the native path already refuses it in discovery).
+            let root = project.checkout_root.clone();
+            let remote = tokio::task::spawn_blocking(move || {
+                wrongindex_storage::wrongstack_paths::remote_git_link(std::path::Path::new(&root))
+            })
+            .await
+            .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+            if let Some(target) = remote {
+                let msg = format!(
+                    "the checkout's Git metadata names a network or device path ({target}); refusing to follow it"
+                );
+                record_failure(shared, project_id, &msg).await;
+                return Err(ErrorBody::new(ErrorCode::Forbidden, msg));
+            }
             let mut args = json!({
                 "projectRoot": project.checkout_root,
                 "indexDir": project.index_dir,

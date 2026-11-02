@@ -118,45 +118,12 @@ pub fn on_disk_case(root: &str) -> String {
     }
 }
 
-/// A path naming a network share or a device namespace (`\\server\share`,
-/// `//server/share`, `\\?\`, `\\.\`). Merely opening one makes Windows
-/// connect and authenticate as the user.
-fn is_remote_or_device(p: &str) -> bool {
-    let b = p.as_bytes();
-    b.len() >= 2 && matches!(b[0], b'\\' | b'/') && matches!(b[1], b'\\' | b'/')
-}
-
-/// The `gitdir:` target of a `.git` file, if any.
-fn gitdir_link(dot_git: &Path) -> Option<String> {
-    if !std::fs::symlink_metadata(dot_git).ok()?.is_file() {
-        return None;
-    }
-    let line = std::fs::read_to_string(dot_git).ok()?;
-    let line = line.trim();
-    line.get(..7)
-        .filter(|p| p.eq_ignore_ascii_case("gitdir:"))
-        .map(|_| line[7..].trim().to_string())
-}
-
-/// Containment (security review WI-604): the `.git` Git would use for
-/// `checkout` (the nearest one in it or an ancestor) is a file whose
-/// `gitdir:` names a network share or device while the checkout itself is
-/// local. Following it - by WrongIndex or by `git` - would send the user's
-/// credentials to that host. A cloned repository never contains a `.git`
-/// file; such a folder came from an archive or a copy. Returns the target.
+/// Containment (security review WI-604): the first reference in the Git
+/// metadata Git would use for `checkout` that names a network share or a
+/// device (see [`crate::git_containment`]), if any. Following it - by
+/// WrongIndex or by `git` - would send the user's credentials to that host.
 pub fn remote_git_link(checkout: &Path) -> Option<String> {
-    if is_remote_or_device(&strip_verbatim(checkout)) {
-        return None;
-    }
-    let mut dir = Some(checkout);
-    while let Some(d) = dir {
-        let dot_git = d.join(".git");
-        if std::fs::symlink_metadata(&dot_git).is_ok() {
-            return gitdir_link(&dot_git).filter(|t| is_remote_or_device(t));
-        }
-        dir = d.parent();
-    }
-    None
+    crate::git_containment::vet_checkout(checkout, true).err()
 }
 
 /// `gitIdentityRoot`: map a linked Git worktree to its main checkout.
@@ -165,6 +132,8 @@ pub fn remote_git_link(checkout: &Path) -> Option<String> {
 fn git_identity_root(checkout: &Path) -> PathBuf {
     let dot_git = checkout.join(".git");
     let attempt = || -> Option<PathBuf> {
+        // Never touch Git metadata that leads to a share (WI-604).
+        crate::git_containment::vet_checkout(checkout, false).ok()?;
         if !std::fs::metadata(&dot_git).ok()?.is_file() {
             return None;
         }
@@ -174,8 +143,7 @@ fn git_identity_root(checkout: &Path) -> PathBuf {
             .get(..7)
             .filter(|p| p.eq_ignore_ascii_case("gitdir:"))
             .map(|_| line[7..].trim())?;
-        if rest.is_empty() || remote_git_link(checkout).is_some() {
-            // Never touch a share named by a `.git` file (see `remote_git_link`).
+        if rest.is_empty() {
             return None;
         }
         let git_dir = node_resolve(&checkout.join(rest));

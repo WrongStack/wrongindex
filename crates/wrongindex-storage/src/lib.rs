@@ -5,6 +5,7 @@
 //! write primitives arrive with WI-108 behind ownership and profile admission.
 
 pub mod content_hash;
+pub mod git_containment;
 pub mod inspect;
 pub mod owner_lock;
 pub mod profile;
