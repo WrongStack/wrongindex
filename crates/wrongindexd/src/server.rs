@@ -757,7 +757,7 @@ async fn dispatch_inner(
                     json!({
                         "backend": "native",
                         "selection": shared.backend.as_str(),
-                        "writes": "every WrongStack language (Python and Go through their toolchains, tree-sitter languages through bun or node); fresh builds, in-place incremental runs and no-ops as WrongStack; indexes with enrichment data, extra schema or another version are left to the compatibility worker",
+                        "writes": "every WrongStack language (Python and Go through their toolchains, tree-sitter languages through bun or node); fresh builds, in-place incremental runs and no-ops as WrongStack; enrichment rows kept as WrongStack keeps them; indexes with extra schema or another version are left to the compatibility worker",
                         "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),

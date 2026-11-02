@@ -592,54 +592,149 @@ fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
     ));
 }
 
-/// Maintenance replaces what the regular writer refuses, keeping a backup,
-/// but never an index a newer WrongStack wrote (security review WI-604).
-/// Concepts and vectors WrongStack's enrichment passes wrote are never
-/// dropped: a run over such an index is refused and the file left as is.
-#[test]
-fn an_index_with_enrichment_data_is_left_to_the_preserving_writer() {
-    let tmp = tempfile::tempdir().unwrap();
-    let base = long(tmp.path());
-    let root = base.join("p");
-    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
-    for (table, insert) in [
-        (
-            "file_concepts",
-            "INSERT INTO file_concepts(file) SELECT file FROM files LIMIT 1",
-        ),
-        (
-            "file_vectors",
-            "INSERT INTO file_vectors(file, vector) SELECT file, x'00' FROM files LIMIT 1",
-        ),
+/// Rows WrongStack's enrichment passes (`/codebase-map --enrich/--embed`)
+/// write: concepts, file vectors, subsystems, concept edges.
+const ENRICH: [&str; 4] = [
+    "INSERT INTO file_concepts(file, content_hash, summary, state, model, updated_at) SELECT file, content_hash, 'what it is for', 'ready', 'm', 7 FROM files ORDER BY file LIMIT 2",
+    "INSERT INTO file_vectors(file, vector, source_hash, provider) SELECT file, x'0001ff', 'h', 'p' FROM files ORDER BY file LIMIT 1",
+    "INSERT INTO subsystems(id, name, summary, member_files, model, updated_at) VALUES ('core', 'Core', 's', '[\"a\"]', 'm', 9)",
+    "INSERT INTO concept_edges(from_id, to_id, relation) VALUES ('core', 'ui', 'uses')",
+];
+
+fn enrichment(index: &Path) -> Vec<String> {
+    let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    let mut out = Vec::new();
+    for t in [
+        "file_concepts",
+        "file_vectors",
+        "subsystems",
+        "concept_edges",
     ] {
-        let index = base.join(table);
-        std::fs::create_dir_all(&index).unwrap();
-        assert!(matches!(
-            rebuild(&root, &index).unwrap(),
-            Rebuild::Written(_)
-        ));
-        {
-            let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
-            c.execute(insert, [])
-                .unwrap_or_else(|e| panic!("{table}: {e}"));
-            c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+        let mut st = c
+            .prepare(&format!("SELECT * FROM {t} ORDER BY 1, 2"))
+            .unwrap();
+        let n = st.column_count();
+        let mut rows = st.query([]).unwrap();
+        while let Some(r) = rows.next().unwrap() {
+            let cells: Vec<String> = (0..n)
+                .map(|i| format!("{:?}", r.get::<_, rusqlite::types::Value>(i).unwrap()))
+                .collect();
+            out.push(format!("{t}: {}", cells.join(" | ")));
         }
-        // A change that would otherwise be written.
-        std::fs::write(
-            root.join(format!("{table}.json")),
-            "{\"x\": 1}
-",
-        )
-        .unwrap();
-        let before = std::fs::read(index.join("index.db")).unwrap();
-        match rebuild(&root, &index) {
-            Err(NativeError::Unsupported(why)) => assert!(why.contains(table), "{why}"),
-            other => panic!("{table}: expected a refusal, got {other:?}"),
-        }
-        assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
     }
+    out
 }
 
+/// An enriched index whose project then changes, as WrongStack's indexer
+/// finds it after `/codebase-map --enrich/--embed`.
+fn enriched_index(base: &Path, name: &str) -> (PathBuf, PathBuf, Vec<String>) {
+    let root = base.join(name);
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    let index = base.join(format!("{name}-idx"));
+    std::fs::create_dir_all(&index).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    {
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        for sql in ENRICH {
+            assert!(c.execute(sql, []).unwrap() > 0, "{sql}");
+        }
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
+    let rows = enrichment(&index);
+    assert_eq!(rows.len(), 5, "{rows:?}");
+    std::fs::write(root.join("added.json"), "{\"x\": 1}\n").unwrap();
+    (root, index, rows)
+}
+
+/// WI-512: WrongStack's indexer never writes the enrichment tables, so its
+/// runs keep their rows verbatim; the native writer does the same, in place
+/// (incremental) and when it builds a fresh file (rows carried across).
+#[test]
+fn enrichment_rows_survive_native_runs_as_they_do_wrongstack_runs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+
+    let (root, index, rows) = enriched_index(&base, "in-place");
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Updated { .. }
+    ));
+    assert_eq!(enrichment(&index), rows);
+
+    // A state the incremental writer does not take (SAGE memories present):
+    // a fresh file, published with the rows carried over.
+    let (root, index, rows) = enriched_index(&base, "fresh");
+    std::fs::create_dir_all(root.join(".wrongstack/memories")).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    assert_eq!(enrichment(&index), rows);
+    assert!(
+        index_files(&index)
+            .iter()
+            .any(|f| f.ends_with("added.json")),
+        "the change itself was indexed: {:?}",
+        index_files(&index)
+    );
+}
+
+/// A relation-graph version change makes WrongStack clear the whole index,
+/// enrichment included (`clearAll`); a maintenance rebuild is WrongStack's
+/// forced run, which clears too (the old file is kept as a backup).
+#[test]
+fn enrichment_is_dropped_exactly_where_wrongstack_clears_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+
+    let (root, index, _) = enriched_index(&base, "graph-stale");
+    {
+        let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        c.execute(
+            "UPDATE metadata SET value = '1' WHERE key = 'relation_graph_version'",
+            [],
+        )
+        .unwrap();
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    assert!(enrichment(&index).is_empty());
+
+    let (root, index, _) = enriched_index(&base, "forced");
+    let replaced = rebuild_replacing(&root, &index).unwrap();
+    assert!(enrichment(&index).is_empty());
+    let backup = PathBuf::from(replaced.backup.expect("old file kept"));
+    assert_eq!(
+        enrichment_at(&backup).len(),
+        5,
+        "the backup still holds the enrichment"
+    );
+}
+
+fn enrichment_at(db: &Path) -> Vec<String> {
+    let dir = db.parent().unwrap().join("backup-view");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(db, dir.join("index.db")).unwrap();
+    enrichment(&dir)
+}
+
+fn index_files(index: &Path) -> Vec<String> {
+    let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+    let mut st = c.prepare("SELECT file FROM files ORDER BY file").unwrap();
+    st.query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// Maintenance replaces what the regular writer refuses, keeping a backup,
+/// but never an index a newer WrongStack wrote (security review WI-604).
 #[test]
 fn maintenance_rebuild_never_replaces_a_newer_schema() {
     let tmp = tempfile::tempdir().unwrap();

@@ -802,6 +802,8 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     // Read (and hash) before parsing anything: an unchanged project costs a
     // discovery and a read, and a changed one is not scanned twice.
     let mut first = scan(project_root, &trusted_stamps(&db))?;
+    // Enrichment rows to carry into a fresh file (see `carry_enrichment`).
+    let mut carry = false;
     // One look at the existing file decides: no-op, refuse, or replace.
     // The native writer replaces the whole file with a fresh baseline-schema
     // index, which is only safe for an index it reproduces exactly: extra
@@ -822,11 +824,17 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
                 files,
                 graph_stamp,
                 git_blobs,
+                ..
             } if files == first.hashes() && !first.stamps_differ(&git_blobs) => {
                 return Ok(Rebuild::Unchanged { graph_stamp });
             }
-            Existing::Baseline { .. } => {
-                // WrongStack's own run here is incremental, in place.
+            Existing::Baseline {
+                carry_enrichment, ..
+            } => {
+                carry = carry_enrichment;
+                // WrongStack's own run here is incremental, in place. It
+                // never touches the enrichment tables, and neither does the
+                // native incremental writer.
                 match incremental::applicable(project_root, &db) {
                     Ok(None) => {
                         let out = incremental::update(project_root, &db, first)?;
@@ -859,6 +867,9 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     first.read_all()?;
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
+        if carry {
+            carry_enrichment(&db, &staging.join("index.db"))?;
+        }
         for suffix in ["-wal", "-shm"] {
             let mut p = db.as_os_str().to_owned();
             p.push(suffix);
@@ -1026,6 +1037,11 @@ enum Existing {
         graph_stamp: Option<String>,
         /// `files.git_blob` per file.
         git_blobs: std::collections::HashMap<String, String>,
+        /// The enrichment tables hold rows WrongStack's run would keep: its
+        /// indexer never writes them (`/codebase-map --enrich/--embed` own
+        /// them) and only a relation-graph version change clears them, with
+        /// everything else. A fresh native file must carry them over.
+        carry_enrichment: bool,
     },
     /// Anything else, with a reason ("has schema version 4", ...).
     Other(String),
@@ -1103,25 +1119,27 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
         )));
     }
     // Enrichment WrongStack keeps across its own runs (`/codebase-map
-    // --enrich/--embed`): the native writer neither maintains nor carries
-    // it, so an index holding any is left to the preserving worker.
-    let mut enriched: Vec<&str> = Vec::new();
+    // --enrich/--embed`). Its indexer leaves these rows alone (stale marking
+    // and pruning run in the enrichment pass), except that a relation-graph
+    // version change clears the whole index first (`clearAll`).
+    let mut enriched = false;
     for table in ENRICHMENT_TABLES {
         let any: i64 = conn.query_row(
             &format!("SELECT EXISTS(SELECT 1 FROM \"{table}\")"),
             [],
             |r| r.get(0),
         )?;
-        if any == 1 {
-            enriched.push(table);
-        }
+        enriched |= any == 1;
     }
-    if !enriched.is_empty() {
-        return Ok(Existing::Other(format!(
-            "carries enrichment data the native writer does not maintain ({})",
-            enriched.join(", ")
-        )));
-    }
+    let graph_current = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'relation_graph_version'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .as_deref()
+        == Some("2");
     let mut files: Vec<(String, String)> = Vec::new();
     let mut git_blobs: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     {
@@ -1146,7 +1164,64 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
         files,
         graph_stamp,
         git_blobs,
+        carry_enrichment: enriched && graph_current,
     })
+}
+
+/// Copy the enrichment tables' rows, verbatim, from the published index into
+/// a freshly built one before it is published (WI-512). Same schema on both
+/// sides (the baseline), so rows go across column for column.
+fn carry_enrichment(from: &Path, to: &Path) -> Result<(), NativeError> {
+    let src = Connection::open_with_flags(
+        from,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    src.pragma_update(None, "query_only", true)?;
+    let mut dst = Connection::open_with_flags(
+        to,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    let tx = dst.transaction()?;
+    for table in ENRICHMENT_TABLES {
+        let mut read = src.prepare(&format!("SELECT * FROM \"{table}\""))?;
+        let n = read.column_count();
+        let cols = read
+            .column_names()
+            .map(|c| format!("\"{c}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let marks = (1..=n)
+            .map(|i| format!("?{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut write = tx.prepare(&format!(
+            "INSERT INTO \"{table}\" ({cols}) VALUES ({marks})"
+        ))?;
+        let mut rows = read.query([])?;
+        while let Some(r) = rows.next()? {
+            let values = (0..n)
+                .map(|i| r.get::<_, rusqlite::types::Value>(i))
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            write.execute(rusqlite::params_from_iter(values))?;
+        }
+    }
+    // WrongStack's closing `PRAGMA optimize` analyzes a table with rows and
+    // no statistics, these included (see `write_stat1`).
+    tx.execute_batch("PRAGMA analysis_limit=2000")?;
+    for table in ENRICHMENT_TABLES {
+        let any: i64 = tx.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM \"{table}\")"),
+            [],
+            |r| r.get(0),
+        )?;
+        if any == 1 {
+            tx.execute_batch(&format!("ANALYZE \"{table}\""))?;
+        }
+    }
+    tx.execute_batch("PRAGMA analysis_limit=0")?;
+    tx.execute_batch("DROP TABLE IF EXISTS sqlite_stat4")?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Remove a database this run created and never committed.

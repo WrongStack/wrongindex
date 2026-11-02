@@ -1681,3 +1681,92 @@ fn native_incremental_matches_wrongstack_across_languages() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// WI-512 against WrongStack itself: an enriched index (concepts, file
+/// vectors, subsystems, concept edges) goes through WrongStack's runs and
+/// the native ones - in place, and through a fresh native file - and the
+/// databases stay identical, enrichment rows included.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE and bun"]
+fn native_keeps_enrichment_as_wrongstack_does() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("project");
+    scenario_npm_monorepo(&root);
+    let ws = base.join("idx-wrongstack");
+    let native = base.join("idx-native");
+    wrongstack_index(&root, &ws);
+    {
+        let c = rusqlite::Connection::open(ws.join("index.db")).unwrap();
+        for sql in [
+            "INSERT INTO file_concepts(file, content_hash, summary, state, model, updated_at) SELECT file, content_hash, 'purpose of ' || file, 'ready', 'm', 7 FROM files ORDER BY file LIMIT 5",
+            "INSERT INTO file_vectors(file, vector, source_hash, provider) SELECT file, x'0001ff', 'h', 'p' FROM files ORDER BY file LIMIT 3",
+            "INSERT INTO subsystems(id, name, summary, member_files, model, updated_at) VALUES ('core', 'Core', 's', '[]', 'm', 9)",
+            "INSERT INTO concept_edges(from_id, to_id, relation) VALUES ('core', 'ui', 'uses')",
+        ] {
+            assert!(c.execute(sql, []).unwrap() > 0, "{sql}");
+        }
+        c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+    }
+    copy_index(&ws, &native);
+    let mut failures = Vec::new();
+    // In place: an edit, then deleting a file that has a concept row.
+    let first = source_files(&root)
+        .into_iter()
+        .find(|p| p.extension().is_some_and(|e| e == "ts") && !is_marker(p))
+        .unwrap();
+    let text = std::fs::read_to_string(&first).unwrap();
+    std::fs::write(&first, format!("{text}\n{}", appended_decl(&first, 1))).unwrap();
+    failures.extend(incremental_round("enriched/edit", &root, &ws, &native));
+    std::fs::remove_file(&first).unwrap();
+    failures.extend(incremental_round("enriched/delete", &root, &ws, &native));
+    // A fresh native file (SAGE memories present) vs WrongStack in place.
+    std::fs::create_dir_all(root.join(".wrongstack/memories")).unwrap();
+    write(
+        &root,
+        "packages/extra/src/added.ts",
+        "export const added = 1;\n",
+    );
+    wrongstack_index(&root, &ws);
+    let n = wrongindex_engine::native::rebuild(&root, &native).unwrap();
+    let outcome = serde_json::to_value(&n).unwrap();
+    let v = Volatile::logical();
+    let want = dump(&ws.join("index.db"), &v).unwrap();
+    let got = dump(&native.join("index.db"), &v).unwrap();
+    // The fresh file is the native fallback for a state WrongStack heals in
+    // place (symbol ids and statistics of the rewritten tables differ by
+    // design); what WI-512 needs is the enrichment layer itself.
+    const ENRICHMENT: [&str; 4] = [
+        "file_concepts",
+        "file_vectors",
+        "subsystems",
+        "concept_edges",
+    ];
+    let only = |d: &wrongindex_engine::dbdump::Dump| {
+        let mut d = d.clone();
+        d.retain(|t, _| ENRICHMENT.contains(&t.as_str()) || t == "sqlite_stat1");
+        if let Some(stat) = d.get_mut("sqlite_stat1") {
+            stat.retain(|r| ENRICHMENT.contains(&r["tbl"].as_str().unwrap_or("")));
+        }
+        d
+    };
+    let d = diff(&only(&want), &only(&got), 8);
+    eprintln!(
+        "enriched/fresh: native {outcome} | {} enrichment differences",
+        d.len()
+    );
+    failures.extend(d.into_iter().map(|l| format!("enriched/fresh: {l}")));
+    let rows: i64 = rusqlite::Connection::open(native.join("index.db"))
+        .unwrap()
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM file_concepts) + (SELECT COUNT(*) FROM file_vectors)",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        rows, 8,
+        "enrichment kept, orphans included (WrongStack prunes them in its enrichment pass)"
+    );
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

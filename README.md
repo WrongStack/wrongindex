@@ -10,7 +10,8 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
 - Ownership of each index:
   - an OS lock, owner epochs and fencing;
   - a consistent backup at every ownership transfer, and a `restore` job to bring one back;
-  - refusal of indexes the native writer cannot reproduce: another schema version, extra data, or WrongStack enrichment rows (those are left to the preserving compatibility worker).
+  - refusal of indexes the native writer cannot reproduce (another schema version, extra schema objects);
+  - WrongStack enrichment rows (`/codebase-map --enrich/--embed`) kept across native runs exactly as WrongStack's indexer keeps them.
 - Watching: a per-project file watcher with debounced dirty sets, session leases and watch policies (`manual`, `session`, `pinned`, `disabled`).
   - A checkout root that disappears is reported as unavailable and nothing is deleted; watching resumes when the root returns.
   - After a suspend, every watched project is reconciled.

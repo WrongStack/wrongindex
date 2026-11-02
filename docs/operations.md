@@ -80,7 +80,7 @@ While the service owns an index, it is the only writer.
 
 - **Claiming** (`ownership.acquire`, automatic for `pinned`/`session`):
   1. The index is inspected read-only.
-  2. An index of another schema version, with extra tables, or with WrongStack enrichment data is refused for the native writer and left untouched.
+  2. An index of another schema version or with extra tables is refused for the native writer and left untouched. WrongStack enrichment rows (concepts, file vectors, subsystems, concept edges) are kept exactly as WrongStack's own indexer keeps them: never rewritten by an indexing run, cleared only by a forced rebuild (the backup keeps them).
   3. A consistent backup is taken (`VACUUM INTO`) before anything is written. If the backup fails, the transfer does not happen.
 - **Releasing** (`ownership.release`) hands the index back. WrongStack in `local` or `auto` mode then writes it again.
 - **Backups**: `wrongindex index <id> --backups` lists them.
@@ -130,7 +130,6 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `freshness: unavailable`, `watchHealth: root_unavailable` | The checkout folder is gone (moved, drive removed) | Restore it; watching resumes within seconds. Nothing was deleted. |
 | `OWNER_CONFLICT` | Another process (another data root, or a claim not released) holds the index | Release it there, or stop that service |
 | `PROFILE_UNSUPPORTED` / "newer WrongStack" | The index was written by a newer or unknown schema | Update WrongIndex; the index is left untouched |
-| `NOT_IMPLEMENTED` "native engine: … enrichment data" | The index carries concepts or vectors WrongStack maintains | Start the service with `--engine <WrongStack dir>` (the compatibility worker preserves them), or leave the project to WrongStack |
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open | Close WrongStack clients of that project, then retry |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |
