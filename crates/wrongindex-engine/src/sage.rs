@@ -594,15 +594,50 @@ pub struct Remapped {
     pub updated_jsonl_count: usize,
 }
 
-/// `remapAnchoredSageMemories(projectRoot, moves)`. `memories` is the
-/// project's `.wrongstack/memories` directory (already vetted).
-pub fn remap(memories: &Path, moves: &[Move]) -> Remapped {
+/// The link-free real path of `p` when it stays inside the checkout
+/// (`project_root`, or the root with its own links resolved); `None`
+/// otherwise. Links are resolved by reading their targets, never opened
+/// (security review WI-604), so nothing outside the checkout is written.
+fn contained(project_root: &Path, p: &Path) -> Option<std::path::PathBuf> {
+    use wrongindex_storage::git_containment::resolve_links_locally;
+    use wrongindex_storage::wrongstack_paths::node_resolve;
+    let real = resolve_links_locally(p).ok()?;
+    let key = |p: &Path| {
+        let s = node_resolve(p).to_string_lossy().into_owned();
+        if cfg!(windows) { s.to_lowercase() } else { s }
+    };
+    let f = key(&real);
+    let sep = std::path::MAIN_SEPARATOR;
+    let roots = [
+        Some(project_root.to_path_buf()),
+        resolve_links_locally(project_root).ok(),
+    ];
+    let inside = roots.iter().flatten().any(|root| {
+        let r = key(root);
+        f.starts_with(&format!("{}{sep}", r.trim_end_matches(sep)))
+    });
+    inside.then_some(real)
+}
+
+/// `remapAnchoredSageMemories(projectRoot, moves)` for the checkout at
+/// `project_root` (its `.wrongstack/memories`). Each store is vetted right
+/// before it is opened: a store (or an SQLite journal beside it) that is a
+/// link, or that resolves outside the checkout, is left alone.
+pub fn remap(project_root: &Path, moves: &[Move]) -> Remapped {
     let mut r = Remapped::default();
+    let memories = project_root.join(".wrongstack").join("memories");
     if moves.is_empty() || !memories.is_dir() {
         return r;
     }
-    let db = memories.join("sage.db");
-    if db.exists() {
+    let is_link = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
+    let db = contained(project_root, &memories.join("sage.db")).filter(|db| {
+        ["-wal", "-shm", "-journal"].iter().all(|suffix| {
+            let mut s = db.as_os_str().to_owned();
+            s.push(suffix);
+            !is_link(Path::new(&s))
+        })
+    });
+    if let Some(db) = db.filter(|db| db.is_file()) {
         let _ = (|| -> rusqlite::Result<()> {
             let conn = Connection::open_with_flags(
                 &db,
@@ -634,8 +669,8 @@ pub fn remap(memories: &Path, moves: &[Move]) -> Remapped {
             Ok(())
         })();
     }
-    let jsonl = memories.join("memories.jsonl");
-    if jsonl.is_file()
+    if let Some(jsonl) = contained(project_root, &memories.join("memories.jsonl"))
+        && jsonl.is_file()
         && let Ok(bytes) = std::fs::read(&jsonl)
     {
         let raw = String::from_utf8_lossy(&bytes).into_owned();
@@ -659,10 +694,30 @@ pub fn remap(memories: &Path, moves: &[Move]) -> Remapped {
             })
             .collect();
         if mutated {
-            let _ = std::fs::write(&jsonl, next.join("\n"));
+            write_replacing(&jsonl, next.join("\n").as_bytes());
         }
     }
     r
+}
+
+/// Replace `path` (link-free, vetted) with `bytes`: written beside it and
+/// renamed over it, so a link swapped in meanwhile is replaced, not followed.
+/// A rename refused because another process holds the file open falls back
+/// to writing the vetted path in place, as WrongStack's `writeFileSync` does.
+fn write_replacing(path: &Path, bytes: &[u8]) {
+    let Some(dir) = path.parent() else { return };
+    let tmp = dir.join(format!(
+        ".memories.jsonl.wrongindex-{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+    if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, path).is_ok() {
+        return;
+    }
+    let _ = std::fs::remove_file(&tmp);
+    let unchanged_target = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file());
+    if unchanged_target {
+        let _ = std::fs::write(path, bytes);
+    }
 }
 
 /// The `toRel` of `finalizeIndexRun` for snapshot files.

@@ -881,3 +881,71 @@ fn targeted_paths_never_leave_the_checkout_through_links() {
         "{r:?}"
     );
 }
+
+/// Security review of the SAGE heal (WI-604): a memory store that is a link
+/// out of the checkout is never written; a regular store is healed. The
+/// link part needs the symbolic-link privilege (CI runs elevated); without
+/// it that part is reported NOT RUN and the regular-store part still runs.
+#[cfg(windows)]
+#[test]
+fn sage_heal_never_writes_through_a_link_out_of_the_checkout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/basic-ts"), &root);
+    let index = base.join("idx");
+    std::fs::create_dir_all(&index).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    let mem = root.join(".wrongstack").join("memories");
+    std::fs::create_dir_all(&mem).unwrap();
+    let record = |sym: &str| {
+        format!(
+            "{{\"text\":\"greets\",\"anchors\":[{{\"path\":\"src/greet.ts\",\"symbol\":\"{sym}\"}}]}}\n"
+        )
+    };
+    let rename = |from: &str, to: &str| {
+        let p = root.join("src/greet.ts");
+        let t = std::fs::read_to_string(&p).unwrap();
+        std::fs::write(
+            &p,
+            t.replace(&format!("function {from}("), &format!("function {to}(")),
+        )
+        .unwrap();
+    };
+    let outside = base.join("outside.jsonl");
+    std::fs::write(&outside, record("greet")).unwrap();
+    let healed = |r: Rebuild| match r {
+        Rebuild::Updated { report, .. } => report.sage_healed,
+        other => panic!("expected an in-place run, got {other:?}"),
+    };
+    let mut from = "greet";
+    match std::os::windows::fs::symlink_file(&outside, mem.join("memories.jsonl")) {
+        Ok(()) => {
+            rename("greet", "greetPerson");
+            from = "greetPerson";
+            let h = healed(rebuild(&root, &index).unwrap()).expect("a move was detected");
+            assert_eq!(h.updated_jsonl_count, 0);
+            assert_eq!(std::fs::read_to_string(&outside).unwrap(), record("greet"));
+            std::fs::remove_file(mem.join("memories.jsonl")).unwrap();
+        }
+        Err(e) => eprintln!("NOT RUN (link part): cannot create a file symlink: {e}"),
+    }
+    std::fs::write(mem.join("memories.jsonl"), record(from)).unwrap();
+    rename(from, "greetAgain");
+    let h = healed(rebuild(&root, &index).unwrap()).expect("a move was detected");
+    assert_eq!(h.updated_jsonl_count, 1);
+    assert_eq!(
+        std::fs::read_to_string(mem.join("memories.jsonl")).unwrap(),
+        record("greetAgain").trim_end().to_string() + "\n"
+    );
+    assert!(
+        std::fs::read_dir(&mem)
+            .unwrap()
+            .flatten()
+            .all(|e| !e.file_name().to_string_lossy().ends_with(".tmp")),
+        "no temporary file left behind"
+    );
+}

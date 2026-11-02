@@ -1196,10 +1196,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     // commit; here a failed commit never leaves anchors pointing at rows
     // that were not published). Best effort, like WrongStack's.
     let mut sage_healed = None;
-    if let Some(dir) = &heal
-        && !prev_snap.is_empty()
-        && !next_snap.is_empty()
-    {
+    if heal.is_some() && !prev_snap.is_empty() && !next_snap.is_empty() {
         let t = std::time::Instant::now();
         let root = project_root.to_string_lossy();
         let rel = |s: crate::sage::Snap| crate::sage::Snap {
@@ -1210,7 +1207,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
         let next: Vec<_> = next_snap.into_iter().map(rel).collect();
         let moves = crate::sage::detect_moves(&prev, &next);
         if !moves.is_empty() {
-            sage_healed = Some(crate::sage::remap(dir, &moves));
+            sage_healed = Some(crate::sage::remap(project_root, &moves));
         }
         timing("incremental: SAGE anchors", t);
     }
