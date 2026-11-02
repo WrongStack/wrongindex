@@ -12,3 +12,4 @@ node_modules/
 # Per-user agent tooling (never committed)
 /.claude/
 /.dfmt/
+/.playwright-mcp/

@@ -43,6 +43,7 @@ button { font: inherit; }
 .conn { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--chip); }
 .conn.up { color: var(--ok); }
 .conn.down { color: var(--bad); }
+.conn.paused { color: var(--warn); }
 
 .layout { flex: 1; display: flex; min-height: 0; }
 .sidebar { width: 168px; padding: 12px 8px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; background: var(--panel); }

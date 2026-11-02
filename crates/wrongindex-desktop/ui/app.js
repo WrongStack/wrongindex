@@ -186,8 +186,8 @@ function renderHeader() {
   }
   if (o.connected) {
     const h = o.health;
-    conn.textContent = h.draining ? 'Service stopping' : 'Service running';
-    conn.className = h.draining ? 'conn down' : 'conn up';
+    conn.textContent = h.draining ? 'Service stopping' : h.paused ? 'Background indexing paused' : 'Service running';
+    conn.className = h.draining ? 'conn down' : h.paused ? 'conn paused' : 'conn up';
     meta.textContent = `v${h.daemonVersion} · up ${duration(h.uptimeMs)} · ${h.queuedJobs} queued · ${h.runningJobs} running`;
     start.hidden = true;
     stop.hidden = false;
