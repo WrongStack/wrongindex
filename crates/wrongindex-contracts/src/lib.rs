@@ -205,6 +205,7 @@ pub mod method {
     pub const INDEX_REQUEST: &str = "index.request";
     pub const INDEX_CHECK: &str = "index.check";
     pub const INDEX_QUERY: &str = "index.query";
+    pub const INDEX_BACKUPS: &str = "index.backups";
     pub const JOB_GET: &str = "job.get";
     pub const JOB_LIST: &str = "job.list";
     pub const JOB_CANCEL: &str = "job.cancel";
@@ -448,6 +449,9 @@ pub enum JobKind {
     /// a backup next to it. Native engine only; needs maintenance ownership
     /// or ordinary ownership.
     Rebuild,
+    /// Replace the index with one of its backups (taken at each ownership
+    /// transfer); the current file is backed up first. Needs ownership.
+    Restore,
 }
 
 impl JobKind {
@@ -458,6 +462,7 @@ impl JobKind {
             JobKind::Full => "full",
             JobKind::Reconcile => "reconcile",
             JobKind::Rebuild => "rebuild",
+            JobKind::Restore => "restore",
         }
     }
 
@@ -468,6 +473,7 @@ impl JobKind {
             "full" => JobKind::Full,
             "reconcile" => JobKind::Reconcile,
             "rebuild" => JobKind::Rebuild,
+            "restore" => JobKind::Restore,
             _ => return None,
         })
     }
@@ -537,6 +543,9 @@ pub struct IndexRequestParams {
     pub kind: JobKind,
     #[serde(default)]
     pub paths: Vec<String>,
+    /// `restore` only: the backup file name (from `index.backups`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup: Option<String>,
 }
 
 /// Durable admission acknowledgement. Completion is observed via `job.get`.

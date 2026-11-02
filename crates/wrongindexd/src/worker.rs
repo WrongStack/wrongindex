@@ -162,6 +162,67 @@ async fn execute(
             serde_json::to_value(inspection)
                 .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))
         }
+        JobKind::Restore => {
+            let params = params.unwrap_or_default();
+            let fence: OwnerFence =
+                serde_json::from_value(params["fence"].clone()).map_err(|_| {
+                    ErrorBody::new(ErrorCode::OwnerConflict, "job carries no ownership fence")
+                })?;
+            let name = params["backup"].as_str().unwrap_or_default().to_string();
+            let pid = project_id.to_string();
+            shared
+                .registry(move |r| r.validate_fence(&pid, &fence))
+                .await?;
+            let _run = shared.owners.begin_run(project_id).ok_or_else(|| {
+                ErrorBody::new(
+                    ErrorCode::OwnerConflict,
+                    "ownership guard not held by this instance",
+                )
+            })?;
+            // The compatibility worker pools open stores; they must close
+            // before the file is replaced.
+            if shared.engine.configured() {
+                let _ = shared
+                    .engine
+                    .call(
+                        "release",
+                        serde_json::json!({
+                            "projectRoot": project.checkout_root,
+                            "indexDir": project.index_dir,
+                        }),
+                        Duration::from_secs(30),
+                    )
+                    .await;
+            }
+            let dir = std::path::PathBuf::from(&project.index_dir);
+            let epoch = fence.owner_epoch;
+            let restored = tokio::task::spawn_blocking(move || {
+                let (from, previous) = wrongindex_storage::backup::restore(&dir, &name, epoch)?;
+                let stamp = wrongindex_storage::backup::graph_stamp(&dir);
+                Ok::<_, wrongindex_storage::backup::BackupError>((from, previous, stamp))
+            })
+            .await
+            .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+            let (from, previous, stamp) = restored.map_err(|e| {
+                use wrongindex_storage::backup::BackupError;
+                let code = match &e {
+                    BackupError::Busy(_) => ErrorCode::DatabaseBusy,
+                    BackupError::NotFound(_) | BackupError::Invalid(..) => {
+                        ErrorCode::InvalidRequest
+                    }
+                    _ => ErrorCode::Internal,
+                };
+                ErrorBody::new(code, e.to_string())
+            })?;
+            info!("index_restored", {"projectId": project_id, "from": from.display().to_string()});
+            let generation = publish(shared, project_id, fence, stamp.clone()).await?;
+            Ok(serde_json::json!({
+                "restoredFrom": from.display().to_string(),
+                "previousKeptAs": previous.map(|p| p.display().to_string()),
+                "graphStamp": stamp,
+                "generation": generation,
+            }))
+        }
         JobKind::Full | JobKind::Incremental | JobKind::Reconcile | JobKind::Rebuild => {
             let params = params.unwrap_or_default();
             let fence: OwnerFence =

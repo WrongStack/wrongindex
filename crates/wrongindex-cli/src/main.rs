@@ -203,6 +203,13 @@ struct IndexArgs {
     /// Targeted run for these project paths (repeatable).
     #[arg(long = "path", conflicts_with_all = ["check", "reconcile", "rebuild", "full"])]
     paths: Vec<String>,
+    /// List the index backups taken at each ownership transfer.
+    #[arg(long, conflicts_with_all = ["check", "reconcile", "rebuild", "full", "paths"])]
+    backups: bool,
+    /// Replace the index with this backup (a name from --backups); the
+    /// current file is backed up first. Needs ownership.
+    #[arg(long, value_name = "NAME", conflicts_with_all = ["check", "reconcile", "rebuild", "full", "paths", "backups"])]
+    restore: Option<String>,
     /// Wait until the job reaches a terminal state.
     #[arg(long)]
     wait: bool,
@@ -884,7 +891,31 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
 // ─── index / job ────────────────────────────────────────────────────────────
 
 async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
-    let kind = if args.rebuild {
+    if args.backups {
+        let mut c = connect(root).await?;
+        let listed = c
+            .call_raw(method::INDEX_BACKUPS, Some(&args.id), json!({}), None)
+            .await?;
+        if json {
+            print_json(&listed);
+        } else {
+            let items = listed["backups"].as_array().cloned().unwrap_or_default();
+            if items.is_empty() {
+                println!("no backups");
+            }
+            for b in items {
+                println!(
+                    "{}  {} bytes",
+                    b["name"].as_str().unwrap_or("?"),
+                    b["bytes"].as_u64().unwrap_or(0)
+                );
+            }
+        }
+        return Ok(exit_code::SUCCESS);
+    }
+    let kind = if args.restore.is_some() {
+        "restore"
+    } else if args.rebuild {
         "rebuild"
     } else if args.full {
         "full"
@@ -897,7 +928,7 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
     } else {
         return Err(fail(
             exit_code::INVALID_INPUT,
-            "choose one of --check, --full, --path <p>, --reconcile, --rebuild",
+            "choose one of --check, --full, --path <p>, --reconcile, --rebuild, --backups, --restore <name>",
         ));
     };
     let mut c = connect(root).await?;
@@ -905,7 +936,10 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
         c.call_raw(
             method::INDEX_REQUEST,
             Some(&args.id),
-            json!({"kind": kind, "paths": args.paths}),
+            match &args.restore {
+                Some(name) => json!({"kind": kind, "backup": name}),
+                None => json!({"kind": kind, "paths": args.paths}),
+            },
             None,
         )
         .await?,

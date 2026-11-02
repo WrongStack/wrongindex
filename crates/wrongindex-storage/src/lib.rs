@@ -4,6 +4,7 @@
 //! schema/profile inspector. Nothing in this crate writes to an `index.db` yet;
 //! write primitives arrive with WI-108 behind ownership and profile admission.
 
+pub mod backup;
 pub mod content_hash;
 pub mod git_containment;
 pub mod inspect;

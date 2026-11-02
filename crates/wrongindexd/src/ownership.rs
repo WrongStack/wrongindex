@@ -223,12 +223,39 @@ pub async fn acquire(
 
     // 4. Journal outcome.
     let (pid, o) = (project_id.to_string(), owner.clone());
-    match attempt {
+    // 5. Backup before the new owner writes anything (compatibility §6.2):
+    //    a consistent copy of the index as the previous owner left it. No
+    //    backup, no transfer.
+    let attempt = match attempt {
         Ok(guard) => {
+            let dir = index_dir.clone();
+            match tokio::task::spawn_blocking(move || {
+                wrongindex_storage::backup::snapshot(&dir, epoch)
+            })
+            .await
+            {
+                Ok(Ok(backup)) => Ok((guard, backup)),
+                Ok(Err(e)) => Err(Err(format!("backup before transfer failed: {e}"))),
+                Err(e) => Err(Err(format!("backup task failed: {e}"))),
+            }
+        }
+        Err(e) => Err(Ok(e)),
+    };
+    match attempt {
+        Err(Err(why)) => {
+            let evidence = json!({ "error": why });
+            let _ = shared
+                .registry(move |r| r.finish_acquire(&pid, &o, epoch, Err(evidence)))
+                .await;
+            warn!("ownership_backup_failed", {"projectId": project_id, "epoch": epoch, "error": why});
+            Err(ErrorBody::new(ErrorCode::Internal, why))
+        }
+        Ok((guard, backup)) => {
             let evidence = json!({
                 "lock": index_dir.join(wrongindex_storage::owner_lock::LOCK_FILE).display().to_string(),
                 "verdict": inspection.verdict,
                 "maintenance": maintenance,
+                "backup": backup.map(|b| b.display().to_string()),
             });
             let status = shared
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Ok(evidence)))
@@ -245,7 +272,7 @@ pub async fn acquire(
             );
             Ok(status)
         }
-        Err(AcquireError::Held { holder }) => {
+        Err(Ok(AcquireError::Held { holder })) => {
             let evidence = json!({ "holder": holder });
             let _ = shared
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Err(evidence)))
@@ -262,7 +289,7 @@ pub async fn acquire(
                 },
             ))
         }
-        Err(AcquireError::Io(e)) => {
+        Err(Ok(AcquireError::Io(e))) => {
             let evidence = json!({ "error": e.to_string() });
             let _ = shared
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Err(evidence)))

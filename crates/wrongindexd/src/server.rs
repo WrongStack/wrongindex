@@ -794,6 +794,7 @@ async fn dispatch_inner(
                 IndexRequestParams {
                     kind: JobKind::Check,
                     paths: Vec::new(),
+                    backup: None,
                 }
             } else {
                 parse(req.params.clone())?
@@ -825,6 +826,12 @@ async fn dispatch_inner(
                             e
                         }
                     })?;
+                if params.kind == JobKind::Restore && params.backup.is_none() {
+                    return Err(ErrorBody::new(
+                        ErrorCode::InvalidRequest,
+                        "restore jobs need a backup name (see index.backups)",
+                    ));
+                }
                 if params.kind == JobKind::Incremental && params.paths.is_empty() {
                     return Err(ErrorBody::new(
                         ErrorCode::InvalidRequest,
@@ -974,6 +981,33 @@ async fn dispatch_inner(
                 out["nativeSkipped"] = json!(why);
             }
             Ok(out)
+        }
+        method::INDEX_BACKUPS => {
+            let pid = require_project(&req)?;
+            let project = shared.registry(move |r| r.get_project(&pid)).await?;
+            let dir = std::path::PathBuf::from(&project.index_dir);
+            let backups = tokio::task::spawn_blocking(move || {
+                wrongindex_storage::backup::list(&dir)
+                    .into_iter()
+                    .filter_map(|p| {
+                        let meta = std::fs::metadata(&p).ok()?;
+                        let modified = meta
+                            .modified()
+                            .ok()?
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .ok()?
+                            .as_millis() as i64;
+                        Some(json!({
+                            "name": p.file_name()?.to_string_lossy(),
+                            "bytes": meta.len(),
+                            "modifiedAtMs": modified,
+                        }))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+            Ok(json!({ "projectId": project.project_id, "backups": backups }))
         }
         method::JOB_CANCEL => {
             let p: JobGetParams = parse(req.params)?;
