@@ -1033,6 +1033,14 @@ fn schema_objects(conn: &Connection) -> rusqlite::Result<Vec<SchemaObject>> {
     Ok(v)
 }
 
+/// Baseline tables only WrongStack's enrichment passes fill.
+const ENRICHMENT_TABLES: [&str; 4] = [
+    "file_concepts",
+    "concept_edges",
+    "subsystems",
+    "file_vectors",
+];
+
 fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
     use rusqlite::OptionalExtension;
     // Read-write without create, but query-only: a read-only connection to a
@@ -1070,6 +1078,26 @@ fn stored_state(db: &Path) -> rusqlite::Result<Existing> {
         return Ok(Existing::Other(format!(
             "has schema version {}",
             version.as_deref().unwrap_or("(none)")
+        )));
+    }
+    // Enrichment WrongStack keeps across its own runs (`/codebase-map
+    // --enrich/--embed`): the native writer neither maintains nor carries
+    // it, so an index holding any is left to the preserving worker.
+    let mut enriched: Vec<&str> = Vec::new();
+    for table in ENRICHMENT_TABLES {
+        let any: i64 = conn.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM \"{table}\")"),
+            [],
+            |r| r.get(0),
+        )?;
+        if any == 1 {
+            enriched.push(table);
+        }
+    }
+    if !enriched.is_empty() {
+        return Ok(Existing::Other(format!(
+            "carries enrichment data the native writer does not maintain ({})",
+            enriched.join(", ")
         )));
     }
     let mut files: Vec<(String, String)> = Vec::new();

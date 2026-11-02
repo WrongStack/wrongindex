@@ -594,6 +594,52 @@ fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
 
 /// Maintenance replaces what the regular writer refuses, keeping a backup,
 /// but never an index a newer WrongStack wrote (security review WI-604).
+/// Concepts and vectors WrongStack's enrichment passes wrote are never
+/// dropped: a run over such an index is refused and the file left as is.
+#[test]
+fn an_index_with_enrichment_data_is_left_to_the_preserving_writer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);
+    for (table, insert) in [
+        (
+            "file_concepts",
+            "INSERT INTO file_concepts(file) SELECT file FROM files LIMIT 1",
+        ),
+        (
+            "file_vectors",
+            "INSERT INTO file_vectors(file, vector) SELECT file, x'00' FROM files LIMIT 1",
+        ),
+    ] {
+        let index = base.join(table);
+        std::fs::create_dir_all(&index).unwrap();
+        assert!(matches!(
+            rebuild(&root, &index).unwrap(),
+            Rebuild::Written(_)
+        ));
+        {
+            let c = rusqlite::Connection::open(index.join("index.db")).unwrap();
+            c.execute(insert, [])
+                .unwrap_or_else(|e| panic!("{table}: {e}"));
+            c.pragma_update(None, "journal_mode", "DELETE").unwrap();
+        }
+        // A change that would otherwise be written.
+        std::fs::write(
+            root.join(format!("{table}.json")),
+            "{\"x\": 1}
+",
+        )
+        .unwrap();
+        let before = std::fs::read(index.join("index.db")).unwrap();
+        match rebuild(&root, &index) {
+            Err(NativeError::Unsupported(why)) => assert!(why.contains(table), "{why}"),
+            other => panic!("{table}: expected a refusal, got {other:?}"),
+        }
+        assert_eq!(std::fs::read(index.join("index.db")).unwrap(), before);
+    }
+}
+
 #[test]
 fn maintenance_rebuild_never_replaces_a_newer_schema() {
     let tmp = tempfile::tempdir().unwrap();
