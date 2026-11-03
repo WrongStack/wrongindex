@@ -33,11 +33,19 @@ fi
 work="$(mktemp -d 2>/dev/null || mktemp -d -t wrongindex)"
 trap 'rm -rf "$work"' EXIT INT TERM
 
-# Run from a checkout: use the install.ps1 next to this script; otherwise
-# fetch it from the same branch of the repository.
-here="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
-if [ -n "$here" ] && [ -f "$here/install.ps1" ]; then
-  cp "$here/install.ps1" "$work/install.ps1"
+# Run as a file from a checkout (`sh install.sh`): use the install.ps1 next to
+# it. Piped into sh, $0 is the shell, and an install.ps1 in the current
+# directory is not ours: fetch it from the repository instead.
+local_ps1=""
+case "$0" in
+  *install.sh)
+    if [ -f "$0" ]; then
+      local_ps1="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/install.ps1"
+    fi
+    ;;
+esac
+if [ -n "$local_ps1" ] && [ -f "$local_ps1" ]; then
+  cp "$local_ps1" "$work/install.ps1"
 else
   ref="${WRONGINDEX_REF:-main}"
   curl -fsSL "https://raw.githubusercontent.com/$repo/$ref/install.ps1" -o "$work/install.ps1"

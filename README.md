@@ -55,7 +55,7 @@ Git Bash, MSYS2 or Cygwin:
 curl -fsSL https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.sh | sh
 ```
 
-Both download the latest GitHub release, check the installer against the release's `SHA256SUMS.txt` (and its build-provenance attestation when the GitHub CLI `gh` is installed), install it for the current user (no administrator rights) and put `wrongindex` on your PATH. Running them again updates or repairs an installation. Options: `-Version v0.1.0` / `-InstallDir <dir>` (or `WRONGINDEX_VERSION` / `WRONGINDEX_INSTALL_DIR`).
+Both download the latest GitHub release, check the installer against the release's `SHA256SUMS.txt` (and its build-provenance attestation when the GitHub CLI `gh` is installed and signed in), install it for the current user (no administrator rights) and put `wrongindex` on your PATH. Running them again updates or repairs an installation. Options: `-Version v0.1.0` / `-InstallDir <dir>` (or `WRONGINDEX_VERSION` / `WRONGINDEX_INSTALL_DIR`).
 
 Update an installed copy:
 
