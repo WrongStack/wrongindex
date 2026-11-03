@@ -126,6 +126,15 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
   - the enforced limits (queued jobs 1000, frame 8 MiB, dirty paths per project 10000, log 5 MiB, index file read limit 5 MiB).
 - `logs/wrongindexd.log`: one JSON object per line; no tokens and no source text.
 - `wrongindex diagnostics export --output bundle.json [--redact-paths]` (desktop: Diagnostics) writes a bounded bundle. It contains health, metrics, settings, projects, recent jobs and the log tail; it never contains the token or source code. `--dry-run` shows the categories and sizes first.
+- `wrongindex events [--project <id>] [--snapshot]` follows the service's event stream:
+  - `project.state` when a project's freshness, watch health, activity or ownership changes (checked about once a second);
+  - `job.progress` and `job.finished`;
+  - `index.published` (a new generation);
+  - `ownership.changed`;
+  - `project.registered`, `project.configured` and `project.detached`;
+  - `settings.changed` and `daemon.draining`.
+
+  Every event carries the service instance and a sequence number. A client that missed events resumes from its last sequence number or takes a snapshot.
 - `wrongindex doctor` checks the endpoint, discovery metadata, the running service and the toolchains (Python, Go, Bun or Node.js) the native writer needs for some languages.
 
 ## 8. Troubleshooting

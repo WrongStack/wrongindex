@@ -17,6 +17,7 @@ and how, is in [docs/status.md](docs/status.md).
 ### Added
 
 - Desktop: Settings > Updates checks GitHub for a newer release and installs it after you confirm. The window closes during the install and reopens on the new version, which reports the outcome. A daily check can be turned on (it is off by default). The tray menu has Check for Updates....
+- `project.state` events: a project's freshness, watch health, activity and ownership as they change, so clients no longer poll for them (`wrongindex events`).
 - `RELEASE-MANIFEST.json` lists the DLLs each shipped binary imports.
 
 ### Install scripts
