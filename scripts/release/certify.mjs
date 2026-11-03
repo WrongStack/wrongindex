@@ -163,7 +163,7 @@ const manual = [
   { id: 'M02', name: 'Native per-monitor DPI pass on a mixed-DPI setup', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs mixed-DPI hardware' },
   { id: 'M03', name: 'Code signing of the installer and binaries', req: 'WI-703', status: 'WAIVED', reason: 'owner decision 2026-11-03: releases ship unsigned; SHA-256 and build provenance are checked' },
   { id: 'M04', name: 'Real sleep/resume cycle with watched projects', req: 'WI-207', status: 'NOT RUN', reason: 'manual; needs a machine that is put to sleep (the resume path is unit-tested)' },
-  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'NOT RUN', reason: 'manual; needs a clean machine or VM (G19 installs on the build machine)' },
+  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'PASS', reason: 'recorded 2026-11-03 in Windows Sandbox for a build with the static C runtime (docs/status.md, row M05); the published v0.1.0 fails it. Repeat for each release' },
 ];
 const summary = {
   generatedAt: new Date().toISOString(),
@@ -187,7 +187,7 @@ const md = [
   ...results.map((r) => `| ${r.id} ${r.name} | ${r.req} | ${r.status} | ${(r.detail || r.reason || '').replace(/\|/g, '/')} | ${r.seconds ?? ''} |`),
   ...manual.map((m) => `| ${m.id} ${m.name} | ${m.req} | ${m.status} | ${m.reason} | |`),
   '',
-  `PASS ${summary.counts.PASS} · FAIL ${summary.counts.FAIL} · NOT RUN ${summary.counts['NOT RUN']} (automated) · manual NOT RUN ${manual.filter((m) => m.status === 'NOT RUN').length}, WAIVED ${manual.filter((m) => m.status === 'WAIVED').length}`,
+  `PASS ${summary.counts.PASS} · FAIL ${summary.counts.FAIL} · NOT RUN ${summary.counts['NOT RUN']} (automated) · manual PASS (recorded) ${manual.filter((m) => m.status === 'PASS').length}, NOT RUN ${manual.filter((m) => m.status === 'NOT RUN').length}, WAIVED ${manual.filter((m) => m.status === 'WAIVED').length}`,
   '',
 ].join('\n');
 fs.writeFileSync(path.join(outDir, 'certification.md'), md);
