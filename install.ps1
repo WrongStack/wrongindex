@@ -114,7 +114,11 @@
     # NSIS: /D= must come last and is taken verbatim (no quotes).
     if ($InstallDir) { $installArgs += "/D=$InstallDir" }
     Say 'installing (per user, silent)'
-    $p = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+    # Wait for the installer only: `Start-Process -Wait` also waits for its
+    # descendants, and the installer restarts a service that was running.
+    $p = Start-Process -FilePath $installer -ArgumentList $installArgs -PassThru
+    $null = $p.Handle # keeps the handle, so ExitCode is there after the exit
+    $p.WaitForExit()
     if ($p.ExitCode -ne 0) { throw "the installer exited with $($p.ExitCode)" }
   } finally {
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
