@@ -201,6 +201,7 @@ async fn execute(
                     "ownership guard not held by this instance",
                 )
             })?;
+            ensure_room(&project.index_dir, kind).await?;
             // The compatibility worker pools open stores; they must close
             // before the file is replaced.
             if shared.engine.configured() {
@@ -279,6 +280,12 @@ async fn execute(
                     "ownership guard not held by this instance",
                 )
             })?;
+            // Not enough room for this run: refuse before anything is
+            // written (a watched project waits for space, see `disk`).
+            if let Err(e) = ensure_room(&project.index_dir, kind).await {
+                record_failure(shared, project_id, &e.message).await;
+                return Err(e);
+            }
 
             let replace = kind == JobKind::Rebuild;
             let backend = match shared.backend_for(project.backend_preference) {
@@ -398,12 +405,24 @@ async fn execute(
                     Ok(out)
                 }
                 Err(e) => {
+                    // The compatibility worker reports a full disk in text.
+                    let e = crate::disk::classify(e);
                     record_failure(shared, project_id, &e.to_string()).await;
                     Err(e)
                 }
             }
         }
     }
+}
+
+/// `DISK_FULL` when the index's volume lacks the room a `kind` run needs.
+async fn ensure_room(index_dir: &str, kind: JobKind) -> Result<(), ErrorBody> {
+    let dir = std::path::PathBuf::from(index_dir);
+    tokio::task::spawn_blocking(move || {
+        crate::disk::ensure_room(&dir, crate::disk::needed(kind, &dir))
+    })
+    .await
+    .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?
 }
 
 /// Remember the engine that last wrote this project's index (shown in
@@ -624,10 +643,14 @@ async fn rebuild_in_child(
                     ErrorCode::DatabaseBusy,
                     format!("native engine: {msg}"),
                 )),
-                _ => NativeOutcome::Failed(ErrorBody::new(
+                Some("diskFull") => NativeOutcome::Failed(ErrorBody::new(
+                    ErrorCode::DiskFull,
+                    format!("native engine: {msg}; the write was rolled back"),
+                )),
+                _ => NativeOutcome::Failed(crate::disk::classify(ErrorBody::new(
                     ErrorCode::Internal,
                     format!("native engine: {msg}"),
-                )),
+                ))),
             })
         }
         // Crashed (e.g. stack overflow) or produced no reply: the staging

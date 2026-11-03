@@ -1449,6 +1449,40 @@ async fn doctor_checks(root: &DataRoot) -> Vec<Value> {
                 ),
                 Err(e) => add("service_health", "fail", e.to_string()),
             }
+            // Volumes the service found short of space (`resource.warning`).
+            if let Ok(snap) = c
+                .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
+                .await
+            {
+                let short: Vec<String> = snap["resources"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|r| r["resource"] == "disk")
+                    .map(|r| {
+                        format!(
+                            "{} {} MB free ({}{})",
+                            r["volume"].as_str().unwrap_or("?"),
+                            r["freeBytes"].as_u64().unwrap_or(0) / (1024 * 1024),
+                            r["level"].as_str().unwrap_or("?"),
+                            if r["level"] == "full" {
+                                ": indexing there waits for space"
+                            } else {
+                                ""
+                            }
+                        )
+                    })
+                    .collect();
+                if short.is_empty() {
+                    add(
+                        "disk_space",
+                        "pass",
+                        "no volume in use is short of space".into(),
+                    );
+                } else {
+                    add("disk_space", "warn", short.join("; "));
+                }
+            }
         }
         Err(CallError::Unavailable(m)) => add(
             "service_connect",

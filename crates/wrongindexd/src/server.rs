@@ -94,6 +94,9 @@ pub struct Shared {
     pub metrics: crate::metrics::Metrics,
     /// The last `project.state` published per project.
     project_states: Mutex<std::collections::HashMap<String, Value>>,
+    pub data_root: std::path::PathBuf,
+    /// Free space on the volumes in use (`resource.warning`).
+    pub disk: crate::disk::Monitor,
 }
 
 impl Shared {
@@ -254,6 +257,8 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         progress: Mutex::new(std::collections::HashMap::new()),
         metrics: crate::metrics::Metrics::default(),
         project_states: Mutex::new(std::collections::HashMap::new()),
+        data_root: cfg.root.path().to_path_buf(),
+        disk: crate::disk::Monitor::default(),
     });
     shared.apply_settings();
     let info = EndpointInfo {
@@ -904,6 +909,8 @@ async fn dispatch_inner(
                 "instanceId": shared.instance_id,
                 "seq": seq,
                 "projects": projects,
+                // Volumes short of space (`resource.warning` events).
+                "resources": shared.disk.warnings(),
             }))
         }
         method::PROJECT_DETACH => {

@@ -262,11 +262,33 @@ function overviewView() {
   const attention = ps.filter((p) => p.lastError);
   return el('section', {},
     el('h1', {}, 'Overview'),
+    ...diskBanners(),
     cards,
     attention.length ? el('h2', {}, 'Needs attention') : null,
     attention.length ? projectTable(attention) : null,
     el('h2', {}, 'Projects'),
     ps.length ? projectTable(ps) : firstUse());
+}
+
+function megabytes(n) {
+  const mb = n / 1024 / 1024;
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
+/** Volumes short of space (`resource.warning`, kept in the snapshot). */
+function diskBanners() {
+  const vols = state.overview?.snapshot?.resources ?? [];
+  return vols.filter((r) => r.resource === 'disk' && r.level !== 'ok').map((r) => {
+    const n = (r.projects ?? []).length;
+    const which = n ? ` (${n} project index${n === 1 ? '' : 'es'})` : ' (the service data)';
+    return r.level === 'full'
+      ? el('div', { class: 'banner bad', role: 'alert' },
+        el('p', {}, `Disk almost full on ${r.volume}: ${megabytes(r.freeBytes)} free${which}.`),
+        el('p', { class: 'note' }, `Indexing there waits until at least ${megabytes(r.fullBytes)} is free (a full run also needs room for a copy of the index), then resumes by itself. WrongIndex deletes nothing to make room.`))
+      : el('div', { class: 'banner', role: 'status' },
+        el('p', {}, `Disk space is getting low on ${r.volume}: ${megabytes(r.freeBytes)} free${which}.`),
+        el('p', { class: 'note' }, `Indexing stops there below ${megabytes(r.fullBytes)}.`));
+  });
 }
 
 function card(k, v) {
@@ -379,7 +401,7 @@ function detailView() {
       el('div', { class: 'k' }, 'Ownership'), el('div', {}, badge(s.ownership, OWNERSHIP)),
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
       el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
-        retryNote(s) ? el('div', { class: s.parked ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
+        retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
@@ -464,6 +486,7 @@ function progressText(pr) {
 // Watcher retry state (WI-208): failures back automatic runs off; after the
 // configured number in a row the project is parked.
 function retryNote(s) {
+  if (s.watchHealth === 'disk_full') return 'Waiting for disk space: pending changes are indexed by themselves once the volume has room.';
   const n = s.consecutiveFailures ?? 0;
   if (!n) return '';
   const next = s.nextRetryMs ? ` Next automatic attempt ${when(s.nextRetryMs)}.` : '';
@@ -478,7 +501,7 @@ function nextAction(message) {
   if (/owned by|OWNER_CONFLICT|ownership/.test(m)) return 'Another process owns this index. Release it there, or claim it here.';
   if (/newer WrongStack|schema version|PROFILE_UNSUPPORTED/.test(m)) return 'Update WrongIndex, or use Rebuild index (the current file is kept).';
   if (/enrichment data|extra schema|outside the baseline/.test(m)) return 'This index carries data only WrongStack maintains; the compatibility worker handles it.';
-  if (/disk|space|DISK_FULL/i.test(m)) return 'Free disk space, then retry.';
+  if (/disk|space|DISK_FULL/i.test(m)) return 'Free disk space on that drive. Watched projects resume by themselves; otherwise retry.';
   if (/access|denied|permission/i.test(m)) return 'Fix access to the folder, then retry.';
   return 'Retry the job; if it keeps failing, export diagnostics.';
 }

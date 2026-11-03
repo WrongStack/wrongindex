@@ -150,6 +150,25 @@ pub enum NativeError {
     Sqlite(#[from] rusqlite::Error),
 }
 
+impl NativeError {
+    /// The write ran out of disk space: SQLite's `SQLITE_FULL` ("database or
+    /// disk is full"; SQLite reports Windows' `ERROR_DISK_FULL` and
+    /// `ERROR_HANDLE_DISK_FULL` this way) or a file write that failed with
+    /// them. A failed write rolls back; the published index is untouched.
+    pub fn is_disk_full(&self) -> bool {
+        match self {
+            NativeError::Io(e) => {
+                e.kind() == std::io::ErrorKind::StorageFull
+                    || (cfg!(windows) && matches!(e.raw_os_error(), Some(112 | 39)))
+            }
+            NativeError::Sqlite(rusqlite::Error::SqliteFailure(e, _)) => {
+                e.code == rusqlite::ErrorCode::DiskFull
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
@@ -1713,6 +1732,30 @@ fn insert_fts(tx: &Connection, rows: &[(i64, String)]) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disk_full_is_told_apart() {
+        // A real SQLITE_FULL: the database may not grow past its page cap.
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch("PRAGMA max_page_count = 2; CREATE TABLE t (x BLOB);")
+            .unwrap();
+        let full = c
+            .execute("INSERT INTO t VALUES (zeroblob(100000))", [])
+            .unwrap_err();
+        assert!(NativeError::from(full).is_disk_full());
+        assert!(
+            NativeError::Io(std::io::Error::from(std::io::ErrorKind::StorageFull)).is_disk_full()
+        );
+        #[cfg(windows)]
+        assert!(NativeError::Io(std::io::Error::from_raw_os_error(112)).is_disk_full());
+        let locked = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            None,
+        );
+        assert!(!NativeError::from(locked).is_disk_full());
+        assert!(!NativeError::Io(std::io::Error::from_raw_os_error(5)).is_disk_full());
+        assert!(!NativeError::Busy("x".into()).is_disk_full());
+    }
 
     #[test]
     fn ladder_matches_writer_helpers() {

@@ -21,7 +21,7 @@ The installer (per user, no administrator rights) puts all three in one director
 | `registry.db` | Registrations, durable jobs, ownership journal, publication generations |
 | `settings.json` | Service settings with their revision (section 4) |
 | `runtime/` | Endpoint and token of the running service (removed on clean exit) |
-| `logs/wrongindexd.log` | Structured JSON log, rotated at 5 MiB (`wrongindexd.log.1`) |
+| `logs/wrongindexd.log` | Structured JSON log, rotated at 5 MiB, also while the service runs (one older file, `wrongindexd.log.1`) |
 | `staging/` | Scratch space |
 
 Project indexes are not under the data root. Each project keeps its WrongStack index directory, by default `~/.wrongstack/projects/<slug>/codebase-index`; `wrongindex resolve-index-dir <root>` prints it. In that directory WrongIndex adds:
@@ -56,11 +56,13 @@ A watcher batch (or `wrongindex index <id> --path ...`) runs as WrongStack's tar
 Freshness is reported separately from activity. `current` means the watcher is attached, nothing is pending and the last run succeeded. The other states are:
 
 - `pending`: edits are waiting, or the service is paused.
-- `degraded`: the last run failed, or the project is parked (below).
+- `degraded`: the last run failed, the project is parked, or it waits for disk space (below).
 - `unavailable`: the checkout root is missing, or watching failed.
+- `unknown`: the project is not watched.
 
 A failed watcher run keeps its paths pending and is retried after 2 s, doubling per failure up to 60 s; new edits do not skip the wait. After `watchParkAfterFailures` failures in a row (default 8) the project is **parked**: `watchHealth: parked`, freshness `degraded`, one probe attempt every 15 minutes. `project status` reports `consecutiveFailures`, `nextRetryMs` and `parked`; the desktop shows them under Watch. Any explicit index job for the project that succeeds (Reconcile, Retry, `index <id> --full`) closes the circuit and pending edits run at once. A successful probe does the same.
-- `unknown`: the project is not watched.
+
+**Disk space.** An index job starts only when the drive holding the index has at least 256 MiB free, plus the size of the index for a run that may write a complete new copy (full, reconcile, rebuild, restore). Otherwise the job fails with `DISK_FULL` before anything is written. A run that still runs out of space is rolled back and reported as `DISK_FULL` too; the index keeps its last generation. A watched project then waits: `watchHealth: disk_full`, freshness `degraded`, its edits kept pending, no retries on a timer and nothing counted toward parking. Once the drive has the room the waiting work needs, it runs by itself within a second or two. The service looks at the drives holding the data root and every index every 5 seconds and reports a drive under 1 GiB free as `low` and under 256 MiB as `full` (`resource.warning` events, the desktop's Overview, `wrongindex doctor`). It never deletes anything to make room.
 
 ## 4. Settings
 
@@ -132,10 +134,11 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
   - `index.published` (a new generation);
   - `ownership.changed`;
   - `project.registered`, `project.configured` and `project.detached`;
+  - `resource.warning` when a drive in use changes level (`ok`, `low`, `full`; with its free bytes and the projects whose indexes are on it); the drives not `ok` are also in the snapshot (`resources`);
   - `settings.changed` and `daemon.draining`.
 
   Every event carries the service instance and a sequence number. A client that missed events resumes from its last sequence number or takes a snapshot.
-- `wrongindex doctor` checks the endpoint, discovery metadata, the running service and the toolchains (Python, Go, Bun or Node.js) the native writer needs for some languages.
+- `wrongindex doctor` checks the endpoint, discovery metadata, the running service, the free space the service reports for the drives it uses, and the toolchains (Python, Go, Bun or Node.js) the native writer needs for some languages.
 
 ## 8. Troubleshooting
 
@@ -146,6 +149,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `PROFILE_UNSUPPORTED` / "newer WrongStack" | The index was written by a newer or unknown schema | Update WrongIndex; the index is left untouched |
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open | Close WrongStack clients of that project, then retry |
+| `DISK_FULL`, `watchHealth: disk_full` | The drive holding the index has too little free space; nothing was written | Free space on that drive (the message says how much is needed). Watched projects resume by themselves; retry other jobs |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |
 | Files missing from search | Files over 5 MiB are not indexed (as in WrongStack) | Listed under Files and errors / `oversizedFiles` in the job result |
 

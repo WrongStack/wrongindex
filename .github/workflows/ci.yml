@@ -22,3 +22,24 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+      # A real full disk (architecture §9): a 64 MB volume the runner can
+      # attach because it runs elevated. The test is ignored elsewhere.
+      - name: Attach a small volume
+        shell: pwsh
+        run: |
+          $vhd = Join-Path $env:RUNNER_TEMP 'small.vhdx'
+          $script = Join-Path $env:RUNNER_TEMP 'small-volume.txt'
+          Set-Content $script @(
+            "create vdisk file=`"$vhd`" maximum=64 type=expandable",
+            "select vdisk file=`"$vhd`"",
+            'attach vdisk',
+            'create partition primary',
+            'format fs=ntfs quick label=WISMALL',
+            'assign letter=W'
+          )
+          diskpart /s $script
+          if (-not (Test-Path 'W:\')) { throw 'the small volume did not appear as W:' }
+          Get-Volume -DriveLetter W | Format-List DriveLetter, FileSystem, Size, SizeRemaining
+          "WRONGINDEX_TEST_SMALL_VOLUME=W:\" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Disk full on a real volume
+        run: cargo test -p wrongindexd --test real_disk_full --locked -- --ignored

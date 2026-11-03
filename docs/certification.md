@@ -42,6 +42,7 @@ Inputs come from the environment. A gate whose input is missing is reported `NOT
 | `WRONGSTACK_CHECKOUT` | G15-G17 | WrongStack checkout with the adapter, built |
 | `PLAYWRIGHT_CORE` | G18, G19 | Directory with playwright-core's `index.mjs` |
 | `WRONGINDEX_INSTALLER` | G19, G21 | Installer (default `target/release/bundle/nsis/*-setup.exe`) |
+| `WRONGINDEX_TEST_SMALL_VOLUME` | G22 | Root of a small, empty NTFS volume the test may fill (e.g. a 64 MB VHD; attaching one needs an elevated prompt) |
 
 The run writes `certification.json`, `certification.md`, one log per gate, `THIRD-PARTY-LICENSES.txt` and `RELEASE-MANIFEST.json` to `target/certification/<commit>-<time>/`. It records the commit, whether the working tree was clean, and the versions of rustc, cargo, Bun, Node.js, Python, Go, Git and WrongStack. It exits non-zero when any gate fails.
 
@@ -70,6 +71,7 @@ The run writes `certification.json`, `certification.md`, one log per gate, `THIR
 | G19 | Installed package: silent install, installed service, CLI and GUI, license inventory installed, uninstall leaves nothing | WI-408, WI-700, WI-701, WI-703 | `scripts/release/smoke-installed.ps1` |
 | G20 | Third-party license inventory: every shipped crate declares a license; bundled-asset license texts match their recorded hashes | WI-009, WI-703 | `manifest.mjs licenses` |
 | G21 | Release manifest: commit, profile hashes, toolchain, Cargo.lock, SQLite, binary and installer hashes with Authenticode status, the DLLs each binary imports; fails when a binary needs the Visual C++ redistributable | WI-001, WI-700, WI-703 | `manifest.mjs manifest` |
+| G22 | Disk full on a real volume: a native run that runs out of space is rolled back (`index.db` byte-identical) and reported as `diskFull`; the service refuses a job before running it, with the real free space | WI-603 | `real_disk_full -- --ignored` with `WRONGINDEX_TEST_SMALL_VOLUME` (CI attaches a 64 MB VHD) |
 
 Manual items. The runner always records these as `NOT RUN` until a person does them:
 

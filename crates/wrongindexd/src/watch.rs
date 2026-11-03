@@ -70,6 +70,10 @@ struct ProjectWatch {
     grace_until: Option<Instant>,
     overflowed: Arc<AtomicBool>,
     initial_done: bool,
+    /// A batch was refused for disk space: free bytes the index's volume
+    /// needs before the pending work runs again (no backoff, not counted
+    /// toward parking).
+    disk_wait: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,9 +244,12 @@ impl Supervisor {
         let p = self.projects.lock();
         let w = p.as_ref().ok().and_then(|p| p.get(project_id));
         let parked = w.is_some_and(|w| w.watcher.is_some() && w.dirty.parked(&cfg));
+        let disk_wait = w.is_some_and(|w| w.watcher.is_some() && w.disk_wait.is_some());
         WatchStatus {
             watching: w.is_some_and(|w| w.watcher.is_some()),
-            watch_health: if parked {
+            watch_health: if disk_wait {
+                DISK_FULL.to_string()
+            } else if parked {
                 PARKED.to_string()
             } else {
                 w.map(|w| if w.health.is_empty() { "off" } else { w.health })
@@ -284,6 +291,11 @@ impl Supervisor {
                 "projectId": project_id, "jobId": job_id, "consecutiveFailures": failures,
             });
         }
+        // A write just went through: there was room after all.
+        if w.disk_wait.take().is_some() {
+            w.last_error = None;
+            info!("watch_disk_wait_ended", {"projectId": project_id, "jobId": job_id});
+        }
     }
 
     /// Freshness is separate from activity (WI-ADR-012): an idle project with
@@ -295,8 +307,9 @@ impl Supervisor {
         if !status.watching {
             return Freshness::Unknown;
         }
-        // Parked work does not progress on its own: not merely pending.
-        if status.parked {
+        // Parked work, or work waiting for disk space, does not progress
+        // until something changes: not merely pending.
+        if status.parked || status.watch_health == DISK_FULL {
             return Freshness::Degraded;
         }
         if !status.initial_scan_done
@@ -433,6 +446,7 @@ impl Supervisor {
         w.last_error = None;
         w.retry_at = None;
         w.initial_done = false;
+        w.disk_wait = None;
         // Watcher first, then the full attach reconciliation.
         w.dirty.mark_reconcile("attach", Instant::now());
         Ok(())
@@ -446,6 +460,7 @@ impl Supervisor {
             w.health = "off";
             w.dirty = DirtySet::default();
             w.initial_done = false;
+            w.disk_wait = None;
             info!("watch_detached", {"projectId": project_id});
         }
     }
@@ -495,6 +510,7 @@ pub async fn run(
 ) {
     let mut tick = tokio::time::interval(Duration::from_millis(50));
     let mut last_reconcile = Instant::now() - Duration::from_secs(10);
+    let mut last_disk = Instant::now() - DISK_CHECK;
     let mut last_wall = std::time::SystemTime::now();
     loop {
         tokio::select! {
@@ -514,7 +530,12 @@ pub async fn run(
                     }
                     last_wall = wall;
                     shared.watch.expire_leases();
-                    reconcile_desired(&shared).await;
+                    let projects = reconcile_desired(&shared).await;
+                    let monitor_due = last_disk.elapsed() >= DISK_CHECK;
+                    if monitor_due {
+                        last_disk = Instant::now();
+                    }
+                    check_disk(&shared, &projects, monitor_due).await;
                     crate::server::publish_state_changes(&shared).await;
                 }
                 settle_finished(&shared).await;
@@ -528,12 +549,94 @@ pub async fn run(
     }
 }
 
-async fn reconcile_desired(shared: &Arc<Shared>) {
-    let Ok(projects) = shared.registry(|r| r.list_projects()).await else {
+/// How often the volumes in use are looked at for `resource.warning`.
+const DISK_CHECK: Duration = Duration::from_secs(5);
+/// How long the supervisor waits for one disk check.
+const DISK_CHECK_BUDGET: Duration = Duration::from_secs(2);
+
+/// Disk space (see `disk`): end the wait of projects whose index volume has
+/// room again (every tick, only while a project waits), and report volume
+/// level changes as `resource.warning` (every `DISK_CHECK`).
+async fn check_disk(
+    shared: &Arc<Shared>,
+    projects: &[wrongindex_contracts::ProjectRecord],
+    monitor_due: bool,
+) {
+    let waiting: Vec<(String, PathBuf, u64)> = shared
+        .watch
+        .projects
+        .lock()
+        .map(|g| {
+            g.iter()
+                .filter_map(|(pid, w)| {
+                    w.disk_wait
+                        .map(|need| (pid.clone(), w.index_dir.clone(), need))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if waiting.is_empty() && !monitor_due {
+        return;
+    }
+    let indexes: Vec<(String, PathBuf)> = if monitor_due {
+        projects
+            .iter()
+            .map(|p| (p.project_id.clone(), PathBuf::from(&p.index_dir)))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let s2 = shared.clone();
+    let check = tokio::task::spawn_blocking(move || {
+        // One check at a time; a volume that does not answer (a share that
+        // went away) holds only this one.
+        let _slot = s2.disk.slot()?;
+        let room: Vec<(String, u64, Option<u64>)> = waiting
+            .into_iter()
+            .map(|(pid, dir, need)| (pid, need, crate::disk::free_bytes(&dir)))
+            .collect();
+        let changes = if monitor_due {
+            s2.disk.check(&s2.data_root, &indexes)
+        } else {
+            Vec::new()
+        };
+        Some((room, changes))
+    });
+    // The supervisor does not wait on a slow volume: a check that takes
+    // longer finishes in the background and its result is dropped.
+    let Ok(Ok(Some((room, changes)))) = tokio::time::timeout(DISK_CHECK_BUDGET, check).await else {
         return;
     };
+    for (pid, need, free) in room {
+        // Unknown free space is never a reason to wait.
+        if free.is_none_or(|f| f >= need)
+            && let Ok(mut g) = shared.watch.projects.lock()
+            && let Some(w) = g.get_mut(&pid)
+            && w.disk_wait.take().is_some()
+        {
+            info!("watch_disk_space_available", {
+                "projectId": pid, "freeBytes": free, "neededBytes": need,
+            });
+        }
+    }
+    for change in changes {
+        if change["level"] == "ok" {
+            info!("disk_space_ok", change.clone());
+        } else {
+            warn!("disk_space_low", change.clone());
+        }
+        shared.events.publish("resource.warning", None, change);
+    }
+}
+
+/// Attach and detach watchers to match the desired state; returns the
+/// registered projects.
+async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::ProjectRecord> {
+    let Ok(projects) = shared.registry(|r| r.list_projects()).await else {
+        return Vec::new();
+    };
     let now = Instant::now();
-    for p in projects {
+    for p in &projects {
         let (attached, retry_at) = {
             let g = shared.watch.projects.lock();
             let w = g.as_ref().ok().and_then(|g| g.get(&p.project_id));
@@ -584,6 +687,7 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
             Err(e) => set_failure(shared, &p.project_id, format!("watcher: {e}")),
         }
     }
+    projects
 }
 
 /// How often a missing checkout root is looked for again.
@@ -593,6 +697,8 @@ const ROOT_POLL: Duration = Duration::from_secs(2);
 pub const ROOT_UNAVAILABLE: &str = "root_unavailable";
 /// Watch health of a project the circuit parked (WI-208).
 pub const PARKED: &str = "parked";
+/// Watch health of a project whose pending work waits for disk space.
+pub const DISK_FULL: &str = "disk_full";
 
 fn root_unavailable(shared: &Arc<Shared>, project_id: &str) {
     if let Ok(mut g) = shared.watch.projects.lock() {
@@ -637,11 +743,32 @@ async fn settle_finished(shared: &Arc<Shared>) {
             continue;
         }
         let ok = job.state == JobState::Succeeded;
+        let disk_full = job
+            .error
+            .as_ref()
+            .is_some_and(|e| e.code == wrongindex_contracts::ErrorCode::DiskFull);
         let cfg = shared.watch.debounce();
         if let Ok(mut g) = shared.watch.projects.lock()
             && let Some(w) = g.get_mut(&pid)
             && let Some((_, batch)) = w.inflight.take()
         {
+            if disk_full {
+                // Not the project's fault and no use retrying on a timer:
+                // everything stays dirty until the volume has room again.
+                let kind = if batch.reconcile.is_some() {
+                    JobKind::Full
+                } else {
+                    JobKind::Incremental
+                };
+                let need = crate::disk::needed(kind, &w.index_dir);
+                if w.disk_wait.replace(need).is_none() {
+                    warn!("watch_waiting_for_disk", {
+                        "projectId": pid, "jobId": job_id, "neededBytes": need,
+                    });
+                }
+                w.last_error = job.error.as_ref().map(|e| e.to_string());
+                continue;
+            }
             let was_parked = w.dirty.parked(&cfg);
             w.dirty.settle(&batch, ok, Instant::now(), &cfg);
             if !ok {
@@ -683,7 +810,10 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
         .map(|g| {
             g.iter()
                 .filter(|(_, w)| {
-                    w.watcher.is_some() && w.inflight.is_none() && w.dirty.ready(now, &cfg)
+                    w.watcher.is_some()
+                        && w.inflight.is_none()
+                        && w.disk_wait.is_none()
+                        && w.dirty.ready(now, &cfg)
                 })
                 .filter_map(|(pid, w)| w.dirty.take().map(|b| (pid.clone(), b)))
                 .collect()

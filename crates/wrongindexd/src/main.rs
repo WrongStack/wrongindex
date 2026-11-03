@@ -6,6 +6,7 @@
 
 mod confine;
 mod dirty;
+mod disk;
 mod engine;
 mod events;
 mod log;
@@ -78,7 +79,7 @@ pub const EXIT_ALREADY_RUNNING: u8 = 3;
 /// `wrongindexd --native-rebuild-replace <root> <index-dir>`: one isolated
 /// maintenance rebuild (fresh index, previous file kept as a backup).
 fn native_replace_child(root: &str, index_dir: &str) -> ExitCode {
-    use wrongindex_engine::native::{NativeError, rebuild_replacing};
+    use wrongindex_engine::native::rebuild_replacing;
     let reply = match rebuild_replacing(std::path::Path::new(root), std::path::Path::new(index_dir))
     {
         Ok(replaced) => {
@@ -86,21 +87,27 @@ fn native_replace_child(root: &str, index_dir: &str) -> ExitCode {
             r["outcome"] = serde_json::json!("replaced");
             serde_json::json!({"ok": true, "result": r})
         }
-        Err(e) => {
-            let kind = match &e {
-                NativeError::Unsupported(_) => "unsupported",
-                NativeError::Busy(_) => "busy",
-                _ => "error",
-            };
-            let message = match &e {
-                NativeError::Unsupported(m) | NativeError::Busy(m) => m.clone(),
-                other => other.to_string(),
-            };
-            serde_json::json!({"ok": false, "kind": kind, "message": message})
-        }
+        Err(e) => native_error_reply(&e),
     };
     println!("{reply}");
     ExitCode::SUCCESS
+}
+
+/// A native child's failure reply: `kind` is `unsupported`, `busy`,
+/// `diskFull` or `error`.
+fn native_error_reply(e: &wrongindex_engine::native::NativeError) -> serde_json::Value {
+    use wrongindex_engine::native::NativeError;
+    let kind = match e {
+        NativeError::Unsupported(_) => "unsupported",
+        NativeError::Busy(_) => "busy",
+        e if e.is_disk_full() => "diskFull",
+        _ => "error",
+    };
+    let message = match e {
+        NativeError::Unsupported(m) | NativeError::Busy(m) => m.clone(),
+        other => other.to_string(),
+    };
+    serde_json::json!({"ok": false, "kind": kind, "message": message})
 }
 
 fn native_rebuild_child(root: &str, index_dir: &str) -> ExitCode {
@@ -140,7 +147,7 @@ fn native_update_child(root: &str, index_dir: &str) -> ExitCode {
 fn rebuild_reply(
     r: Result<wrongindex_engine::native::Rebuild, wrongindex_engine::native::NativeError>,
 ) -> serde_json::Value {
-    use wrongindex_engine::native::{NativeError, Rebuild};
+    use wrongindex_engine::native::Rebuild;
     match r {
         Ok(Rebuild::Unchanged {
             graph_stamp,
@@ -168,18 +175,7 @@ fn rebuild_reply(
             r["outcome"] = serde_json::json!("written");
             serde_json::json!({"ok": true, "result": r})
         }
-        Err(e) => {
-            let kind = match &e {
-                NativeError::Unsupported(_) => "unsupported",
-                NativeError::Busy(_) => "busy",
-                _ => "error",
-            };
-            let message = match &e {
-                NativeError::Unsupported(m) | NativeError::Busy(m) => m.clone(),
-                other => other.to_string(),
-            };
-            serde_json::json!({"ok": false, "kind": kind, "message": message})
-        }
+        Err(e) => native_error_reply(&e),
     }
 }
 

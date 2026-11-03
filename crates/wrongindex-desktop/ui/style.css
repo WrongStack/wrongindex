@@ -93,6 +93,10 @@ input[type=number] { font: inherit; padding: 6px 8px; border: 1px solid var(--li
 .note { color: var(--muted); font-size: 12px; margin: 6px 0; }
 .error { color: var(--bad); }
 .back { margin-bottom: 12px; }
+.banner { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; }
+.banner.bad { border-left-color: var(--bad); }
+.banner p { margin: 0; }
+.banner p + p { margin-top: 4px; }
 
 .toast { position: fixed; right: 16px; bottom: 16px; max-width: 480px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
 .toast.bad { border-left-color: var(--bad); }
