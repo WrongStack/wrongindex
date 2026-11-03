@@ -15,8 +15,7 @@
  * outputs by hand.
  */
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 function arg(name: string): string | undefined {
@@ -165,7 +164,12 @@ main().catch((e) => {
 });
 `;
 
-const work = mkdtempSync(join(tmpdir(), 'wi-ts-bundle-'));
+// A fixed staging directory inside the repository (gitignored `target/`):
+// the bundler records entry paths in comments, so a random temp directory
+// would make the output differ per run and embed the user's temp path.
+const work = join(repo, 'target', 'ts-bundle-work');
+rmSync(work, { recursive: true, force: true });
+mkdirSync(work, { recursive: true });
 try {
   const entryPath = join(work, 'entry.mjs');
   writeFileSync(entryPath, entry);
@@ -184,7 +188,10 @@ try {
     process.exit(1);
   }
   const tsJs = await builtTs.outputs[0]!.text();
-  rmSync(out, { recursive: true, force: true });
+  // Replace this script's outputs; LICENSES/ belongs to bundle-licenses.ts.
+  for (const f of existsSync(out) ? readdirSync(out) : []) {
+    if (f !== 'LICENSES') rmSync(join(out, f), { recursive: true, force: true });
+  }
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'ts_batch.mjs'), js);
   writeFileSync(join(out, 'ts_parse.mjs'), tsJs);
@@ -217,7 +224,7 @@ try {
             (f) => [f, sha(readFileSync(`${base}/${f}`))],
           ),
         ),
-        licences: 'TypeScript (@typescript/typescript6) Apache-2.0; web-tree-sitter MIT; tree-sitter grammars MIT (tree-sitter-wasm); WrongStack visitor/queries MIT',
+        licences: 'TypeScript (@typescript/typescript6) Apache-2.0; web-tree-sitter MIT; tree-sitter-wasm MIT; grammars per upstream (MIT, tree-sitter-elixir Apache-2.0); WrongStack MIT. Texts: LICENSES/ (scripts/oracle/bundle-licenses.ts)',
         files,
       },
       null,

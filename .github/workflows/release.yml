@@ -1,8 +1,11 @@
 name: release
 
 # Builds the per-user Windows installer (WI-700) from the exact commit and
-# publishes it with a SHA-256 manifest: as a workflow artifact on manual runs,
-# and as a draft GitHub release for `v*` tags.
+# publishes it with a SHA-256 manifest, the release manifest (WI-703: commit,
+# supported profile, toolchain, Cargo.lock, binary and installer hashes,
+# Authenticode status) and the third-party license inventory: as a workflow
+# artifact on manual runs, and as a draft GitHub release for `v*` tags. The
+# installer and the binaries get a GitHub build-provenance attestation.
 on:
   workflow_dispatch:
   push:
@@ -16,6 +19,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned toolchain
@@ -26,27 +31,25 @@ jobs:
         # Outside the repository so the pinned workspace toolchain does not apply.
         working-directory: ${{ runner.temp }}
         run: cargo install tauri-cli --version "=2.12.4" --locked
-      - name: Build installer
+      - name: Build installer, release manifest and license inventory
         shell: pwsh
         run: scripts/release/package-windows.ps1
-      - name: Record provenance
-        shell: pwsh
-        run: |
-          $out = 'target/release/bundle/nsis'
-          @{
-            commit = '${{ github.sha }}'
-            ref = '${{ github.ref }}'
-            run = '${{ github.run_id }}'
-            rustc = (rustc -V)
-            tauriCli = (cargo tauri --version)
-          } | ConvertTo-Json | Set-Content "$out/PROVENANCE.json"
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            target/release/bundle/nsis/*.exe
+            target/release/wrongindexd.exe
+            target/release/wrongindex.exe
+            target/release/wrongindex-desktop.exe
       - uses: actions/upload-artifact@v4
         with:
           name: wrongindex-windows-installer
           path: |
             target/release/bundle/nsis/*.exe
             target/release/bundle/nsis/SHA256SUMS.txt
-            target/release/bundle/nsis/PROVENANCE.json
+            target/release/bundle/nsis/RELEASE-MANIFEST.json
+            target/release/bundle/nsis/THIRD-PARTY-LICENSES.txt
       - name: Draft release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -54,4 +57,4 @@ jobs:
         shell: pwsh
         run: |
           $out = 'target/release/bundle/nsis'
-          gh release create '${{ github.ref_name }}' --draft --title 'WrongIndex ${{ github.ref_name }}' --notes 'Per-user Windows installer. Verify with SHA256SUMS.txt.' (Get-ChildItem $out -Include *.exe,SHA256SUMS.txt,PROVENANCE.json -Recurse).FullName
+          gh release create '${{ github.ref_name }}' --draft --title 'WrongIndex ${{ github.ref_name }}' --notes 'Per-user Windows installer. Verify with SHA256SUMS.txt and `gh attestation verify <file> --repo WrongStack/wrongindex`; RELEASE-MANIFEST.json records the commit, supported index profile, toolchain and hashes; THIRD-PARTY-LICENSES.txt lists the bundled components.' (Get-ChildItem $out -Include *.exe,SHA256SUMS.txt,RELEASE-MANIFEST.json,THIRD-PARTY-LICENSES.txt -Recurse).FullName

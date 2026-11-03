@@ -5,8 +5,9 @@
 #
 # Needs the Tauri CLI (`cargo install tauri-cli --version "=2.12.4" --locked`);
 # Tauri fetches or reuses NSIS. Output: <target dir>/release/bundle/nsis/*.exe
-# (honours CARGO_TARGET_DIR)
-# plus a SHA-256 manifest next to it.
+# (honours CARGO_TARGET_DIR) plus, next to it, SHA256SUMS.txt,
+# RELEASE-MANIFEST.json and THIRD-PARTY-LICENSES.txt (WI-703; needs Node).
+# The license inventory is also installed next to the binaries.
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 Set-Location $root
@@ -25,6 +26,11 @@ foreach ($name in 'wrongindexd', 'wrongindex') {
   Copy-Item (Join-Path $target "release\$name.exe") (Join-Path $bin "$name-$triple.exe") -Force
 }
 
+# Third-party licenses for what the binaries link; bundled as a resource
+# (tauri.bundle.json) and published next to the installer.
+node (Join-Path $root 'scripts\release\manifest.mjs') licenses --out (Join-Path $bin 'THIRD-PARTY-LICENSES.txt')
+if ($LASTEXITCODE) { throw 'license inventory failed' }
+
 Push-Location (Join-Path $root 'crates\wrongindex-desktop')
 try {
   cargo tauri build --config tauri.bundle.json -- --locked
@@ -38,4 +44,7 @@ $manifest = Get-ChildItem $out -Filter *.exe | ForEach-Object {
   "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
 }
 $manifest | Set-Content (Join-Path $out 'SHA256SUMS.txt')
+Copy-Item (Join-Path $bin 'THIRD-PARTY-LICENSES.txt') $out -Force
+node (Join-Path $root 'scripts\release\manifest.mjs') manifest --bin (Join-Path $target 'release') --bundle $out --out (Join-Path $out 'RELEASE-MANIFEST.json')
+if ($LASTEXITCODE) { throw 'release manifest failed' }
 $manifest

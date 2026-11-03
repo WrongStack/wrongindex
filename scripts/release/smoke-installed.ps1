@@ -35,6 +35,8 @@ $desktop = $null
 try {
   $p = Start-Process $Installer -ArgumentList '/S', "/D=$dir" -Wait -PassThru
   $result.install = $p.ExitCode
+  # The license inventory ships next to the binaries (WI-703).
+  $result.licensesInstalled = Test-Path (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
   $cli = Join-Path $dir 'wrongindex.exe'
   & $cli daemon start --wait-seconds 20 | Out-Null
   $add = & $cli --json project add $proj --index-dir (Join-Path $work 'idx') --watch pinned | ConvertFrom-Json
@@ -80,4 +82,17 @@ try {
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
 }
+# Every expectation is checked here: the gate passes only when all hold.
+$failures = @()
+if ($result.install -ne 0) { $failures += "install exit $($result.install)" }
+if (-not $result.licensesInstalled) { $failures += 'THIRD-PARTY-LICENSES.txt not installed' }
+if ($result.freshness -ne 'current') { $failures += "freshness $($result.freshness)" }
+if ($result.guiExit -ne 0) { $failures += "GUI checks exit $($result.guiExit)" }
+if ($result.pausedAfterGui -ne $false) { $failures += 'GUI pause not undone' }
+if ($result.parallelJobsAfterGui -ne 2) { $failures += 'refused setting was applied' }
+if ($result.uninstall -ne 0) { $failures += "uninstall exit $($result.uninstall)" }
+if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left after uninstall" }
+if ($result.uninstallEntryLeft) { $failures += 'uninstall entry left' }
+$result.failures = $failures
 $result | ConvertTo-Json -Depth 6
+if ($failures.Count) { exit 1 }

@@ -106,6 +106,8 @@ const gates = [
   { id: 'G17', name: 'Live WrongStack CLI + WebUI proof', req: 'WI-704', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'node', args: ['scripts/release/wrongstack-live-webui.mjs', path.join(release, 'wrongindexd.exe'), path.join(release, 'wrongindex.exe'), wsCheckout ?? ''] },
   { id: 'G18', name: 'Desktop reconnect smoke (missed events, no false success)', req: 'WI-404', needs: () => need(envVar('PLAYWRIGHT_CORE'), file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop')), cmd: 'node', args: ['scripts/release/smoke-reconnect.mjs', env.PLAYWRIGHT_CORE ?? '', release] },
   { id: 'G19', name: 'Installed package smoke (install, service, CLI, GUI, uninstall)', req: 'WI-408, WI-700, WI-701', needs: () => need(envVar('PLAYWRIGHT_CORE'), tool('pwsh', ['-NoProfile', '-Command', 'exit 0']), file(installer, 'installer (scripts/release/package-windows.ps1)')), cmd: 'pwsh', args: ['-NoProfile', '-File', 'scripts/release/smoke-installed.ps1', '-PlaywrightCore', env.PLAYWRIGHT_CORE ?? '', ...(installer ? ['-Installer', installer] : [])] },
+  { id: 'G20', name: 'Third-party license inventory (every shipped crate and bundled asset)', req: 'WI-009, WI-703', cmd: 'node', args: ['scripts/release/manifest.mjs', 'licenses', '--out', path.join(outDir, 'THIRD-PARTY-LICENSES.txt')] },
+  { id: 'G21', name: 'Release manifest (commit, profile, toolchain, hashes, Authenticode status)', req: 'WI-703', needs: () => need(file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop'), file(installer, 'installer')), cmd: 'node', args: ['scripts/release/manifest.mjs', 'manifest', '--bin', release, '--bundle', installer ? path.dirname(installer) : '', '--out', path.join(outDir, 'RELEASE-MANIFEST.json')] },
 ];
 
 const results = [];
@@ -160,6 +162,8 @@ const manual = [
   { id: 'M01', name: 'Screen reader pass over every desktop screen', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs a person with NVDA/Narrator' },
   { id: 'M02', name: 'Native per-monitor DPI pass on a mixed-DPI setup', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs mixed-DPI hardware' },
   { id: 'M03', name: 'Code signing of the installer and binaries', req: 'WI-703', status: 'NOT RUN', reason: 'needs the publisher certificate' },
+  { id: 'M04', name: 'Real sleep/resume cycle with watched projects', req: 'WI-207', status: 'NOT RUN', reason: 'manual; needs a machine that is put to sleep (the resume path is unit-tested)' },
+  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'NOT RUN', reason: 'manual; needs a clean machine or VM (G19 installs on the build machine)' },
 ];
 const summary = {
   generatedAt: new Date().toISOString(),

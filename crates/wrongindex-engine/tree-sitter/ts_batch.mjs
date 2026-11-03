@@ -4260,7 +4260,7 @@ function getQueries(lang) {
   return LANG_QUERIES[lang] ?? DEFAULT_QUERIES;
 }
 
-// ../../../../C:/Users/ersin/AppData/Local/Temp/wi-ts-bundle-VQMfFf/entry.mjs
+// target/ts-bundle-work/entry.mjs
 import * as path from "node:path";
 var GRAMMARS = { c: "c", cpp: "cpp", java: "java", csharp: "c_sharp", php: "php", ruby: "ruby", swift: "swift", kotlin: "kotlin", shell: "bash", elixir: "elixir" };
 var dir = process.argv[2];

@@ -1,0 +1,119 @@
+{
+  "generator": "scripts/oracle/bundle-licenses.ts",
+  "wrongstackCommit": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+  "treeSitterWasm": "2.0.4",
+  "components": [
+    {
+      "component": "wrongstack",
+      "version": "222d23a90ae9c67c2433d7734c6966be7ee4e696",
+      "license": "MIT",
+      "source": "WrongStack 222d23a90ae9c67c2433d7734c6966be7ee4e696:LICENSE",
+      "file": "wrongstack.txt",
+      "sha256": "e0a23b24778bcf25dd3b7749d6a3aee95cb9666098224703e7070052c13ee753"
+    },
+    {
+      "component": "web-tree-sitter",
+      "version": "0.27.1",
+      "license": "MIT",
+      "source": "npm web-tree-sitter@0.27.1 (resolved by the oracle)",
+      "file": "web-tree-sitter.txt",
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    },
+    {
+      "component": "typescript",
+      "version": "6.0.2",
+      "license": "Apache-2.0",
+      "source": "npm @typescript/typescript6@6.0.2 (resolved by the oracle)",
+      "file": "typescript.txt",
+      "sha256": "a5e9f9b1575301c7a7a03508fdaa2e05a918cc17fd21c6e898096a96d6a34f61"
+    },
+    {
+      "component": "tree-sitter-wasm",
+      "version": "2.0.4",
+      "license": "MIT",
+      "source": "npm tree-sitter-wasm@2.0.4 (resolved by the oracle)",
+      "file": "tree-sitter-wasm.txt",
+      "sha256": "9836b901f21211b515de4866ace8af39e9c502648bb553c9f54cde1951e57b51"
+    },
+    {
+      "component": "tree-sitter-c",
+      "version": "0.24.1",
+      "license": "MIT",
+      "source": "npm tree-sitter-c@0.24.1 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-c.txt",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "tree-sitter-cpp",
+      "version": "0.23.4",
+      "license": "MIT",
+      "source": "npm tree-sitter-cpp@0.23.4 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-cpp.txt",
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "component": "tree-sitter-java",
+      "version": "0.23.5",
+      "license": "MIT",
+      "source": "npm tree-sitter-java@0.23.5 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-java.txt",
+      "sha256": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+    },
+    {
+      "component": "tree-sitter-c_sharp",
+      "version": "0.23.5",
+      "license": "MIT",
+      "source": "npm tree-sitter-c-sharp@0.23.5 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-c_sharp.txt",
+      "sha256": "778fb7d63b8c1844da315648c02f325c4713a6f4a5d19644fd413421422776d3"
+    },
+    {
+      "component": "tree-sitter-php",
+      "version": "92b5271b60bec77fb65b5e5bc41561e8dac81299",
+      "license": "MIT",
+      "source": "https://codeload.github.com/tree-sitter/tree-sitter-php/tar.gz/92b5271b60bec77fb65b5e5bc41561e8dac81299 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-php.txt",
+      "sha256": "664764fabf40c0b318e06324a5a12379092a2df25b8cbf2415f71bc0bb352346"
+    },
+    {
+      "component": "tree-sitter-ruby",
+      "version": "0.23.1",
+      "license": "MIT",
+      "source": "npm tree-sitter-ruby@0.23.1 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-ruby.txt",
+      "sha256": "ee006f02a3d856df282e409be2a86e24a65bb573a98b9c28343771141351bb6b"
+    },
+    {
+      "component": "tree-sitter-swift",
+      "version": "0.7.1",
+      "license": "MIT",
+      "source": "npm tree-sitter-swift@0.7.1 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-swift.txt",
+      "sha256": "3533cec129bb4bba015c0d61d86dd7c3b7e82110e4d2ff7837a01eff5bad5ccc"
+    },
+    {
+      "component": "tree-sitter-kotlin",
+      "version": "0.3.8",
+      "license": "MIT",
+      "source": "npm tree-sitter-kotlin@0.3.8 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-kotlin.txt",
+      "sha256": "948495f61768f7de26bcc61113d8cd95f50bbc15adb678c28c941c6c8fcd5903"
+    },
+    {
+      "component": "tree-sitter-bash",
+      "version": "0.25.1",
+      "license": "MIT",
+      "source": "npm tree-sitter-bash@0.25.1 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-bash.txt",
+      "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+    },
+    {
+      "component": "tree-sitter-elixir",
+      "version": "0.3.5",
+      "license": "Apache-2.0",
+      "source": "npm tree-sitter-elixir@0.3.5 (pinned by tree-sitter-wasm 2.0.4)",
+      "file": "tree-sitter-elixir.txt",
+      "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+    }
+  ]
+}

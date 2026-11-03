@@ -25,10 +25,10 @@
     "tree-sitter/query-extractors.ts": "6249f55edca0ce242cb7849ca5117509e2b6c184eda41f3843b748f41448f771",
     "tree-sitter/util.ts": "286903a41c6ca6e69739342634cebe2e4e7e32ee3f7c2db8f7bbd54a8668f8e5"
   },
-  "licences": "TypeScript (@typescript/typescript6) Apache-2.0; web-tree-sitter MIT; tree-sitter grammars MIT (tree-sitter-wasm); WrongStack visitor/queries MIT",
+  "licences": "TypeScript (@typescript/typescript6) Apache-2.0; web-tree-sitter MIT; tree-sitter-wasm MIT; grammars per upstream (MIT, tree-sitter-elixir Apache-2.0); WrongStack MIT. Texts: LICENSES/ (scripts/oracle/bundle-licenses.ts)",
   "files": {
-    "ts_batch.mjs": "34ae02628804eb1de02a7854cfc8890f3c67a7e0202dacca6423a2134e9e85d8",
-    "ts_parse.mjs": "5069f9c7980810bb7338edc78d6d7c7d45c0099c4ad687e1534227e17ab23778",
+    "ts_batch.mjs": "9f5641909867f4a147a8009704cd213f0181f2b0769e7f73f8ccc6b013f5ecf8",
+    "ts_parse.mjs": "980a8b2a418c44e3278cbbb75287f31c360b4a12f93f2a657e8cadcf700a2b5f",
     "tree-sitter-runtime.wasm": "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc",
     "c/tree-sitter-c.wasm": "7b80a64003e8ef8cde197329ee0167e9270f67663f2e6c6ef7d67b5425998aac",
     "cpp/tree-sitter-cpp.wasm": "285a0d1da90e6cdea639ddf1b925ebca567d24b68d13c418ea92f5a6b7c099dd",

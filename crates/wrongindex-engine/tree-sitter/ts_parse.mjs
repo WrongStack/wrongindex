@@ -171966,7 +171966,7 @@ function emitExportSpecifierRefs(node, refs, lineNum) {
   }
 }
 
-// ../../../../C:/Users/ersin/AppData/Local/Temp/wi-ts-bundle-VQMfFf/ts-entry.mjs
+// target/ts-bundle-work/ts-entry.mjs
 var wf = (v) => typeof v === "string" ? v.toWellFormed() : v;
 async function readStdin() {
   const chunks = [];

@@ -50,6 +50,24 @@ struct Args {
     /// worker), `native`, or `legacy`.
     #[arg(long, value_enum, default_value_t = server::Backend::Auto)]
     backend: server::Backend,
+    /// Print what this build links (version, bundled SQLite version and
+    /// compile options, required SQLite features) as JSON and exit. Used by
+    /// the release manifest (WI-001, WI-703).
+    #[arg(long)]
+    build_info: bool,
+}
+
+/// `--build-info`: the SQLite the index writer and readers actually run
+/// (probed, not taken from the crate version).
+fn build_info() -> ExitCode {
+    println!(
+        "{}",
+        serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "sqlite": wrongindex_storage::sqlite_runtime(),
+        })
+    );
+    ExitCode::SUCCESS
 }
 
 /// Exit code when another daemon already owns this data root's endpoint.
@@ -203,6 +221,9 @@ fn main() -> ExitCode {
         return native_update_child(&raw[2], &raw[3]);
     }
     let args = Args::parse();
+    if args.build_info {
+        return build_info();
+    }
     if let Err(e) = confine::kill_children_with_me() {
         eprintln!("wrongindexd: child processes will not die with the service: {e}");
     }
