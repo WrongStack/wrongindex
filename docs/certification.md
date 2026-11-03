@@ -126,7 +126,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-702 | Release docs, runbook | Done | `docs/operations.md` |
 | WI-703 | Exact-commit CI, provenance, licenses, checksums, signing | Done (signing waived) | Release workflow builds from the exact commit, publishes `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests build provenance (G20, G21). Signing was waived by the owner (M03): every binary reports `NotSigned`. |
 | WI-704 | Artifact smoke and live WrongStack proof | Done | G16, G17, G19 |
-| WI-705 | Native 1.0 release evidence | This document | Release not published: see §7 |
+| WI-705 | Native 1.0 release evidence | This document | 1.0 not published (preview v0.1.0 is): see §7 |
 
 ## 5. Known differences from WrongStack
 
@@ -155,7 +155,7 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 - L1 (supervisor preview) and L2 (compatible preview): met.
 - L3 (native 1.0) profile: met for §1, with the user-approved helper profile and the differences in §5.
-- Releases ship unsigned (M03 waived by the owner). A 1.0 release is **not** published yet. It needs: the adapter branch merged into WrongStack (the owner's decision), and the open manual items (M01, M02, M04, M05) done or explicitly waived.
+- Releases ship unsigned (M03 waived by the owner). The preview release v0.1.0 is published (2026-11-03, release run 41653576684; installed and updated from GitHub in a live test, [status.md](status.md)). A 1.0 release is **not** published yet. It needs: the adapter branch merged into WrongStack (the owner's decision), and the open manual items (M01, M02, M04, M05) done or explicitly waived.
 
 ## 8. Latest run
 
