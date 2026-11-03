@@ -79,7 +79,7 @@ Manual items. The runner always records these as `NOT RUN` until a person does t
 | M02 | Native per-monitor DPI pass on a mixed-DPI setup | WI-407 | Needs mixed-DPI hardware |
 | M03 | Code signing of the installer and binaries | WI-703 | WAIVED by the owner (2026-11-03): releases ship unsigned; integrity is the SHA-256 check (install.ps1, `self-update`) and the build-provenance attestation |
 | M04 | Real sleep/resume cycle with watched projects | WI-207 | Needs a machine that is put to sleep. The resume path (a 30 s wall-clock gap triggers reconciliation) is unit-tested. |
-| M05 | Install on a clean Windows machine without developer tools | WI-700 | Needs a clean machine or VM (G19 installs on the build machine). Run 2026-11-03 in Windows Sandbox: **PASS** for a build from this tree; the published v0.1.0 **FAILS** (needs the Visual C++ runtime, fixed by linking it statically; G21 now refuses such a binary). Details in [status.md](status.md), row M05. |
+| M05 | Install on a clean Windows machine without developer tools | WI-700 | Needs a clean machine or VM (G19 installs on the build machine). Run 2026-11-03 in Windows Sandbox: the published v0.1.0 **FAILS** (needs the Visual C++ runtime, fixed by linking it statically; G21 now refuses such a binary); the published v0.1.1 **PASSES** through the documented one-liner, and so does running the one-liner again over a v0.1.0 that does not start. Details in [status.md](status.md), row M05. |
 
 ## 4. Requirement matrix
 
@@ -122,7 +122,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-600..605 | Backend switch, faults, soak, maintenance, security review, rollout | Done | G03, G09, G11, G13 |
 | WI-606 | Native process tree | Done with the helper profile | No Bun indexing engine, no per-project daemon (`tests/process_tree.rs`). Python, Go and the tree-sitter languages run WrongStack's parse-only programs as confined children (§1). |
 | WI-700 | Installer | Done | G05, G19; install from GitHub with `install.ps1` / `install.sh` (SHA-256 and attestation checked). M05 (clean machine): PASS for a build from this tree, FAIL for the published v0.1.0 (see §3). |
-| WI-701 | Autostart, upgrade, uninstall | Done | G19; `wrongindex self-update` and Settings > Updates in the desktop (tests in G03; local end-to-end upgrades 0.1.0 -> 0.1.1 from the CLI and from the installed desktop, in status.md); PATH entry added and removed, the value restored byte for byte |
+| WI-701 | Autostart, upgrade, uninstall | Done | G19; `wrongindex self-update` and Settings > Updates in the desktop (tests in G03; local end-to-end upgrades 0.1.0 -> 0.1.1 from the CLI and from the installed desktop; live from GitHub v0.1.0 -> v0.1.1 with `self-update` and `install.sh`, and the desktop's check; in status.md); PATH entry added and removed, the value restored byte for byte |
 | WI-702 | Release docs, runbook | Done | `docs/operations.md` |
 | WI-703 | Exact-commit CI, provenance, licenses, checksums, signing | Done (signing waived) | Release workflow builds from the exact commit, publishes `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests build provenance (G20, G21). Signing was waived by the owner (M03): every binary reports `NotSigned`. |
 | WI-704 | Artifact smoke and live WrongStack proof | Done | G16, G17, G19 |
@@ -155,7 +155,7 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 - L1 (supervisor preview) and L2 (compatible preview): met.
 - L3 (native 1.0) profile: met for §1, with the user-approved helper profile and the differences in §5.
-- Releases ship unsigned (M03 waived by the owner). The preview release v0.1.0 is published (2026-11-03, release run 41653576684; installed and updated from GitHub in a live test, [status.md](status.md)). v0.1.0 does not start on a Windows without the Visual C++ redistributable (M05); the fix needs a new release. A 1.0 release is **not** published yet. It needs the open manual items (M01, M02, M04) done or explicitly waived; the adapter is merged into WrongStack `main` (2026-11-03).
+- Releases ship unsigned (M03 waived by the owner). The preview release v0.1.0 is published (2026-11-03, release run 41653576684; installed and updated from GitHub in a live test, [status.md](status.md)). v0.1.0 does not start on a Windows without the Visual C++ redistributable (M05); v0.1.1 (2026-11-03, release run 41697362060) fixes it and passed M05, and updating to it from v0.1.0 was tested live from GitHub. A 1.0 release is **not** published yet. It needs the open manual items (M01, M02, M04) done or explicitly waived; the adapter is merged into WrongStack `main` (2026-11-03).
 
 ## 8. Latest run
 

@@ -67,7 +67,7 @@ wrongindex self-update --version v0.1.0   # a specific release, also an older on
 
 The desktop does the same from Settings > Updates (or the tray's Check for Updates...); a daily check can be turned on there.
 
-> **Known issue in v0.1.0:** its service and CLI need the Microsoft Visual C++ runtime, which a clean Windows does not have; without it they do not start (the desktop opens but shows the service as not running). Install the [Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) or install 0.1.1 once it is published: it links the runtime statically ([CHANGELOG](CHANGELOG.md)).
+> **v0.1.0 on a Windows without the Microsoft Visual C++ runtime:** its service and CLI do not start there (the desktop opens but shows the service as not running), and the one-liner says so. Run the one-liner again: it installs the latest release over it, and 0.1.1 and later link the runtime statically ([CHANGELOG](CHANGELOG.md)).
 
 Releases are not code-signed: Windows SmartScreen may warn on first run of a downloaded installer. Integrity comes from the SHA-256 check and the release's provenance attestation (`gh attestation verify <file> --repo WrongStack/wrongindex`).
 
