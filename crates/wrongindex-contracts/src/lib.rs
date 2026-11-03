@@ -467,6 +467,16 @@ pub struct ProjectStatus {
     /// engine (`{jobId, phase, done?, ms?, files?, atMs}`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<Value>,
+    /// Consecutive failed watcher batches (WI-208); 0 when healthy.
+    #[serde(default)]
+    pub consecutive_failures: u32,
+    /// Epoch ms of the next automatic attempt, while failures back it off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_retry_ms: Option<i64>,
+    /// Parked by the circuit after `watchParkAfterFailures` failures: one
+    /// probe per 15 minutes until a batch or an explicit job succeeds.
+    #[serde(default)]
+    pub parked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -638,6 +648,9 @@ pub struct DaemonSettings {
     pub native_memory_mb: u64,
     /// Index backups kept per project (taken at each ownership transfer).
     pub backup_keep: usize,
+    /// Consecutive failed watcher batches after which a project is parked
+    /// (one probe per 15 minutes until a batch or an explicit job succeeds).
+    pub watch_park_after_failures: u32,
     /// Background indexing paused: watcher batches wait (freshness is not
     /// current); explicit requests and queries still run.
     pub paused: bool,
@@ -652,6 +665,7 @@ impl Default for DaemonSettings {
             parallel_jobs: 2,
             native_memory_mb: 0,
             backup_keep: 3,
+            watch_park_after_failures: 8,
             paused: false,
         }
     }
@@ -678,6 +692,12 @@ impl DaemonSettings {
             range("nativeMemoryMb", self.native_memory_mb, 512, 1_048_576)?;
         }
         range("backupKeep", self.backup_keep as u64, 1, 20)?;
+        range(
+            "watchParkAfterFailures",
+            u64::from(self.watch_park_after_failures),
+            2,
+            100,
+        )?;
         Ok(())
     }
 }

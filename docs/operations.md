@@ -56,8 +56,10 @@ A watcher batch (or `wrongindex index <id> --path ...`) runs as WrongStack's tar
 Freshness is reported separately from activity. `current` means the watcher is attached, nothing is pending and the last run succeeded. The other states are:
 
 - `pending`: edits are waiting, or the service is paused.
-- `degraded`: the last run failed.
+- `degraded`: the last run failed, or the project is parked (below).
 - `unavailable`: the checkout root is missing, or watching failed.
+
+A failed watcher run keeps its paths pending and is retried after 2 s, doubling per failure up to 60 s; new edits do not skip the wait. After `watchParkAfterFailures` failures in a row (default 8) the project is **parked**: `watchHealth: parked`, freshness `degraded`, one probe attempt every 15 minutes. `project status` reports `consecutiveFailures`, `nextRetryMs` and `parked`; the desktop shows them under Watch. Any explicit index job for the project that succeeds (Reconcile, Retry, `index <id> --full`) closes the circuit and pending edits run at once. A successful probe does the same.
 - `unknown`: the project is not watched.
 
 ## 4. Settings
@@ -72,6 +74,7 @@ Freshness is reported separately from activity. `current` means the watcher is a
 | `watchMaxWaitMs` | 2000 | 500-60000, ≥ debounce | Longest wait under continuous edits |
 | `sessionGraceSeconds` | 120 | 0-3600 | Watching continues this long after the last client |
 | `backupKeep` | 3 | 1-20 | Backups kept per index |
+| `watchParkAfterFailures` | 8 | 2-100 | Failed watcher runs in a row after which a project is parked |
 | `paused` | false | — | Background indexing paused (explicit requests and queries still run) |
 
 Changes apply immediately and survive restarts. An unknown key, an out-of-range value or a stale `expectedRevision` is refused, and nothing changes.

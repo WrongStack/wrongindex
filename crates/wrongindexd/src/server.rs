@@ -665,6 +665,9 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
             .lock()
             .ok()
             .and_then(|p| p.get(&pid).cloned()),
+        consecutive_failures: ws.consecutive_failures,
+        next_retry_ms: ws.retry_in_ms.map(|ms| now_ms() + ms as i64),
+        parked: ws.parked,
     })
 }
 
@@ -1123,6 +1126,7 @@ async fn dispatch_inner(
                 "parallelJobs": settings.parallel_jobs,
                 "nativeMemoryMb": settings.native_memory_mb,
                 "backupKeep": settings.backup_keep,
+                "watchParkAfterFailures": settings.watch_park_after_failures,
             });
             Ok(m)
         }

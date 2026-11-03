@@ -33,6 +33,7 @@ const SERVICE_FIELDS = [
   { key: 'watchMaxWaitMs', label: 'Longest wait under continuous edits', unit: 'ms', min: 500, max: 60000 },
   { key: 'sessionGraceSeconds', label: 'Keep watching after the last client', unit: 's', min: 0, max: 3600 },
   { key: 'backupKeep', label: 'Index backups kept per project', unit: '', min: 1, max: 20 },
+  { key: 'watchParkAfterFailures', label: 'Park a project after failed runs in a row', unit: '', min: 2, max: 100, note: 'A parked project is retried once every 15 minutes until a run succeeds.' },
 ];
 const ACTIVITY_CAP = 200;
 
@@ -355,7 +356,8 @@ function detailView() {
       el('div', { class: 'k' }, 'Freshness'), el('div', {}, badge(s.freshness, FRESHNESS), s.reconcileReason ? ` (reconcile: ${s.reconcileReason})` : ''),
       el('div', { class: 'k' }, 'Ownership'), el('div', {}, badge(s.ownership, OWNERSHIP)),
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
-      el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`),
+      el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
+        retryNote(s) ? el('div', { class: s.parked ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
@@ -437,6 +439,17 @@ function progressText(pr) {
 }
 
 /** A plain next step for an error message (compatibility §, plan 2.4). */
+// Watcher retry state (WI-208): failures back automatic runs off; after the
+// configured number in a row the project is parked.
+function retryNote(s) {
+  const n = s.consecutiveFailures ?? 0;
+  if (!n) return '';
+  const next = s.nextRetryMs ? ` Next automatic attempt ${when(s.nextRetryMs)}.` : '';
+  return s.parked
+    ? `Parked after ${n} failed runs in a row.${next} Fix the error, then use Reconcile or Retry.`
+    : `${n} failed run(s) in a row; retrying with a growing delay.${next}`;
+}
+
 function nextAction(message) {
   const m = String(message);
   if (/checkout root .*unavailable|root is unavailable/.test(m)) return 'Restore or reconnect the project folder; watching resumes by itself.';

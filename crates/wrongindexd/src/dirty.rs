@@ -13,6 +13,11 @@
 //!   off: the next attempt waits 2 s, doubling per consecutive failure up to
 //!   60 s, so a project that keeps failing cannot occupy the worker in a
 //!   tight loop. A success resets the backoff.
+//! * Circuit (WI-208): after `park_after` consecutive failures the project is
+//!   parked - one probe attempt every 15 minutes instead of every minute -
+//!   until a batch or an explicit job succeeds (`clear_failures`). Parking
+//!   is reported (`watchHealth: parked`, freshness `degraded`), never
+//!   silent.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -22,6 +27,8 @@ pub struct DebounceConfig {
     pub debounce: Duration,
     pub max_wait: Duration,
     pub cap: usize,
+    /// Consecutive failed batches after which the project is parked.
+    pub park_after: u32,
 }
 
 impl Default for DebounceConfig {
@@ -30,6 +37,7 @@ impl Default for DebounceConfig {
             debounce: Duration::from_millis(400),
             max_wait: Duration::from_secs(2),
             cap: 10_000,
+            park_after: 8,
         }
     }
 }
@@ -62,6 +70,8 @@ pub struct DirtySet {
 pub const RETRY_BASE: Duration = Duration::from_secs(2);
 /// Longest retry delay.
 pub const RETRY_MAX: Duration = Duration::from_secs(60);
+/// While parked: one probe attempt this often.
+pub const PARK_PROBE: Duration = Duration::from_secs(15 * 60);
 
 impl DirtySet {
     pub fn is_empty(&self) -> bool {
@@ -78,6 +88,28 @@ impl DirtySet {
 
     pub fn failures(&self) -> u32 {
         self.failures
+    }
+
+    /// The circuit is open: automatic attempts are down to one probe per
+    /// `PARK_PROBE`.
+    pub fn parked(&self, cfg: &DebounceConfig) -> bool {
+        self.failures >= cfg.park_after
+    }
+
+    /// How long until the next automatic attempt is allowed (after failures).
+    pub fn retry_in(&self, now: Instant) -> Option<Duration> {
+        self.retry_at
+            .filter(|t| *t > now)
+            .map(|t| t.duration_since(now))
+    }
+
+    /// The cause went away (an explicit job succeeded): close the circuit and
+    /// let pending work run now.
+    pub fn clear_failures(&mut self) -> bool {
+        let had = self.failures > 0;
+        self.failures = 0;
+        self.retry_at = None;
+        had
     }
 
     pub fn reconcile_reason(&self) -> Option<&str> {
@@ -147,12 +179,16 @@ impl DirtySet {
 
     /// Settle a finished batch. Success clears what it covered; anything
     /// newer survives. Failure keeps everything.
-    pub fn settle(&mut self, batch: &Batch, success: bool, now: Instant) {
+    pub fn settle(&mut self, batch: &Batch, success: bool, now: Instant, cfg: &DebounceConfig) {
         if !success {
             self.failures = self.failures.saturating_add(1);
-            let delay = RETRY_BASE
-                .saturating_mul(1u32 << (self.failures - 1).min(16))
-                .min(RETRY_MAX);
+            let delay = if self.parked(cfg) {
+                PARK_PROBE
+            } else {
+                RETRY_BASE
+                    .saturating_mul(1u32 << (self.failures - 1).min(16))
+                    .min(RETRY_MAX)
+            };
             self.retry_at = Some(now + delay);
             return;
         }
@@ -190,6 +226,7 @@ mod tests {
             debounce: Duration::from_millis(400),
             max_wait: Duration::from_secs(2),
             cap: 3,
+            park_after: 100,
         }
     }
 
@@ -231,7 +268,7 @@ mod tests {
         assert_eq!(batch.paths, vec!["a.ts", "b.ts"]);
         // a.ts edited again while the batch runs.
         d.mark("a.ts".into(), t0 + Duration::from_millis(10), &cfg());
-        d.settle(&batch, true, t0 + Duration::from_millis(20));
+        d.settle(&batch, true, t0 + Duration::from_millis(20), &cfg());
         assert_eq!(d.take().unwrap().paths, vec!["a.ts"]);
     }
 
@@ -241,7 +278,7 @@ mod tests {
         let mut d = DirtySet::default();
         d.mark("a.ts".into(), t0, &cfg());
         let batch = d.take().unwrap();
-        d.settle(&batch, false, t0);
+        d.settle(&batch, false, t0, &cfg());
         assert_eq!(d.len(), 1);
     }
 
@@ -255,7 +292,7 @@ mod tests {
         for _ in 0..8 {
             assert!(d.ready(now, &cfg()));
             let batch = d.take().unwrap();
-            d.settle(&batch, false, now);
+            d.settle(&batch, false, now, &cfg());
             let mut t = now;
             while !d.ready(t, &cfg()) {
                 t += Duration::from_millis(500);
@@ -267,15 +304,51 @@ mod tests {
         assert_eq!(d.failures(), 8);
         // A new edit does not bypass the backoff.
         let batch = d.take().unwrap();
-        d.settle(&batch, false, now);
+        d.settle(&batch, false, now, &cfg());
         d.mark("b.ts".into(), now, &cfg());
         assert!(!d.ready(now + Duration::from_secs(1), &cfg()));
         let later = now + RETRY_MAX;
         let batch = d.take().unwrap();
-        d.settle(&batch, true, later);
+        d.settle(&batch, true, later, &cfg());
         assert_eq!(d.failures(), 0);
         d.mark("c.ts".into(), later, &cfg());
         assert!(d.ready(later + Duration::from_millis(500), &cfg()));
+    }
+
+    #[test]
+    fn repeated_failures_park_until_an_explicit_success() {
+        let c = DebounceConfig {
+            park_after: 3,
+            ..cfg()
+        };
+        let t0 = Instant::now();
+        let mut d = DirtySet::default();
+        d.mark("a.ts".into(), t0, &c);
+        let mut now = t0 + Duration::from_secs(1);
+        for n in 1..=3 {
+            assert!(d.ready(now, &c), "attempt {n}");
+            assert!(!d.parked(&c));
+            let batch = d.take().unwrap();
+            d.settle(&batch, false, now, &c);
+            now += d.retry_in(now).unwrap();
+        }
+        // Parked: the next attempt is a probe 15 minutes out, edits included.
+        assert!(d.parked(&c));
+        let probe = now;
+        // The third failure (at probe - PARK_PROBE) set the probe delay.
+        assert_eq!(d.retry_in(probe - PARK_PROBE), Some(PARK_PROBE));
+        d.mark("b.ts".into(), probe - Duration::from_secs(60), &c);
+        assert!(!d.ready(probe - Duration::from_secs(1), &c));
+        assert!(d.ready(probe, &c));
+        // A failed probe stays parked; an explicit success closes the circuit.
+        let batch = d.take().unwrap();
+        d.settle(&batch, false, probe, &c);
+        assert!(d.parked(&c));
+        assert_eq!(d.retry_in(probe), Some(PARK_PROBE));
+        assert!(d.clear_failures());
+        assert!(!d.parked(&c));
+        assert!(d.ready(probe + Duration::from_secs(1), &c));
+        assert!(!d.clear_failures());
     }
 
     #[test]
@@ -292,10 +365,10 @@ mod tests {
         assert!(batch.paths.is_empty());
         // An event after the reconcile started keeps the marker alive.
         d.mark("e".into(), t0 + Duration::from_millis(5), &cfg());
-        d.settle(&batch, true, t0 + Duration::from_millis(10));
+        d.settle(&batch, true, t0 + Duration::from_millis(10), &cfg());
         assert!(!d.is_empty(), "newer event must survive");
         let again = d.take().unwrap();
-        d.settle(&again, true, t0 + Duration::from_millis(20));
+        d.settle(&again, true, t0 + Duration::from_millis(20), &cfg());
         assert!(d.is_empty());
     }
 }

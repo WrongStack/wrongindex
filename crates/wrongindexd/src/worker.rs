@@ -148,6 +148,13 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
                 "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
             });
             crate::events::job_event(&shared, "job.finished", &done);
+            // An explicit write job that succeeded closes a watcher circuit
+            // (WI-208); the watcher's own batches settle in the supervisor.
+            if ok && done.kind != JobKind::Check {
+                shared
+                    .watch
+                    .note_job_succeeded(&done.project_id, &done.job_id);
+            }
         }
         Err(e) => {
             warn!("job_completion_not_recorded", {"jobId": job_id, "error": e.to_string()})

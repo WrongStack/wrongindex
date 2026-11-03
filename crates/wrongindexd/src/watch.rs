@@ -84,6 +84,13 @@ pub struct WatchStatus {
     pub overflows: u64,
     pub last_error: Option<String>,
     pub initial_scan_done: bool,
+    /// Consecutive failed watcher batches (WI-208).
+    pub consecutive_failures: u32,
+    /// When the next automatic attempt is allowed, after failures.
+    pub retry_in_ms: Option<u64>,
+    /// The circuit parked the project: one probe per 15 minutes until a
+    /// batch or an explicit job succeeds.
+    pub parked: bool,
 }
 
 pub struct Supervisor {
@@ -116,6 +123,7 @@ impl Supervisor {
         if let Ok(mut c) = self.cfg.lock() {
             c.debounce = Duration::from_millis(s.watch_debounce_ms);
             c.max_wait = Duration::from_millis(s.watch_max_wait_ms);
+            c.park_after = s.watch_park_after_failures;
         }
         if let Ok(mut g) = self.grace.lock() {
             *g = Duration::from_secs(s.session_grace_seconds);
@@ -209,14 +217,20 @@ impl Supervisor {
 
     pub fn status(&self, project_id: &str) -> WatchStatus {
         let sessions = self.session_count(project_id);
+        let cfg = self.debounce();
+        let now = Instant::now();
         let p = self.projects.lock();
         let w = p.as_ref().ok().and_then(|p| p.get(project_id));
+        let parked = w.is_some_and(|w| w.watcher.is_some() && w.dirty.parked(&cfg));
         WatchStatus {
             watching: w.is_some_and(|w| w.watcher.is_some()),
-            watch_health: w
-                .map(|w| if w.health.is_empty() { "off" } else { w.health })
-                .unwrap_or("off")
-                .to_string(),
+            watch_health: if parked {
+                PARKED.to_string()
+            } else {
+                w.map(|w| if w.health.is_empty() { "off" } else { w.health })
+                    .unwrap_or("off")
+                    .to_string()
+            },
             pending_paths: w.map(|w| w.dirty.len()).unwrap_or(0),
             reconcile_reason: w.and_then(|w| w.dirty.reconcile_reason().map(str::to_string)),
             inflight_job: w.and_then(|w| w.inflight.as_ref().map(|(j, _)| j.clone())),
@@ -224,6 +238,33 @@ impl Supervisor {
             overflows: w.map(|w| w.dirty.overflows()).unwrap_or(0),
             last_error: w.and_then(|w| w.last_error.clone()),
             initial_scan_done: w.is_some_and(|w| w.initial_done),
+            consecutive_failures: w.map(|w| w.dirty.failures()).unwrap_or(0),
+            retry_in_ms: w
+                .and_then(|w| w.dirty.retry_in(now))
+                .map(|d| d.as_millis() as u64),
+            parked,
+        }
+    }
+
+    /// An explicit (non-watcher) write job for the project succeeded: what
+    /// made the watcher's batches fail is gone, so the circuit closes and
+    /// pending work runs without waiting out the backoff.
+    pub fn note_job_succeeded(&self, project_id: &str, job_id: &str) {
+        let Ok(mut g) = self.projects.lock() else {
+            return;
+        };
+        let Some(w) = g.get_mut(project_id) else {
+            return;
+        };
+        if w.inflight.as_ref().is_some_and(|(j, _)| j == job_id) {
+            return; // the watcher's own batch: settled with its result
+        }
+        let failures = w.dirty.failures();
+        if w.dirty.clear_failures() {
+            w.last_error = None;
+            info!("watch_circuit_closed", {
+                "projectId": project_id, "jobId": job_id, "consecutiveFailures": failures,
+            });
         }
     }
 
@@ -235,6 +276,10 @@ impl Supervisor {
         }
         if !status.watching {
             return Freshness::Unknown;
+        }
+        // Parked work does not progress on its own: not merely pending.
+        if status.parked {
+            return Freshness::Degraded;
         }
         if !status.initial_scan_done
             || status.pending_paths > 0
@@ -534,6 +579,8 @@ const ROOT_POLL: Duration = Duration::from_secs(2);
 
 /// `watchHealth` of a project whose checkout root is missing.
 pub const ROOT_UNAVAILABLE: &str = "root_unavailable";
+/// Watch health of a project the circuit parked (WI-208).
+pub const PARKED: &str = "parked";
 
 fn root_unavailable(shared: &Arc<Shared>, project_id: &str) {
     if let Ok(mut g) = shared.watch.projects.lock() {
@@ -578,16 +625,25 @@ async fn settle_finished(shared: &Arc<Shared>) {
             continue;
         }
         let ok = job.state == JobState::Succeeded;
+        let cfg = shared.watch.debounce();
         if let Ok(mut g) = shared.watch.projects.lock()
             && let Some(w) = g.get_mut(&pid)
             && let Some((_, batch)) = w.inflight.take()
         {
-            w.dirty.settle(&batch, ok, Instant::now());
+            let was_parked = w.dirty.parked(&cfg);
+            w.dirty.settle(&batch, ok, Instant::now(), &cfg);
             if !ok {
                 warn!("watch_batch_failed", {
                     "projectId": pid,
                     "consecutiveFailures": w.dirty.failures(),
                 });
+                if !was_parked && w.dirty.parked(&cfg) {
+                    warn!("watch_parked", {
+                        "projectId": pid,
+                        "consecutiveFailures": w.dirty.failures(),
+                        "probeEverySeconds": crate::dirty::PARK_PROBE.as_secs(),
+                    });
+                }
             }
             if batch.reconcile.is_some() && ok {
                 w.initial_done = true;
