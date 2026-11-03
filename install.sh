@@ -55,4 +55,7 @@ script="$work/install.ps1"
 if command -v cygpath >/dev/null 2>&1; then
   script="$(cygpath -w "$script")"
 fi
-WRONGINDEX_REPO="$repo" powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$script"
+# Without PSModulePath: when this shell was started from PowerShell 7 it holds
+# PowerShell 7's module directories, and Windows PowerShell then loads modules
+# it cannot use (Get-FileHash, for one, goes missing). Unset, it uses its own.
+WRONGINDEX_REPO="$repo" env -u PSModulePath powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$script"

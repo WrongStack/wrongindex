@@ -71,7 +71,11 @@
         if ($parts.Count -eq 2 -and $parts[1].TrimStart('*') -eq $installerAsset.name) { $parts[0].ToLower() }
       }) | Select-Object -First 1
     if (-not $want) { throw "SHA256SUMS.txt does not list $($installerAsset.name)" }
-    $got = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+    # .NET rather than Get-FileHash: in Windows PowerShell that is a script
+    # function, missing when a PowerShell 7 PSModulePath was inherited.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($installer)
+    try { $got = -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) } finally { $stream.Dispose(); $sha.Dispose() }
     if ($got -ne $want) { throw "checksum mismatch for $($installerAsset.name): expected $want, got $got. Nothing was installed." }
     Say 'SHA-256 verified'
 
