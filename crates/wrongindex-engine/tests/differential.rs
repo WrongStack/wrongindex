@@ -1299,6 +1299,85 @@ fn native_matches_wrongstack_on_polyglot_projects() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// WI-005 / WI-407: files deeper than Windows' classic 260-character path
+/// limit, in walk mode and Git mode (`core.longpaths`), through in-process
+/// (TS, JSON), toolchain (Python) and tree-sitter (Java) routes; a full run,
+/// then a targeted edit of the deepest file.
+#[test]
+#[ignore = "needs WRONGINDEX_TEST_ENGINE (prepared WrongStack engine), bun and python"]
+fn native_matches_wrongstack_on_paths_over_260_characters() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let deep = format!(
+        "src/{}/{}/{}/{}",
+        "alpha".repeat(12),
+        "bravo".repeat(12),
+        "charlie".repeat(9),
+        "delta".repeat(12)
+    );
+    let mut failures = Vec::new();
+    for git_mode in [false, true] {
+        let name = if git_mode {
+            "long-paths-git"
+        } else {
+            "long-paths"
+        };
+        let s = base.join(name);
+        let root = s.join("project");
+        write(
+            &root,
+            &format!("{deep}/deep_module.ts"),
+            "export function deepGreeting(name: string): string {\n  return `hi ${name}`;\n}\n",
+        );
+        write(
+            &root,
+            &format!("{deep}/deep_config.json"),
+            "{\"deep\": true, \"depth\": 4}\n",
+        );
+        write(
+            &root,
+            &format!("{deep}/deep_tool.py"),
+            "def deep_tool(x):\n    return x * 2\n",
+        );
+        write(
+            &root,
+            &format!("{deep}/DeepService.java"),
+            "package deep;\n\npublic class DeepService {\n  public int depth() { return 4; }\n}\n",
+        );
+        write(
+            &root,
+            "src/main.ts",
+            &format!(
+                "import {{ deepGreeting }} from './{}/deep_module';\nexport const greeting = deepGreeting('a');\n",
+                deep.trim_start_matches("src/")
+            ),
+        );
+        let deepest = root.join(&deep).join("deep_module.ts");
+        assert!(
+            deepest.to_string_lossy().len() > 260,
+            "not a long path: {}",
+            deepest.display()
+        );
+        if git_mode {
+            git(&root, &["init", "-q"]);
+            git(&root, &["config", "core.longpaths", "true"]);
+            git(&root, &["add", "-A"]);
+            git(&root, &["commit", "-q", "-m", "init"]);
+        }
+        failures.extend(compare(name, &root, &s));
+        let original = std::fs::read_to_string(&deepest).unwrap();
+        std::fs::write(&deepest, format!("{original}export const deeper = 5;\n")).unwrap();
+        failures.extend(targeted_round(
+            &format!("{name}-targeted"),
+            &root,
+            &s.join("idx-wrongstack"),
+            &s.join("idx-native"),
+            &[deepest.to_string_lossy().into_owned()],
+        ));
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Experiment (WI-515 design input, prints instead of asserting): how far is
 /// WrongStack's own incremental run from its own fresh run over the same
 /// final files?
