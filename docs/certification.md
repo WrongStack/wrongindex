@@ -11,7 +11,7 @@ This document defines what a WrongIndex build is certified against, how the cert
 | Index format | WrongStack schema version 5, DDL fingerprint `d98114d3…`, FTS5 with the trigram tokenizer |
 | WrongIndex SQLite | bundled 3.54.1 (`rusqlite =0.41.1`); version, compile options and FTS5 trigram support recorded per release (`wrongindexd --build-info`, `RELEASE-MANIFEST.json`) |
 | Platform | Windows 11 x64, per-user installation (NSIS, `currentUser`) |
-| WrongStack client | WrongStack with the adapter, branch `feat/wrongindex-adapter` (`38816c01c`), `indexing.service` = `local`, `auto` or `wrongindex`. Not merged into WrongStack `main`. |
+| WrongStack client | WrongStack with the adapter, branch `feat/wrongindex-adapter` (certified run: `38816c01c`; head `e8b3e7257` adds the wire-contract test and uses the service's error codes), `indexing.service` = `local`, `auto` or `wrongindex`. Not merged into WrongStack `main`. |
 | Languages | Every route in [`contracts/inventory/languages.json`](../contracts/inventory/languages.json): 35 languages, 65 extensions, 10 special file names |
 
 How each language is parsed (the index written is WrongStack's in every case):
@@ -63,7 +63,7 @@ The run writes `certification.json`, `certification.md`, one log per gate, `THIR
 | G12 | Parser ports against a real-world known-answer corpus | WI-501 | `parser_ports_match_a_real_world_corpus` |
 | G13 | Git containment vet on real checkouts | WI-604 | `real_checkouts_pass` |
 | G14 | Discovery against WrongStack's, 1,680-case matrix | WI-205 | `bun scripts/oracle/discovery-diff.ts` |
-| G15 | WrongStack adapter tests, including end to end through the service | WI-303..309 | `vitest run tests/wrongindex-adapter.test.ts` |
+| G15 | WrongStack adapter tests, including end to end through the service, and the adapter against the generated wire fixtures | WI-102, WI-303..309 | `vitest run tests/wrongindex-adapter.test.ts tests/wrongindex-wire-contract.test.ts` |
 | G16 | Live proof: WrongStack's MCP server over a running service | WI-704 | `scripts/release/wrongstack-live.mjs` |
 | G17 | Live proof: WrongStack CLI and WebUI over a running service (session start, WebUI index, graphs with SAGE decoration, watcher edit shown in the WebUI) | WI-704 | `scripts/release/wrongstack-live-webui.mjs` |
 | G18 | Desktop reconnect after missed events never shows false success | WI-404 | `scripts/release/smoke-reconnect.mjs` |
@@ -99,7 +99,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-009 | License review | Done | WrongStack code ported or bundled is MIT by the same holder as WrongIndex; inventory of 241 crates and 14 bundled assets with texts from the exact bundled versions (G20). Finding: `tree-sitter-elixir` is Apache-2.0, not MIT as first recorded. MPL-2.0 crates (`cssparser`, `dtoa-short`, `option-ext`, `selectors`, via Tauri) are listed with their source location. |
 | WI-100 | Separate repo, pins, CI | Done | This repository; CI on every push |
 | WI-101 | Dependency/toolchain versions | Done | Exact pins in the workspace `Cargo.toml`; toolchain pinned to 1.93.0. Upgrading to a newer stable toolchain is a deliberate follow-up, not a defect. |
-| WI-102 | Contracts crate and TS DTO generation | Partial | Contracts crate with round-trip tests. The adapter's TypeScript DTOs are written by hand and proven end to end against the real service (G15-G17). There is no generator. |
+| WI-102 | Contracts crate and TS DTO generation | Done | `contracts/wire/fixtures.json` is generated from the Rust contracts (`scripts/contracts/export-wire-fixtures.mjs`). It holds every request, response, record and enum on the wire, plus endpoint.json and the owner record. Drift fails `tests/wire_fixtures.rs`, and every fixture round-trips through its Rust type. The adapter is tested against a byte copy in both directions (`wrongindex-wire-contract.test.ts`, G15): what it reads, and frames identical to the Rust-built ones. Its types stay hand-written; the fixtures keep them honest. |
 | WI-103..107 | Data root, singleton, IPC, registry, inspector | Done | G03/G04 |
 | WI-108 | Storage write/read primitives | Done for the profile | Native DDL, FTS, hashes and IDs identical to WrongStack (G03, G06, G07). `symbol_vectors` (written by WrongStack only with `WRONGSTACK_INDEX_VECTORS`) is out of profile for the native writer: such indexes are refused and left to the preserving worker. |
 | WI-109, WI-110 | Ownership guard, CLI doctor | Done | G03/G04 |
