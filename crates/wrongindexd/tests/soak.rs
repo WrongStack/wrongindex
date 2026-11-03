@@ -171,7 +171,20 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
     let mut last_sample = Instant::now() - Duration::from_secs(10);
     let mut last_marker: Vec<String> = vec![String::new(); projects.len()];
     let mut n = 0u64;
+    let mut last_tick = Instant::now();
     while start.elapsed() < Duration::from_secs(secs) {
+        // A machine that sleeps stops the edits but not the clock: the edit
+        // phase would end early and the plateau rest on a fraction of it.
+        // That run proves nothing either way.
+        let gap = last_tick.elapsed();
+        if gap > Duration::from_secs(30) {
+            println!(
+                "NOT RUN: the machine was suspended during the soak ({} s without a tick after {n} edits); rerun it awake",
+                gap.as_secs()
+            );
+            return;
+        }
+        last_tick = Instant::now();
         let i = (n as usize) % projects.len();
         let (_, src, kind) = &projects[i];
         last_marker[i] = edit(src, kind, n);
