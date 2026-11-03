@@ -265,7 +265,7 @@ CI on the security fix (run 41294030531) FAILED, exposing a real environment cas
 Open items, none of them silently assumed done ([certification.md](certification.md) §4, §6, §7):
 
 1. Code signing (M03): waived by the owner on 2026-11-03 - releases ship unsigned; integrity is the SHA-256 check and the build-provenance attestation.
-2. Merge of the WrongStack adapter branch `feat/wrongindex-adapter`: PR WrongStack/WrongStack#430 (the owner asked for the merge on 2026-11-03). Every check including the CI Gate passes on `c981ae0c8`; the branch protection needs one approving review, which the author cannot give, so the owner approves or merges.
+2. ~~Merge of the WrongStack adapter~~: done 2026-11-03 by the owner (WrongStack/WrongStack#430, merge `c2ecf60d4`; its tree is identical to `c981ae0c8`, on which every WrongStack check including the CI Gate passed). WrongStack users get it with the first WrongStack release after v1.4.0.
 3. An update across two published releases from GitHub (`self-update` and the one-liner), once a second release exists.
 4. Manual passes: screen reader (M01), mixed-DPI (M02), a controlled sleep/resume (M04), install on a clean machine (M05).
 5. Optional: a reproducible-build comparison of two independent release builds.

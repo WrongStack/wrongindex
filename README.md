@@ -2,7 +2,7 @@
 
 A local, persistent codebase indexing service for [WrongStack](https://github.com/WrongStack/WrongStack): one Rust daemon per OS user manages every registered project, each checkout keeps its existing WrongStack-compatible `index.db`, and WrongStack's CLI, WebUI, desktop, and MCP surfaces connect as clients. A separate desktop GUI shows real daemon state.
 
-> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects with a native writer whose output is logically identical to WrongStack's own indexer, in place and incrementally. WrongStack uses it only with the adapter on the WrongStack branch `feat/wrongindex-adapter` (`indexing.service`), which is not merged yet. Builds are not code-signed. [docs/status.md](docs/status.md) lists exactly what is implemented and verified, and what is not; [docs/certification.md](docs/certification.md) defines the certified profile, its gates, the known differences from WrongStack and the latest run.
+> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects with a native writer whose output is logically identical to WrongStack's own indexer, in place and incrementally. WrongStack uses it through its adapter (`indexing.service`), merged into WrongStack `main` on 2026-11-03 (WrongStack/WrongStack#430); the first WrongStack release after v1.4.0 will carry it. Builds are not code-signed. [docs/status.md](docs/status.md) lists exactly what is implemented and verified, and what is not; [docs/certification.md](docs/certification.md) defines the certified profile, its gates, the known differences from WrongStack and the latest run.
 
 ## What works today
 

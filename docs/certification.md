@@ -11,7 +11,7 @@ This document defines what a WrongIndex build is certified against, how the cert
 | Index format | WrongStack schema version 5, DDL fingerprint `d98114d3…`, FTS5 with the trigram tokenizer |
 | WrongIndex SQLite | bundled 3.54.1 (`rusqlite =0.41.1`); version, compile options and FTS5 trigram support recorded per release (`wrongindexd --build-info`, `RELEASE-MANIFEST.json`) |
 | Platform | Windows 11 x64, per-user installation (NSIS, `currentUser`) |
-| WrongStack client | WrongStack with the adapter, branch `feat/wrongindex-adapter` (certified run: `38816c01c`; head `e8b3e7257` adds the wire-contract test and uses the service's error codes), `indexing.service` = `local`, `auto` or `wrongindex`. Not merged into WrongStack `main`. |
+| WrongStack client | WrongStack with the adapter (certified run: branch `feat/wrongindex-adapter` at `38816c01c`; `e8b3e7257` adds the wire-contract test and uses the service's error codes), `indexing.service` = `local`, `auto` or `wrongindex`. Merged into WrongStack `main` on 2026-11-03 (WrongStack/WrongStack#430, merge `c2ecf60d4`, whose tree is that of `c981ae0c8`, on which every WrongStack check passed); not in WrongStack v1.4.0 or earlier. |
 | Languages | Every route in [`contracts/inventory/languages.json`](../contracts/inventory/languages.json): 35 languages, 65 extensions, 10 special file names |
 
 How each language is parsed (the index written is WrongStack's in every case):
@@ -110,7 +110,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-208 | Cancel, deadlines, retry, circuit | Done | Cancel and deadlines; backoff 2-60 s; parking after `watchParkAfterFailures` failures, reported in status and the desktop, closed by an explicit success (`tests/watch_circuit.rs`) |
 | WI-209 | Metrics, logs, quotas | Done | G03 |
 | WI-300..302 | Compatibility worker, routing, read ops | Done | G08 (671/671 operations identical through the daemon), G09 |
-| WI-303..309 | WrongStack transport, hooks, ownership, hosts, takeover, limits | Done (adapter branch) | G15-G17. The adapter is on branch `feat/wrongindex-adapter`, not merged. |
+| WI-303..309 | WrongStack transport, hooks, ownership, hosts, takeover, limits | Done | G15-G17. The adapter is merged into WrongStack `main` (WrongStack/WrongStack#430, 2026-11-03). |
 | WI-400..406 | Desktop shell, views, reconnect, settings, tray | Done | G03, G18, G19 |
 | WI-407 | Accessibility, DPI, theme, long paths | Partial | Automated keyboard, contrast and theme pass done; files past 260 characters indexed, watched and served (`tests/long_paths.rs`, G06); M01 and M02 not run |
 | WI-408 | Packaged desktop smoke | Done | G19 |
@@ -155,7 +155,7 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 - L1 (supervisor preview) and L2 (compatible preview): met.
 - L3 (native 1.0) profile: met for §1, with the user-approved helper profile and the differences in §5.
-- Releases ship unsigned (M03 waived by the owner). The preview release v0.1.0 is published (2026-11-03, release run 41653576684; installed and updated from GitHub in a live test, [status.md](status.md)). A 1.0 release is **not** published yet. It needs: the adapter branch merged into WrongStack (the owner's decision), and the open manual items (M01, M02, M04, M05) done or explicitly waived.
+- Releases ship unsigned (M03 waived by the owner). The preview release v0.1.0 is published (2026-11-03, release run 41653576684; installed and updated from GitHub in a live test, [status.md](status.md)). A 1.0 release is **not** published yet. It needs the open manual items (M01, M02, M04, M05) done or explicitly waived; the adapter is merged into WrongStack `main` (2026-11-03).
 
 ## 8. Latest run
 

@@ -114,7 +114,7 @@ WrongStack selects the service with `indexing.service` in its user config (not s
 | `auto` | WrongIndex for an index it owns, the local engine otherwise. |
 | `wrongindex` | WrongIndex. The project is registered and claimed after WrongStack's local project server for it is shut down. If the service is not running or not installed, WrongStack's own engine is used, unless the service holds the index. |
 
-WrongStack's own index engine never depends on WrongIndex. Without the service, every mode indexes and answers locally. The one exception is an index whose lock is held by a live service: that index is refused, never written. A lock file left behind by a service that is gone does not count. This needs WrongStack with the adapter (branch `feat/wrongindex-adapter`). Older WrongStack versions ignore the ownership lock: do not run them against an index WrongIndex owns.
+WrongStack's own index engine never depends on WrongIndex. Without the service, every mode indexes and answers locally. The one exception is an index whose lock is held by a live service: that index is refused, never written. A lock file left behind by a service that is gone does not count. This needs WrongStack with the adapter: `main` since 2026-11-03 (WrongStack/WrongStack#430), the first release after v1.4.0. Older WrongStack versions (v1.4.0 and earlier) ignore the ownership lock: do not run them against an index WrongIndex owns.
 
 ## 7. Metrics, logs and diagnostics
 
