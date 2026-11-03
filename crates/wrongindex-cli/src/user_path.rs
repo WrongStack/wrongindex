@@ -20,7 +20,10 @@ fn same_dir(entry: &str, dir: &str) -> bool {
     !entry.trim().is_empty() && norm(entry) == norm(dir)
 }
 
-/// The edited value, or `None` when nothing changes.
+/// The edited value, or `None` when nothing changes. Adding then removing
+/// gives back the value byte for byte: a trailing separator (Windows writes
+/// `...\WindowsApps;` on a new account) stays after the added entry, and
+/// removing drops only the matching entries (empty ones stay).
 pub fn edit(value: &str, dir: &str, add: bool) -> Option<String> {
     let entries: Vec<&str> = value.split(';').collect();
     let present = entries.iter().any(|e| same_dir(e, dir));
@@ -28,20 +31,18 @@ pub fn edit(value: &str, dir: &str, add: bool) -> Option<String> {
         if present {
             return None;
         }
-        let kept = value.trim_end_matches(';');
-        return Some(if kept.is_empty() {
+        return Some(if value.is_empty() {
             dir.to_string()
+        } else if value.ends_with(';') {
+            format!("{value}{dir};")
         } else {
-            format!("{kept};{dir}")
+            format!("{value};{dir}")
         });
     }
     if !present {
         return None;
     }
-    let kept: Vec<&str> = entries
-        .into_iter()
-        .filter(|e| !same_dir(e, dir) && !e.is_empty())
-        .collect();
+    let kept: Vec<&str> = entries.into_iter().filter(|e| !same_dir(e, dir)).collect();
     Some(kept.join(";"))
 }
 
@@ -192,7 +193,28 @@ mod tests {
             None
         );
         assert_eq!(edit("", d, true).unwrap(), d);
-        assert_eq!(edit("C:\\X;", d, true).unwrap(), format!("C:\\X;{d}"));
+        assert_eq!(edit("C:\\X;", d, true).unwrap(), format!("C:\\X;{d};"));
+    }
+
+    #[test]
+    fn adding_then_removing_gives_the_value_back_byte_for_byte() {
+        let d = r"C:\Users\a\AppData\Local\WrongIndex";
+        for v in [
+            // A new Windows account (M05 in Windows Sandbox).
+            r"%USERPROFILE%\AppData\Local\Microsoft\WindowsApps;",
+            r"%USERPROFILE%\AppData\Local\Microsoft\WindowsApps",
+            r"C:\A;;C:\B",
+            r"C:\A;;",
+            ";",
+            "",
+        ] {
+            let added = edit(v, d, true).unwrap();
+            assert_eq!(
+                edit(&added, d, false).as_deref(),
+                Some(v),
+                "{v:?} via {added:?}"
+            );
+        }
     }
 
     #[test]
@@ -202,5 +224,10 @@ mod tests {
         assert_eq!(edit(v, d, false).unwrap(), r"C:\A;%LOCALAPPDATA%\B");
         assert_eq!(edit(r"C:\A;C:\B", d, false), None);
         assert_eq!(edit(d, d, false).unwrap(), "");
+        // Empty entries are someone else's: kept.
+        assert_eq!(
+            edit(r"C:\A;;C:\Apps\WrongIndex;C:\B;", d, false).unwrap(),
+            r"C:\A;;C:\B;"
+        );
     }
 }
