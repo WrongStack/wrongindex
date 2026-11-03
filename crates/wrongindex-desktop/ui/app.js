@@ -290,10 +290,20 @@ function usageLine(u) {
   return el('p', { class: 'note' }, `WrongIndex keeps there: ${parts.join(', ')}.${hint}`);
 }
 
-/** Volumes short of space (`resource.warning`, kept in the snapshot). */
+/** Volumes short of space and large write-ahead logs (`resource.warning`, kept in the snapshot). */
 function diskBanners() {
-  const vols = state.overview?.snapshot?.resources ?? [];
-  return vols.filter((r) => r.resource === 'disk' && r.level !== 'ok').map((r) => {
+  const all = state.overview?.snapshot?.resources ?? [];
+  const wals = all.filter((r) => r.resource === 'wal' && r.level === 'large').map((r) => {
+    const p = projects().find((x) => x.project.projectId === r.projectId);
+    const name = p ? p.project.displayName : r.projectId;
+    const times = r.indexBytes > 0 ? ` (${(r.walBytes / r.indexBytes).toFixed(1)}× the index)` : '';
+    return el('div', { class: 'banner', role: 'status' },
+      el('p', {}, `The write-ahead log of ${name} is ${megabytes(r.walBytes)}${times}.`),
+      el('p', { class: 'note' }, r.blockedByReader
+        ? `A program has kept a read transaction open on this index since ${when(r.blockedSinceMs)} (a WrongStack session or another reader), so each run adds to the log. WrongIndex folds it into the index as soon as that transaction ends; it never closes other programs' connections.`
+        : 'WrongIndex folds it into the index once no reader needs it.'));
+  });
+  return wals.concat(all.filter((r) => r.resource === 'disk' && r.level !== 'ok').map((r) => {
     const n = (r.projects ?? []).length;
     const which = n ? ` (${n} project index${n === 1 ? '' : 'es'})` : ' (the service data)';
     return r.level === 'full'
@@ -305,7 +315,7 @@ function diskBanners() {
         el('p', {}, `Disk space is getting low on ${r.volume}: ${megabytes(r.freeBytes)} free${which}.`),
         el('p', { class: 'note' }, `Indexing stops there below ${megabytes(r.fullBytes)}.`),
         usageLine(r.usage));
-  });
+  }));
 }
 
 function card(k, v) {

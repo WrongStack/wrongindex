@@ -11,6 +11,7 @@ pub mod inspect;
 pub mod owner_lock;
 pub mod profile;
 pub mod runtime;
+pub mod wal;
 pub mod wrongstack_paths;
 
 pub use content_hash::{file_content_hash, xxhash64_hex};

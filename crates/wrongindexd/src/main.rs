@@ -14,6 +14,7 @@ mod metrics;
 mod ownership;
 mod server;
 mod settings;
+mod wal;
 mod watch;
 mod worker;
 

@@ -64,6 +64,8 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
 
 **Disk space.** An index job starts only when the drive holding the index has at least 256 MiB free, plus the size of the index for a run that may write a complete new copy (full, reconcile, rebuild, restore). Otherwise the job fails with `DISK_FULL` before anything is written. A run that still runs out of space is rolled back and reported as `DISK_FULL` too; the index keeps its last generation. A watched project then waits: `watchHealth: disk_full`, freshness `degraded`, its edits kept pending, no retries on a timer and nothing counted toward parking. Once the drive has the room the waiting work needs, it runs by itself within a second or two. The service looks at the drives holding the data root and every index every 5 seconds and reports a drive under 1 GiB free as `low` and under 256 MiB as `full` (`resource.warning` events, the desktop's Overview, `wrongindex doctor`), with what WrongIndex itself keeps on that drive: indexes, write-ahead logs, backups (`.wrongindex-backups` and files a rebuild or restore kept), directories of unfinished runs, the service log and its other data. It never deletes anything to make room.
 
+**Write-ahead logs.** An index's changes go to `index.db-wal` first. When nothing else has the index open, the log is folded in and removed as a run ends. A program that keeps the index open (a WrongStack session reading it, the compatibility worker) leaves the log behind, and one that keeps a read transaction open makes it grow with every run. For the indexes it owns, the service folds the log into the index and cuts it to zero bytes within about 5 seconds of a run, never beside a run of that project. It never waits on or closes another program's connection: while a reader's transaction needs the log, it tries again every 15 seconds. A log of at least 16 MiB and more than twice its index is reported as large (`resource.warning` with `resource: "wal"`, saying whether a reader holds it and since when; the desktop's Overview).
+
 ## 4. Settings
 
 `wrongindex settings get` / `wrongindex settings set key=value ...` (desktop: Settings > Index service; tray: Pause/Resume Background Indexing).
@@ -134,7 +136,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
   - `index.published` (a new generation);
   - `ownership.changed`;
   - `project.registered`, `project.configured` and `project.detached`;
-  - `resource.warning` when a drive in use changes level (`ok`, `low`, `full`; with its free bytes and the projects whose indexes are on it); the drives not `ok` are also in the snapshot (`resources`);
+  - `resource.warning` when a drive in use changes level (`resource: "disk"`: `ok`, `low`, `full`; with its free bytes and the projects whose indexes are on it), or an owned index's write-ahead log becomes large or is cut (`resource: "wal"`); the warnings in force are also in the snapshot (`resources`);
   - `settings.changed` and `daemon.draining`.
 
   Every event carries the service instance and a sequence number. A client that missed events resumes from its last sequence number or takes a snapshot.
@@ -149,6 +151,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `PROFILE_UNSUPPORTED` / "newer WrongStack" | The index was written by a newer or unknown schema | Update WrongIndex; the index is left untouched |
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open | Close WrongStack clients of that project, then retry |
+| A large `index.db-wal` (`resource.warning`, `resource: "wal"`, `blockedByReader: true`) | A program keeps a read transaction open on the index, so the log cannot be folded in | End that program's session or query (often a long-running WrongStack session); the service cuts the log within 15 seconds after |
 | `DISK_FULL`, `watchHealth: disk_full` | The drive holding the index has too little free space; nothing was written | Free space on that drive (the message says how much is needed). Watched projects resume by themselves; retry other jobs |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |
 | Files missing from search | Files over 5 MiB are not indexed (as in WrongStack) | Listed under Files and errors / `oversizedFiles` in the job result |

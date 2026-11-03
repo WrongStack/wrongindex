@@ -556,7 +556,8 @@ const DISK_CHECK_BUDGET: Duration = Duration::from_secs(2);
 
 /// Disk space (see `disk`): end the wait of projects whose index volume has
 /// room again (every tick, only while a project waits), and report volume
-/// level changes as `resource.warning` (every `DISK_CHECK`).
+/// level changes as `resource.warning` (every `DISK_CHECK`). The same check
+/// looks at the owned indexes' write-ahead logs (see `wal`).
 async fn check_disk(
     shared: &Arc<Shared>,
     projects: &[wrongindex_contracts::ProjectRecord],
@@ -586,6 +587,19 @@ async fn check_disk(
     } else {
         Vec::new()
     };
+    // Owned indexes for WAL care (see `wal`): those with a job running are
+    // left as they are this time.
+    let running: Vec<String> = shared
+        .progress
+        .lock()
+        .map(|p| p.keys().cloned().collect())
+        .unwrap_or_default();
+    type Owned = Vec<(String, PathBuf)>;
+    let (owned_idle, owned_busy): (Owned, Owned) = indexes
+        .iter()
+        .filter(|(pid, _)| shared.owners.holds(pid))
+        .cloned()
+        .partition(|(pid, _)| !running.contains(pid));
     let s2 = shared.clone();
     let check = tokio::task::spawn_blocking(move || {
         // One check at a time; a volume that does not answer (a share that
@@ -600,13 +614,41 @@ async fn check_disk(
         } else {
             Vec::new()
         };
-        Some((room, changes))
+        let wals: Vec<crate::wal::Seen> = owned_idle
+            .into_iter()
+            .map(|(project_id, dir)| crate::wal::Seen {
+                wal: wrongindex_storage::wal::wal_bytes(&dir),
+                index: std::fs::metadata(dir.join("index.db"))
+                    .map(|m| m.len())
+                    .unwrap_or(0),
+                project_id,
+                dir,
+            })
+            .collect();
+        Some((room, changes, wals))
     });
     // The supervisor does not wait on a slow volume: a check that takes
     // longer finishes in the background and its result is dropped.
-    let Ok(Ok(Some((room, changes)))) = tokio::time::timeout(DISK_CHECK_BUDGET, check).await else {
+    let Ok(Ok(Some((room, changes, wals)))) = tokio::time::timeout(DISK_CHECK_BUDGET, check).await
+    else {
         return;
     };
+    if monitor_due {
+        let busy: Vec<String> = owned_busy.into_iter().map(|(pid, _)| pid).collect();
+        for (pid, change) in shared.wal.observe(&wals, &busy, Instant::now()) {
+            if change["level"] == "large" {
+                warn!("wal_large", {"projectId": pid, "wal": change.clone()});
+            } else {
+                info!("wal_ok", {"projectId": pid});
+            }
+            shared
+                .events
+                .publish("resource.warning", Some(&pid), change);
+        }
+        if !shared.wal.due(Instant::now()).is_empty() {
+            shared.wake_worker.notify_one();
+        }
+    }
     for (pid, need, free) in room {
         // Unknown free space is never a reason to wait.
         if free.is_none_or(|f| f >= need)

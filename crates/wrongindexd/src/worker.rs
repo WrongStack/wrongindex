@@ -98,6 +98,29 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
                 started = true;
             }
         }
+        // WAL care (see `wal`) in the slots jobs left, never beside a job
+        // of the same project.
+        if running.len() < parallel {
+            let in_flight = busy.lock().map(|b| b.clone()).unwrap_or_default();
+            for (pid, dir) in shared.wal.due(std::time::Instant::now()) {
+                if running.len() >= parallel {
+                    break;
+                }
+                if in_flight.contains(&pid) {
+                    continue;
+                }
+                shared.wal.start(&pid);
+                if let Ok(mut b) = busy.lock() {
+                    b.insert(pid.clone());
+                }
+                let marker = Busy {
+                    projects: busy.clone(),
+                    project_id: pid.clone(),
+                };
+                running.spawn(checkpoint(shared.clone(), pid, dir, marker));
+                started = true;
+            }
+        }
         if started {
             continue;
         }
@@ -161,6 +184,31 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
         }
     }
     // Another project's queued job may be waiting for this slot.
+    shared.wake_worker.notify_one();
+}
+
+/// A truncating WAL checkpoint of an owned index (see `wal`), holding the
+/// project's job slot and the ownership guard.
+async fn checkpoint(shared: Arc<Shared>, project_id: String, dir: std::path::PathBuf, _busy: Busy) {
+    let outcome = match shared.owners.begin_run(&project_id) {
+        None => Err("the index is no longer owned by this service".to_string()),
+        Some(_run) => tokio::task::spawn_blocking(move || {
+            wrongindex_storage::wal::truncate(&dir).map_err(|e| e.to_string())
+        })
+        .await
+        .unwrap_or_else(|e| Err(e.to_string())),
+    };
+    if let Some(change) = shared
+        .wal
+        .finish(&project_id, &outcome, std::time::Instant::now())
+    {
+        if change["level"] == "ok" {
+            info!("wal_ok", {"projectId": project_id});
+        }
+        shared
+            .events
+            .publish("resource.warning", Some(&project_id), change);
+    }
     shared.wake_worker.notify_one();
 }
 

@@ -97,6 +97,8 @@ pub struct Shared {
     pub data_root: std::path::PathBuf,
     /// Free space on the volumes in use (`resource.warning`).
     pub disk: crate::disk::Monitor,
+    /// Write-ahead logs of the owned indexes (`resource.warning`).
+    pub wal: crate::wal::Care,
 }
 
 impl Shared {
@@ -259,6 +261,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         project_states: Mutex::new(std::collections::HashMap::new()),
         data_root: cfg.root.path().to_path_buf(),
         disk: crate::disk::Monitor::default(),
+        wal: crate::wal::Care::default(),
     });
     shared.apply_settings();
     let info = EndpointInfo {
@@ -909,8 +912,14 @@ async fn dispatch_inner(
                 "instanceId": shared.instance_id,
                 "seq": seq,
                 "projects": projects,
-                // Volumes short of space (`resource.warning` events).
-                "resources": shared.disk.warnings(),
+                // Volumes short of space and large write-ahead logs
+                // (`resource.warning` events).
+                "resources": shared
+                    .disk
+                    .warnings()
+                    .into_iter()
+                    .chain(shared.wal.warnings())
+                    .collect::<Vec<_>>(),
             }))
         }
         method::PROJECT_DETACH => {
