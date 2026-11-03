@@ -37,15 +37,23 @@ const tryRun = (cmd, args) => {
 };
 // Authenticode status as Windows reports it (Valid, NotSigned, ...): the
 // manifest records what was shipped, not what was intended.
-const authenticode = (p) =>
-  process.platform === 'win32'
-    ? tryRun('powershell', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `(Get-AuthenticodeSignature -LiteralPath '${p.replaceAll("'", "''")}').Status.ToString()`,
-      ])
-    : null;
+// PowerShell 7 if present, else Windows PowerShell with its own module
+// path (one launched from pwsh inherits pwsh's and cannot load the module).
+const authenticode = (p) => {
+  if (process.platform !== 'win32') return null;
+  const cmd = `(Get-AuthenticodeSignature -LiteralPath '${p.replaceAll("'", "''")}').Status.ToString()`;
+  const args = ['-NoProfile', '-NonInteractive', '-Command', cmd];
+  for (const [exe, env] of [
+    ['pwsh', process.env],
+    ['powershell', Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PSMODULEPATH'))],
+  ]) {
+    try {
+      const out = execFileSync(exe, args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (out) return out;
+    } catch {}
+  }
+  return null;
+};
 const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop'];
 
 function shippedCrates() {
