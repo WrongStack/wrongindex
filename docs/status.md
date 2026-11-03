@@ -269,7 +269,7 @@ Open items, none of them silently assumed done ([certification.md](certification
 
 1. Code signing (M03): waived by the owner on 2026-11-03 - releases ship unsigned; integrity is the SHA-256 check and the build-provenance attestation.
 2. ~~Merge of the WrongStack adapter~~: done 2026-11-03 by the owner (WrongStack/WrongStack#430, merge `c2ecf60d4`; its tree is identical to `c981ae0c8`, on which every WrongStack check including the CI Gate passed). WrongStack users get it with the first WrongStack release after v1.4.0.
-3. **Publish a release with the clean-machine fixes** (static C runtime, PATH round trip, claims that race, desktop updates): the published v0.1.0 does not start on a Windows without the Visual C++ redistributable (M05). Needs the version bumped and a tag pushed by the owner.
+3. **Publish 0.1.1** (static C runtime, PATH round trip, claims that race, desktop updates; [CHANGELOG](../CHANGELOG.md)): the published v0.1.0 does not start on a Windows without the Visual C++ redistributable (M05). The workspace version is 0.1.1; the owner pushes tag `v0.1.1`, and the release workflow refuses a tag without a CHANGELOG section.
 4. An update across two published releases from GitHub (`self-update`, the one-liner and the desktop), once that release exists.
 5. Manual passes: screen reader (M01), mixed-DPI (M02), a sleep/resume cycle (M04: a detached probe with three watched projects waits for the machine's next sleep and records the resume, see the M04 row once it reports). M05 passed for a build from this tree.
 6. Optional: a reproducible-build comparison of two independent release builds.
