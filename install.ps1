@@ -32,6 +32,14 @@
   $ProgressPreference = 'SilentlyContinue'
 
   function Say([string]$m) { Write-Host "wrongindex-install: $m" }
+  # Exit code of a native program, its output discarded. Windows PowerShell
+  # turns a native program's stderr into errors, which 'Stop' makes
+  # terminating even when redirected; only the exit code counts here.
+  function Invoke-Native([string]$exe) {
+    $ErrorActionPreference = 'Continue'
+    & $exe @args *> $null
+    $LASTEXITCODE
+  }
 
   if ($env:OS -ne 'Windows_NT') {
     throw 'WrongIndex currently runs on Windows only.'
@@ -84,12 +92,10 @@
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
       Say 'GitHub CLI not found: build-provenance attestation not checked (the SHA-256 was)'
     } else {
-      & gh auth status *> $null
-      if ($LASTEXITCODE -ne 0) {
+      if ((Invoke-Native gh auth status) -ne 0) {
         Say 'GitHub CLI not signed in: build-provenance attestation not checked (the SHA-256 was)'
       } else {
-        & gh attestation verify $installer --repo $Repo *> $null
-        if ($LASTEXITCODE -ne 0) { throw "build-provenance attestation of $($installerAsset.name) did not verify against $Repo. Nothing was installed." }
+        if ((Invoke-Native gh attestation verify $installer --repo $Repo) -ne 0) { throw "build-provenance attestation of $($installerAsset.name) did not verify against $Repo. Nothing was installed." }
         Say 'build provenance verified (gh attestation verify)'
       }
     }
