@@ -272,7 +272,22 @@ function overviewView() {
 
 function megabytes(n) {
   const mb = n / 1024 / 1024;
+  if (mb < 1) return `${Math.max(1, Math.round(n / 1024))} KB`;
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
+const USAGE = [
+  ['indexBytes', 'indexes'], ['backupBytes', 'backups'], ['walBytes', 'write-ahead logs'],
+  ['stagingBytes', 'unfinished runs'], ['logBytes', 'service log'], ['serviceBytes', 'other service data'],
+];
+
+/** What WrongIndex keeps on a volume short of space, largest first. */
+function usageLine(u) {
+  if (!u) return null;
+  const parts = USAGE.filter(([k]) => u[k] > 0).sort((a, b) => u[b[0]] - u[a[0]]).map(([k, label]) => `${label} ${megabytes(u[k])}`);
+  if (!parts.length) return null;
+  const hint = u.backupBytes > u.indexBytes ? ' Backups are in each index directory\'s .wrongindex-backups folder; "Index backups kept per project" (Settings) limits how many are kept.' : '';
+  return el('p', { class: 'note' }, `WrongIndex keeps there: ${parts.join(', ')}.${hint}`);
 }
 
 /** Volumes short of space (`resource.warning`, kept in the snapshot). */
@@ -284,10 +299,12 @@ function diskBanners() {
     return r.level === 'full'
       ? el('div', { class: 'banner bad', role: 'alert' },
         el('p', {}, `Disk almost full on ${r.volume}: ${megabytes(r.freeBytes)} free${which}.`),
-        el('p', { class: 'note' }, `Indexing there waits until at least ${megabytes(r.fullBytes)} is free (a full run also needs room for a copy of the index), then resumes by itself. WrongIndex deletes nothing to make room.`))
+        el('p', { class: 'note' }, `Indexing there waits until at least ${megabytes(r.fullBytes)} is free (a full run also needs room for a copy of the index), then resumes by itself. WrongIndex deletes nothing to make room.`),
+        usageLine(r.usage))
       : el('div', { class: 'banner', role: 'status' },
         el('p', {}, `Disk space is getting low on ${r.volume}: ${megabytes(r.freeBytes)} free${which}.`),
-        el('p', { class: 'note' }, `Indexing stops there below ${megabytes(r.fullBytes)}.`));
+        el('p', { class: 'note' }, `Indexing stops there below ${megabytes(r.fullBytes)}.`),
+        usageLine(r.usage));
   });
 }
 

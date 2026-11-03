@@ -215,6 +215,8 @@ struct VolumeState {
     level: Level,
     free: u64,
     projects: Vec<String>,
+    /// WrongIndex's own files there by category, while not `ok`.
+    usage: Option<Value>,
 }
 
 /// The volumes in use and their last level.
@@ -264,19 +266,18 @@ impl Monitor {
     /// payloads for volumes whose level changed. A volume first seen at
     /// `ok` is not news.
     pub fn check(&self, data_root: &Path, indexes: &[(String, PathBuf)]) -> Vec<Value> {
-        let mut by_volume: HashMap<PathBuf, (PathBuf, Vec<String>)> = HashMap::new();
+        let mut by_volume: HashMap<PathBuf, OnVolume> = HashMap::new();
         if let Some(v) = self.volume(data_root) {
             by_volume
                 .entry(v)
-                .or_insert_with(|| (data_root.to_path_buf(), Vec::new()));
+                .or_insert_with(|| OnVolume::new(data_root))
+                .data_root = Some(data_root.to_path_buf());
         }
         for (pid, dir) in indexes {
             if let Some(v) = self.volume(dir) {
-                by_volume
-                    .entry(v)
-                    .or_insert_with(|| (dir.clone(), Vec::new()))
-                    .1
-                    .push(pid.clone());
+                let on = by_volume.entry(v).or_insert_with(|| OnVolume::new(dir));
+                on.projects.push(pid.clone());
+                on.index_dirs.push(dir.clone());
             }
         }
         let Ok(mut known) = self.volumes.lock() else {
@@ -284,17 +285,21 @@ impl Monitor {
         };
         let seen: Vec<PathBuf> = by_volume.keys().cloned().collect();
         let mut changes = Vec::new();
-        for (volume, (probe, mut projects)) in by_volume {
-            let Some(free) = free_bytes(&probe) else {
+        for (volume, mut on) in by_volume {
+            let Some(free) = free_bytes(&on.probe) else {
                 continue;
             };
-            projects.sort();
+            on.projects.sort();
             let previous = known.get(&volume).map(|s| s.level).unwrap_or(Level::Ok);
             let level = Level::of(free, previous);
+            // What WrongIndex itself keeps there, only when it matters.
+            let usage =
+                (level != Level::Ok).then(|| usage(on.data_root.as_deref(), &on.index_dirs));
             let state = VolumeState {
                 level,
                 free,
-                projects,
+                projects: on.projects,
+                usage,
             };
             if level != previous {
                 changes.push(payload(&volume, &state));
@@ -318,7 +323,7 @@ impl Monitor {
 }
 
 fn payload(volume: &Path, s: &VolumeState) -> Value {
-    json!({
+    let mut v = json!({
         "resource": "disk",
         "volume": volume.display().to_string(),
         "level": s.level.as_str(),
@@ -326,6 +331,91 @@ fn payload(volume: &Path, s: &VolumeState) -> Value {
         "lowBytes": LOW_BYTES,
         "fullBytes": FULL_BYTES,
         "projects": s.projects,
+    });
+    if let Some(u) = &s.usage {
+        v["usage"] = u.clone();
+    }
+    v
+}
+
+/// The data root and the index directories on one volume.
+struct OnVolume {
+    /// An existing directory on it, to ask for its free space.
+    probe: PathBuf,
+    data_root: Option<PathBuf>,
+    index_dirs: Vec<PathBuf>,
+    projects: Vec<String>,
+}
+
+impl OnVolume {
+    fn new(probe: &Path) -> Self {
+        Self {
+            probe: probe.to_path_buf(),
+            data_root: None,
+            index_dirs: Vec::new(),
+            projects: Vec::new(),
+        }
+    }
+}
+
+/// Bytes of the files under `dir` (recursive, links not followed).
+fn tree_bytes(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|e| match e.file_type() {
+            Ok(t) if t.is_dir() => tree_bytes(&e.path()),
+            Ok(t) if t.is_file() => file_bytes(&e.path()),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// A file's size, asked of the file itself: on Windows the directory
+/// listing's size of a file another handle is still writing (the log, a
+/// WAL) can be far behind.
+fn file_bytes(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
+/// What WrongIndex keeps on a volume, by category (indexing-pipeline §12:
+/// disk-pressure reporting names what holds the space): the indexes, their
+/// write-ahead logs, backups (claim backups and the files a maintenance
+/// rebuild or restore kept), staging directories a run left, the service's
+/// logs, and its other data (registry, downloaded updates).
+fn usage(data_root: Option<&Path>, index_dirs: &[PathBuf]) -> Value {
+    let (mut index, mut wal, mut backups, mut staging) = (0u64, 0u64, 0u64, 0u64);
+    for dir in index_dirs {
+        index += file_bytes(&dir.join("index.db"));
+        wal += file_bytes(&dir.join("index.db-wal")) + file_bytes(&dir.join("index.db-shm"));
+        backups += tree_bytes(&dir.join(".wrongindex-backups"));
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if name.starts_with("index.db.wrongindex-backup-") {
+                    backups += file_bytes(&e.path());
+                } else if name.starts_with(".wrongindex-staging-") {
+                    staging += tree_bytes(&e.path());
+                }
+            }
+        }
+    }
+    let (logs, service) = match data_root {
+        Some(root) => {
+            let logs = tree_bytes(&root.join("logs"));
+            (logs, tree_bytes(root).saturating_sub(logs))
+        }
+        None => (0, 0),
+    };
+    json!({
+        "indexBytes": index,
+        "walBytes": wal,
+        "backupBytes": backups,
+        "stagingBytes": staging,
+        "logBytes": logs,
+        "serviceBytes": service,
     })
 }
 
@@ -382,6 +472,44 @@ mod tests {
             classify(ErrorBody::new(ErrorCode::Internal, "boom")).code,
             ErrorCode::Internal
         );
+    }
+
+    #[test]
+    fn usage_names_what_holds_the_space() {
+        let t = tempfile::tempdir().unwrap();
+        let put = |rel: &str, n: usize| {
+            let p = t.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, vec![0u8; n]).unwrap();
+        };
+        put("a/index.db", 1000);
+        put("a/index.db-wal", 300);
+        put("a/index.db-shm", 32);
+        put("a/.wrongindex-backups/b1.db", 900);
+        put("a/index.db.wrongindex-backup-17", 800);
+        put("a/.wrongindex-staging-x/index.db", 50);
+        put("a/.wrongindex-owner.json", 7);
+        put("b/index.db", 2000);
+        put("home/logs/wrongindexd.log", 400);
+        put("home/logs/wrongindexd.log.1", 100);
+        put("home/registry.db", 60);
+        put("home/updates/0.2.0/setup.exe", 5);
+        let u = usage(
+            Some(&t.path().join("home")),
+            &[
+                t.path().join("a"),
+                t.path().join("b"),
+                t.path().join("gone"),
+            ],
+        );
+        assert_eq!(
+            u,
+            json!({
+                "indexBytes": 3000, "walBytes": 332, "backupBytes": 1700,
+                "stagingBytes": 50, "logBytes": 500, "serviceBytes": 65,
+            })
+        );
+        assert_eq!(usage(None, &[])["logBytes"], 0);
     }
 
     #[test]

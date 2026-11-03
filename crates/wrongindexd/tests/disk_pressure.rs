@@ -171,6 +171,14 @@ async fn a_full_disk_holds_writes_until_there_is_room() {
     assert_eq!(w["fullBytes"], 256 * MIB, "{w}");
     assert!(w["volume"].as_str().unwrap().ends_with('\\'), "{w}");
     assert_eq!(w["projects"], json!([pid]), "{w}");
+    // What WrongIndex keeps there: the index, the service's own files.
+    let u = &w["usage"];
+    assert!(u["indexBytes"].as_u64().unwrap() > 0, "{w}");
+    assert!(u["serviceBytes"].as_u64().unwrap() > 0, "{w}");
+    assert!(u["logBytes"].as_u64().unwrap() > 0, "{w}");
+    for k in ["walBytes", "backupBytes", "stagingBytes"] {
+        assert!(u[k].is_u64(), "{k}: {w}");
+    }
     assert!(warning.get("projectId").is_none(), "{warning}");
     let snap = c
         .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
