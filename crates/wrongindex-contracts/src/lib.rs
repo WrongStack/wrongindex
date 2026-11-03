@@ -233,6 +233,10 @@ pub mod method {
         INDEX_REQUEST,
         INDEX_CHECK,
         INDEX_QUERY,
+        INDEX_BACKUPS,
+        SETTINGS_GET,
+        SETTINGS_SET,
+        DAEMON_METRICS,
         JOB_GET,
         JOB_LIST,
         JOB_CANCEL,
@@ -599,6 +603,17 @@ pub struct IndexRequestParams {
     pub backup: Option<String>,
 }
 
+/// `session.acquire` result: a watch lease the client keeps alive with
+/// `session.heartbeat` every `heartbeatMs`; it lapses after `leaseMs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLease {
+    pub session_id: String,
+    pub project_id: String,
+    pub lease_ms: u64,
+    pub heartbeat_ms: u64,
+}
+
 /// Durable admission acknowledgement. Completion is observed via `job.get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -749,6 +764,27 @@ mod tests {
         let v = serde_json::to_value(&r).unwrap();
         assert_eq!(v["status"], "error");
         assert_eq!(v["error"]["code"], "UNAUTHENTICATED");
+    }
+
+    /// `method::ALL` is the list clients are generated from: it must name
+    /// every method constant (read from this file, so a new constant that is
+    /// not listed fails here).
+    #[test]
+    fn method_all_lists_every_method() {
+        let src = include_str!("lib.rs");
+        let module = &src[src.find("pub mod method {").unwrap()..];
+        let module = &module[..module.find("\n}\n").unwrap()];
+        let declared: Vec<&str> = module
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("pub const "))
+            .filter(|l| !l.starts_with("ALL"))
+            .filter_map(|l| l.split('"').nth(1))
+            .collect();
+        assert_eq!(declared.len(), 26, "{declared:?}");
+        for m in &declared {
+            assert!(method::ALL.contains(m), "method::ALL lacks {m}");
+        }
+        assert_eq!(method::ALL.len(), declared.len());
     }
 
     #[test]

@@ -1264,12 +1264,12 @@ async fn dispatch_inner(
             let p2 = pid.clone();
             shared.registry(move |r| r.get_project(&p2)).await?;
             let session_id = shared.watch.acquire_lease(&pid, client);
-            Ok(json!({
-                "sessionId": session_id,
-                "projectId": pid,
-                "leaseMs": crate::watch::LEASE.as_millis() as u64,
-                "heartbeatMs": crate::watch::HEARTBEAT.as_millis() as u64,
-            }))
+            to_value(wrongindex_contracts::SessionLease {
+                session_id,
+                project_id: pid,
+                lease_ms: crate::watch::LEASE.as_millis() as u64,
+                heartbeat_ms: crate::watch::HEARTBEAT.as_millis() as u64,
+            })
         }
         method::SESSION_HEARTBEAT => {
             #[derive(Deserialize)]
