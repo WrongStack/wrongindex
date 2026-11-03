@@ -1822,11 +1822,21 @@ fn targeted_round(
         out.push(format!(
             "{name}: native did not take the targeted path: {outcome}"
         ));
-    } else if r["changedFiles"] != outcome["changed_files"] {
-        out.push(format!(
-            "{name}: changedFiles {} vs native {}",
-            r["changedFiles"], outcome["changed_files"]
-        ));
+    } else {
+        // The run's report is what WrongStack's callers show (the WebUI's
+        // index result, the tool output): it must say what WrongStack says.
+        for (ws_key, native_key) in [
+            ("changedFiles", "changed_files"),
+            ("filesIndexed", "filesIndexed"),
+            ("symbolsIndexed", "symbolsIndexed"),
+        ] {
+            if r[ws_key] != outcome[native_key] {
+                out.push(format!(
+                    "{name}: {ws_key} {} vs native {}",
+                    r[ws_key], outcome[native_key]
+                ));
+            }
+        }
     }
     out
 }

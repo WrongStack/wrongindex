@@ -161,6 +161,14 @@ try {
 
   // 4. An edit: the CLI's watcher sends the path; the service runs a
   //    targeted native update and the graph shows the new symbol.
+  //    First wait until the CLI's session lease has the service watching and
+  //    its attach reconciliation is done: an edit made during that scan is
+  //    absorbed by the reconciliation (correct, but not the targeted path
+  //    this step proves).
+  await until('the service to watch the project', 60000, () => {
+    const s = cli('project', 'status', pid);
+    return s.sessions >= 1 && s.freshness === 'current' && s.activity === 'dormant' ? s : null;
+  });
   const jobsBefore = jobs().length;
   fs.appendFileSync(path.join(proj, 'src', 'greet.ts'), '\nexport function liveAddition(): number { return 42; }\n');
   const edit = await until('the watcher job', 60000, () =>
@@ -178,6 +186,13 @@ try {
   out.serviceJobs = cli('metrics').jobs;
 } catch (e) {
   out.error = String(e?.stack ?? e);
+  // What the service saw, for the failure report (no tokens in either).
+  try {
+    out.atFailure = {
+      projects: cli('project', 'list').projects.map((p) => ({ watchPolicy: p.watchPolicy, freshness: p.freshness, watchHealth: p.watchHealth })),
+      jobs: cli('job', 'list').jobs.map((j) => ({ kind: j.kind, state: j.state, paths: j.params?.paths?.length, error: j.error?.code })),
+    };
+  } catch {}
   process.exitCode = 1;
 } finally {
   if (ws) killTree(ws.pid);
