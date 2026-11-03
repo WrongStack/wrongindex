@@ -25,7 +25,7 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
-      - name: Tag matches the version
+      - name: Tag matches the version and has release notes
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
@@ -34,6 +34,7 @@ jobs:
           $version = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages |
             Where-Object name -eq 'wrongindexd').version
           if ($env:TAG -ne "v$version") { throw "tag $env:TAG does not match the workspace version $version" }
+          if (-not (scripts/release/changelog-section.ps1 -Version $version)) { throw "CHANGELOG.md has no section for $version" }
       - name: Install pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - name: Test
@@ -69,7 +70,12 @@ jobs:
         shell: pwsh
         run: |
           $out = 'target/release/bundle/nsis'
+          $changes = (scripts/release/changelog-section.ps1 -Version $env:TAG.TrimStart('v')) -join "`n"
           $notes = @(
+            $changes,
+            '',
+            '---',
+            '',
             'Per-user Windows installer (not code-signed).',
             '',
             'Install or update:',
