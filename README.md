@@ -2,7 +2,7 @@
 
 A local, persistent codebase indexing service for [WrongStack](https://github.com/WrongStack/WrongStack): one Rust daemon per OS user manages every registered project, each checkout keeps its existing WrongStack-compatible `index.db`, and WrongStack's CLI, WebUI, desktop, and MCP surfaces connect as clients. A separate desktop GUI shows real daemon state.
 
-> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects with a native writer whose output is logically identical to WrongStack's own indexer, in place and incrementally. WrongStack uses it only with the adapter on the WrongStack branch `feat/wrongindex-adapter` (`indexing.service`), which is not merged yet. Builds are not code-signed. [docs/status.md](docs/status.md) lists exactly what is implemented and verified, and what is not.
+> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects with a native writer whose output is logically identical to WrongStack's own indexer, in place and incrementally. WrongStack uses it only with the adapter on the WrongStack branch `feat/wrongindex-adapter` (`indexing.service`), which is not merged yet. Builds are not code-signed. [docs/status.md](docs/status.md) lists exactly what is implemented and verified, and what is not; [docs/certification.md](docs/certification.md) defines the certified profile, its gates, the known differences from WrongStack and the latest run.
 
 ## What works today
 
@@ -64,9 +64,9 @@ pwsh scripts/release/package-windows.ps1
 
 `pwsh scripts/release/smoke-installed.ps1 -PlaywrightCore <dir>` installs that installer into a throw-away directory, drives the installed desktop and service, and uninstalls again (see [docs/operations.md](docs/operations.md)).
 
-This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`, with `SHA256SUMS.txt`). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Stop the service (tray: Stop Index Service) before uninstalling or upgrading.
+This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`) with `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` (commit, supported index profile, toolchain, SQLite, hashes and signature status of every binary) and `THIRD-PARTY-LICENSES.txt` (also installed next to the binaries). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Stop the service (tray: Stop Index Service) before uninstalling or upgrading.
 
-Runtime requirements for native indexing of every language: Python (Python files), Go (Go files; regex fallback without it), and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses).
+Runtime requirements for native indexing of every language: Python (Python files) and Go (Go files) - without them those files fall back to the regex extractor, as in WrongStack - and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses).
 
 ## Operating it
 
@@ -111,4 +111,4 @@ Toolchains: Rust pinned in `rust-toolchain.toml`; Bun pinned in `.bun-version`.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE). Third-party components and their licenses: `scripts/release/manifest.mjs licenses` (shipped as `THIRD-PARTY-LICENSES.txt`).
