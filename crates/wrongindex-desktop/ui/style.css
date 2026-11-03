@@ -103,7 +103,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 
 /* Narrow windows and large text scale (high DPI, zoom): wide tables scroll
    on their own instead of widening the page; long paths wrap. */
-main table { display: block; overflow-x: auto; max-width: 100%; }
+/* Positioned, so absolutely positioned content (the screen-reader-only
+   "Actions" header) scrolls with the table instead of widening the page. */
+main table { display: block; overflow-x: auto; max-width: 100%; position: relative; }
 main table > thead, main table > tbody { width: 100%; }
 td.path, .mono, td.error { overflow-wrap: anywhere; }
 @media (max-width: 720px) {
