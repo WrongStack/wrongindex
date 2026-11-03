@@ -515,6 +515,7 @@ pub async fn run(
                     last_wall = wall;
                     shared.watch.expire_leases();
                     reconcile_desired(&shared).await;
+                    crate::server::publish_state_changes(&shared).await;
                 }
                 settle_finished(&shared).await;
                 dispatch_ready(&shared).await;

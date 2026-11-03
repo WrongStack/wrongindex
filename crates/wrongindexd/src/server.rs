@@ -92,6 +92,8 @@ pub struct Shared {
     /// Phase of the job running per project (native engine runs).
     pub progress: Mutex<std::collections::HashMap<String, Value>>,
     pub metrics: crate::metrics::Metrics,
+    /// The last `project.state` published per project.
+    project_states: Mutex<std::collections::HashMap<String, Value>>,
 }
 
 impl Shared {
@@ -251,6 +253,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         settings: crate::settings::Store::load(&cfg.root.path().join("settings.json")),
         progress: Mutex::new(std::collections::HashMap::new()),
         metrics: crate::metrics::Metrics::default(),
+        project_states: Mutex::new(std::collections::HashMap::new()),
     });
     shared.apply_settings();
     let info = EndpointInfo {
@@ -633,6 +636,24 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
             ))
         })
         .await?;
+    Ok(status_from(
+        shared,
+        project,
+        last_job,
+        ownership,
+        publication,
+    ))
+}
+
+/// A project's status from its registry rows and the watcher's state.
+fn status_from(
+    shared: &Arc<Shared>,
+    project: wrongindex_contracts::ProjectRecord,
+    last_job: Option<wrongindex_contracts::JobRecord>,
+    ownership: wrongindex_contracts::OwnershipStatus,
+    publication: wrongindex_registry::PublicationState,
+) -> ProjectStatus {
+    let pid = project.project_id.clone();
     let ws = shared.watch.status(&pid);
     let freshness = crate::watch::Supervisor::freshness(
         &ws,
@@ -640,7 +661,7 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
             .as_deref()
             .or(publication.last_error.as_deref()),
     );
-    Ok(ProjectStatus {
+    ProjectStatus {
         project,
         freshness,
         ownership: ownership.state,
@@ -670,7 +691,73 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
         consecutive_failures: ws.consecutive_failures,
         next_retry_ms: ws.retry_in_ms.map(|ms| now_ms() + ms as i64),
         parked: ws.parked,
+    }
+}
+
+/// What a `project.state` event carries, and what decides whether one is
+/// due: the state clients show (architecture §8.3, "project state" and
+/// "watch health"). The pending path count is only `pending`: counting
+/// edits would publish one event per change.
+fn state_summary(s: &ProjectStatus) -> Value {
+    json!({
+        "freshness": s.freshness,
+        "watchHealth": s.watch_health,
+        "activity": s.activity,
+        "ownership": s.ownership,
+        "pending": s.pending_paths > 0,
+        "parked": s.parked,
+        "generation": s.generation,
+        "lastError": s.last_error,
     })
+}
+
+/// Publish `project.state` for every project whose state changed since the
+/// last one (checked once per supervisor tick), so clients follow pending,
+/// current, degraded and watch-health transitions without polling. A
+/// project's first state after registration or a service start counts as a
+/// change; detached projects are forgotten. All projects are read in one
+/// registry call per tick.
+pub(crate) async fn publish_state_changes(shared: &Arc<Shared>) {
+    let Ok(rows) = shared
+        .registry(|r| {
+            r.list_projects()?
+                .into_iter()
+                .map(|p| {
+                    let id = p.project_id.clone();
+                    Ok((
+                        p,
+                        r.latest_job(&id)?,
+                        r.ownership_status(&id)?,
+                        r.publication_state(&id)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, ErrorBody>>()
+        })
+        .await
+    else {
+        return;
+    };
+    let mut ids = Vec::with_capacity(rows.len());
+    for (project, last_job, ownership, publication) in rows {
+        let status = status_from(shared, project, last_job, ownership, publication);
+        let pid = status.project.project_id.clone();
+        let summary = state_summary(&status);
+        let changed = shared.project_states.lock().is_ok_and(|mut m| {
+            if m.get(&pid) == Some(&summary) {
+                false
+            } else {
+                m.insert(pid.clone(), summary.clone());
+                true
+            }
+        });
+        if changed {
+            shared.events.publish("project.state", Some(&pid), summary);
+        }
+        ids.push(pid);
+    }
+    if let Ok(mut m) = shared.project_states.lock() {
+        m.retain(|id, _| ids.contains(id));
+    }
 }
 
 fn parse<T: DeserializeOwned>(params: Value) -> Result<T, ErrorBody> {
