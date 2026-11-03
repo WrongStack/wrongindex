@@ -43,7 +43,8 @@ $out = Join-Path $target 'release\bundle\nsis'
 $manifest = Get-ChildItem $out -Filter *.exe | ForEach-Object {
   "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
 }
-$manifest | Set-Content (Join-Path $out 'SHA256SUMS.txt')
+# LF line endings: `sha256sum -c SHA256SUMS.txt` must work on any system.
+[IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), (($manifest -join "`n") + "`n"))
 Copy-Item (Join-Path $bin 'THIRD-PARTY-LICENSES.txt') $out -Force
 node (Join-Path $root 'scripts\release\manifest.mjs') manifest --bin (Join-Path $target 'release') --bundle $out --out (Join-Path $out 'RELEASE-MANIFEST.json')
 if ($LASTEXITCODE) { throw 'release manifest failed' }
