@@ -56,6 +56,43 @@ const authenticode = (p) => {
 };
 const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop'];
 
+// The DLLs a PE file imports (its import directory), lower-cased.
+function peImports(file) {
+  const b = fs.readFileSync(file);
+  const pe = b.readUInt32LE(0x3c);
+  if (b.toString('latin1', pe, pe + 4) !== 'PE\0\0') throw new Error(`${file}: not a PE file`);
+  const coff = pe + 4;
+  const sections = b.readUInt16LE(coff + 2);
+  const optSize = b.readUInt16LE(coff + 16);
+  const opt = coff + 20;
+  const dirs = opt + (b.readUInt16LE(opt) === 0x20b ? 112 : 96);
+  const importRva = b.readUInt32LE(dirs + 8);
+  const table = opt + optSize;
+  const offset = (rva) => {
+    for (let i = 0; i < sections; i++) {
+      const s = table + i * 40;
+      const va = b.readUInt32LE(s + 12);
+      const size = Math.max(b.readUInt32LE(s + 8), b.readUInt32LE(s + 16));
+      if (rva >= va && rva < va + size) return rva - va + b.readUInt32LE(s + 20);
+    }
+    throw new Error(`${file}: address ${rva} is outside every section`);
+  };
+  const names = new Set();
+  if (importRva) {
+    for (let d = offset(importRva); b.readUInt32LE(d + 12) !== 0; d += 20) {
+      const at = offset(b.readUInt32LE(d + 12));
+      names.add(b.toString('latin1', at, b.indexOf(0, at)).toLowerCase());
+    }
+  }
+  return [...names].sort();
+}
+// The Visual C++ runtime is not part of Windows: a clean machine has no
+// vcruntime140.dll, and a binary importing it does not start (M05 found the
+// service and the CLI failing that way). The C runtime is linked statically
+// (.cargo/config.toml), and a binary that needs the redistributable is not
+// shipped.
+const VC_REDIST = /^(vcruntime|msvcp|vccorlib|concrt|vcomp|ucrtbased)/;
+
 function shippedCrates() {
   const meta = JSON.parse(
     sh('cargo', ['metadata', '--format-version', '1', '--locked', '--filter-platform', 'x86_64-pc-windows-msvc']),
@@ -156,8 +193,9 @@ if (mode === 'licenses') {
   const binaries = {};
   for (const n of ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe']) {
     const p = path.join(bin, n);
-    if (fs.existsSync(p)) binaries[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p) };
+    if (fs.existsSync(p)) binaries[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p), imports: peImports(p) };
   }
+  const needsRedist = Object.entries(binaries).flatMap(([n, b]) => b.imports.filter((d) => VC_REDIST.test(d)).map((d) => `${n} (${d})`));
   const installers = {};
   if (bundle && fs.existsSync(bundle)) {
     for (const n of fs.readdirSync(bundle).filter((f) => f.endsWith('.exe'))) {
@@ -215,6 +253,10 @@ if (mode === 'licenses') {
   if (buildInfo && !buildInfo.sqlite?.fts5Trigram) absent.push('SQLite FTS5 trigram tokenizer');
   if (absent.length || (bundle && !Object.keys(installers).length)) {
     console.error(`missing: ${[...absent, ...(bundle && !Object.keys(installers).length ? ['installer'] : [])].join(', ')}`);
+    process.exit(1);
+  }
+  if (needsRedist.length) {
+    console.error(`needs the Visual C++ runtime, which a clean Windows does not have: ${needsRedist.join(', ')}`);
     process.exit(1);
   }
 } else {

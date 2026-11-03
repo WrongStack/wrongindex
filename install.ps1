@@ -40,6 +40,11 @@
     & $exe @args *> $null
     $LASTEXITCODE
   }
+  # Its standard output as one string; $LASTEXITCODE is left for the caller.
+  function Invoke-NativeOutput([string]$exe) {
+    $ErrorActionPreference = 'Continue'
+    ((& $exe @args 2> $null) | Out-String).Trim()
+  }
 
   if ($env:OS -ne 'Windows_NT') {
     throw 'WrongIndex currently runs on Windows only.'
@@ -132,7 +137,12 @@
   $cli = if ($dir) { Join-Path $dir 'wrongindex.exe' } else { $null }
   if (-not $cli -or -not (Test-Path $cli)) { throw 'installed, but wrongindex.exe was not found where the installer reported' }
   if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
-  $v = & $cli --version
+  # It must also run here: a binary missing a DLL prints nothing and fails.
+  $v = Invoke-NativeOutput $cli --version
+  if ($LASTEXITCODE -ne 0 -or -not $v) {
+    $why = if ($LASTEXITCODE -eq -1073741515) { 'a DLL it needs is missing' } else { 'exit code 0x{0:X8}' -f $LASTEXITCODE }
+    throw "installed in $dir, but wrongindex.exe does not run ($why). Please report this at https://github.com/$Repo/issues"
+  }
   Say "installed $v in $dir"
   Say 'new terminals have `wrongindex` on PATH; start the service with `wrongindex daemon start` or open WrongIndex from the Start menu'
   Say 'update later with `wrongindex self-update`'

@@ -3,3 +3,10 @@
 # SQLite must match: with STAT4, ANALYZE also creates `sqlite_stat4`, which a
 # WrongStack-written index never contains (and query planning differs).
 LIBSQLITE3_FLAGS = "-USQLITE_ENABLE_STAT4"
+
+# The C runtime is linked statically. A clean Windows has no Visual C++
+# runtime (vcruntime140.dll), and the service and the CLI, which link C code
+# (SQLite and others), did not start there (M05, Windows Sandbox). The release
+# manifest refuses a binary that still imports it.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
