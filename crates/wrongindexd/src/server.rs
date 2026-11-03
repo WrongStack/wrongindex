@@ -859,6 +859,20 @@ async fn dispatch_inner(
                         ),
                     ));
                 }
+                // A project whose policy has the service own it (pinned, or
+                // session with a client) can be asked to index before the
+                // supervisor has claimed it - right after registration, say.
+                // Claim it here, as the supervisor would, instead of refusing.
+                if !shared.owners.holds(&pid) {
+                    let p1 = pid.clone();
+                    let policy = shared
+                        .registry(move |r| r.get_project(&p1))
+                        .await?
+                        .watch_policy;
+                    if shared.watch.wants(&pid, policy) {
+                        crate::ownership::acquire(shared, &pid, false).await?;
+                    }
+                }
                 let p2 = pid.clone();
                 let (project, fence) = shared
                     .registry(move |r| Ok((r.get_project(&p2)?, r.fence(&p2)?)))

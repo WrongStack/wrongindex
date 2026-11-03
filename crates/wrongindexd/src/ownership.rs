@@ -36,6 +36,11 @@ pub struct Owners {
     /// re-run admission first (the claim must not let the compatibility
     /// worker write into such an index). Cleared on release.
     maintenance: Mutex<HashSet<String>>,
+    /// One claim at a time per project. The supervisor (pinned, session),
+    /// an explicit `ownership.acquire` and an index request can claim
+    /// together; the later one waits and then finds the guard held, instead
+    /// of failing on the lock its own process just took.
+    claims: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 /// Held for the duration of one write run; dropping it ends the run.
@@ -132,6 +137,11 @@ impl Owners {
         }
     }
 
+    fn claim_lock(&self, project_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut claims = self.claims.lock().unwrap_or_else(|p| p.into_inner());
+        claims.entry(project_id.to_string()).or_default().clone()
+    }
+
     pub fn holds(&self, project_id: &str) -> bool {
         self.guards
             .lock()
@@ -165,6 +175,8 @@ pub async fn acquire(
     project_id: &str,
     maintenance: bool,
 ) -> Result<OwnershipStatus, ErrorBody> {
+    let claim = shared.owners.claim_lock(project_id);
+    let _claiming = claim.lock().await;
     let pid = project_id.to_string();
     let project = shared.registry(move |r| r.get_project(&pid)).await?;
     if shared.owners.holds(project_id) {

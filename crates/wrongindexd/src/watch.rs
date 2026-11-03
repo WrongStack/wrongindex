@@ -191,6 +191,24 @@ impl Supervisor {
             .unwrap_or(0)
     }
 
+    /// Whether the project's policy has the service own and watch it now:
+    /// `pinned` always; `session` while a client holds a lease or the grace
+    /// period after the last one runs.
+    pub fn wants(&self, project_id: &str, policy: WatchPolicy) -> bool {
+        match policy {
+            WatchPolicy::Pinned => true,
+            WatchPolicy::Session => {
+                self.session_count(project_id) > 0
+                    || self.projects.lock().is_ok_and(|p| {
+                        p.get(project_id)
+                            .and_then(|w| w.grace_until)
+                            .is_some_and(|g| Instant::now() < g)
+                    })
+            }
+            WatchPolicy::Manual | WatchPolicy::Disabled => false,
+        }
+    }
+
     fn expire_leases(&self) {
         let now = Instant::now();
         let expired: Vec<(String, String, String)> = self
@@ -515,22 +533,15 @@ async fn reconcile_desired(shared: &Arc<Shared>) {
     };
     let now = Instant::now();
     for p in projects {
-        let sessions = shared.watch.session_count(&p.project_id);
-        let (attached, grace_until, retry_at) = {
+        let (attached, retry_at) = {
             let g = shared.watch.projects.lock();
             let w = g.as_ref().ok().and_then(|g| g.get(&p.project_id));
             (
                 w.is_some_and(|w| w.watcher.is_some()),
-                w.and_then(|w| w.grace_until),
                 w.and_then(|w| w.retry_at),
             )
         };
-        let desired = shared.can_write()
-            && match p.watch_policy {
-                WatchPolicy::Pinned => true,
-                WatchPolicy::Session => sessions > 0 || grace_until.is_some_and(|g| now < g),
-                WatchPolicy::Manual | WatchPolicy::Disabled => false,
-            };
+        let desired = shared.can_write() && shared.watch.wants(&p.project_id, p.watch_policy);
         if !desired {
             if attached {
                 shared.watch.detach(&p.project_id);
