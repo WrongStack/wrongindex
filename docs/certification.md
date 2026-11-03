@@ -159,4 +159,40 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 ## 8. Latest run
 
-To be filled from the run in progress.
+2026-11-03, commit `ebc3981`, working tree clean, Windows 11 Pro 26300 x64. Runner output: `target/certification/ebc39813b795-2026-11-03T07-57-42-622Z/`.
+
+Tools: rustc 1.93.0, Bun 1.4.3 (on PATH; the oracle fixtures were generated with 1.4.4), Node.js 24.13.0, Python 3.14.8, Go 1.27.0, Git 2.55.0, WrongStack engine `222d23a`, adapter `38816c01c` (`feat/wrongindex-adapter`).
+
+| Gate | Result | Detail |
+|---|---|---|
+| G01 Formatting | PASS | |
+| G02 Clippy | PASS | |
+| G03 Workspace tests | PASS | 226 passed, 0 failed |
+| G04 Daemon tests ×5 | PASS | 43/43 in each of 5 runs |
+| G05 Release build | PASS | |
+| G06 Differential, generated projects | PASS | 17 tests, 0 differences (incl. paths over 260 characters, targeted run reports) |
+| G07 Differential, real projects | PASS | 13 checkouts (gson, timber, turbine, SwiftyJSON, MediatR, phpdotenv, sinatra, plug, cJSON, fmt, nvm, AGEZT 5,473 files / 43,285 symbols, this repository) - 0 differences; incremental rounds 0 differences |
+| G08 Query differential | PASS | 671/671 operations identical |
+| G09 Compatibility worker | PASS | 4 tests |
+| G10 Publication benchmark | PASS | availability 100 %, no partial generation, query p50 23 ms / p95 33 ms during the run |
+| G11 Soak | PASS | 300 s, 1,092 edits over 6 projects; handles 145 → 144, threads 17 → 15, working set 13.4 → 13.8 MB between the middle and last third; all projects converged |
+| G12 Parser corpus | PASS | 221 known-answer cases |
+| G13 Git containment vet | PASS | 4 checkouts |
+| G14 Discovery differential | PASS | 1,680 cases |
+| G15 Adapter tests | PASS | |
+| G16 Live MCP proof | PASS | |
+| G17 Live CLI + WebUI proof | PASS | |
+| G18 Desktop reconnect | PASS | |
+| G19 Installed package | PASS | install, licenses installed, current, GUI checks, refused setting not applied, uninstall leaves 0 files and no entry |
+| G20 License inventory | PASS | 241 crates, 14 bundled assets, none undeclared, no tampered text |
+| G21 Release manifest | PASS | all binaries and the installer `NotSigned` (M03) |
+| M01-M05 | NOT RUN | manual (§3) |
+
+Automated: 21 PASS, 0 FAIL, 0 NOT RUN. Manual: 5 NOT RUN.
+
+Earlier runs on the way to this one, and what they found:
+
+- `e795d37`: G17 FAIL. The live WebUI proof edited a file before the service had attached its watcher, so the attach reconciliation absorbed the edit and the proof timed out waiting for a targeted job. The script now waits for the watch to be established (`8608cb5`). The product behaved correctly.
+- `6f80fe0`: G03 FAIL. rustc aborted while compiling `wrongindexd` (exit 0xc0000409, and a parallel compile then could not load the derive macros). The same commit passed G04 in that run, passed CI, and G03 passed in the next run, so this was a transient toolchain crash, not a code defect. G11 PASS was hollow: the machine went to sleep during the soak (Kernel-Power 42/107, 03:04-09:51), so the edit phase covered 55 s of 300 s. Since `ebc3981`, a suspended soak reports NOT RUN. The service did come through that real 6.8-hour sleep with 6 watched projects, all of which converged afterwards. That was incidental, not the controlled M04 check.
+
+Release workflow on `6f80fe0` (run 41554289696): PASS. The artifact was downloaded, the installer hash matched `SHA256SUMS.txt`, and `gh attestation verify` succeeded: the subject is the installer, built from commit `6f80fe0` by `release.yml` on `main`.
