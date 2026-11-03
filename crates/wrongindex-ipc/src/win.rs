@@ -474,9 +474,12 @@ impl PipeListener {
     }
 
     /// Identify the holder of a name whose bind failed. Never assumes the
-    /// holder is our own daemon.
+    /// holder is our own daemon. A daemon that is still starting accepts its
+    /// first connection only once its registry is open, and other starters
+    /// may be probing at the same time: all instances stay busy for a while,
+    /// so the probe waits up to [`OWNER_PROBE`] before giving up.
     pub async fn existing_owner(name: &str) -> ExistingOwner {
-        match connect_unverified(name, Duration::from_secs(2)).await {
+        match connect_unverified(name, OWNER_PROBE).await {
             Ok(client) => match pipe_server_identity(&client) {
                 Ok((pid, sid)) if current_user_sid().ok().as_deref() == Some(sid.as_str()) => {
                     ExistingOwner::SameUser { pid }
@@ -513,6 +516,10 @@ impl PipeListener {
         }
     }
 }
+
+/// How long a starter that lost the election waits for the holder to accept
+/// its identity probe.
+pub const OWNER_PROBE: Duration = Duration::from_secs(30);
 
 async fn connect_unverified(name: &str, deadline: Duration) -> io::Result<NamedPipeClient> {
     let start = Instant::now();

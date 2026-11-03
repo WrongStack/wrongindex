@@ -252,7 +252,19 @@ async fn vertical_slice_admits_and_completes_a_durable_check_job() {
 async fn concurrent_starts_elect_exactly_one_daemon() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("home");
-    let mut children: Vec<Child> = (0..6).map(|_| Daemon::spawn(&root)).collect();
+    // stderr kept: a starter that exits unexpectedly says why.
+    let mut children: Vec<Child> = (0..6)
+        .map(|_| {
+            Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
+                .arg("--data-root")
+                .arg(&root)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("spawn wrongindexd")
+        })
+        .collect();
     wait_ready(&root).await;
 
     // Losers exit with code 3 without touching the registry or discovery.
@@ -261,7 +273,13 @@ async fn concurrent_starts_elect_exactly_one_daemon() {
         let mut losers = 0;
         for child in children.iter_mut() {
             if let Some(status) = child.try_wait().unwrap() {
-                assert_eq!(status.code(), Some(3), "unexpected exit {status}");
+                if status.code() != Some(3) {
+                    let mut err = String::new();
+                    if let Some(mut e) = child.stderr.take() {
+                        let _ = std::io::Read::read_to_string(&mut e, &mut err);
+                    }
+                    panic!("unexpected exit {status}: {err}");
+                }
                 losers += 1;
             }
         }

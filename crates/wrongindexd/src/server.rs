@@ -183,14 +183,12 @@ impl Shared {
 }
 
 pub async fn run(cfg: Config) -> Result<(), StartError> {
-    cfg.root
-        .ensure_private_dirs()
-        .with_context(|| format!("creating data root {}", cfg.root.path().display()))?;
-    crate::log::init(&cfg.root.logs_dir());
     let endpoint = cfg.root.endpoint_name()?;
 
     // 1. Singleton: the first pipe instance is the OS-backed guard. A losing
-    //    starter returns here without touching the registry or discovery.
+    //    starter returns here without touching the data root at all: not the
+    //    registry, not discovery, and not the private directories (several
+    //    starters re-hardening the same directories at once could fail).
     #[cfg(windows)]
     let (listener, first) = match wrongindex_ipc::win::PipeListener::bind(&endpoint) {
         Ok(x) => x,
@@ -207,6 +205,10 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         }
         Err(e) => return Err(anyhow::Error::new(e).context("binding endpoint").into()),
     };
+    cfg.root
+        .ensure_private_dirs()
+        .with_context(|| format!("creating data root {}", cfg.root.path().display()))?;
+    crate::log::init(&cfg.root.logs_dir());
     #[cfg(not(windows))]
     return Err(anyhow::anyhow!(
         "the WrongIndex daemon currently supports Windows only (Unix sockets are M8)"
