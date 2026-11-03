@@ -392,22 +392,7 @@ impl Bridge {
         redact_paths: bool,
         output: Option<&Path>,
     ) -> Result<Value, UiError> {
-        let exe = std::env::current_exe()
-            .map_err(|e| UiError::new("INTERNAL", e.to_string()))?
-            .with_file_name(if cfg!(windows) {
-                "wrongindex.exe"
-            } else {
-                "wrongindex"
-            });
-        if !exe.is_file() {
-            return Err(UiError::new(
-                "INTERNAL",
-                format!(
-                    "the WrongIndex CLI was not found next to the desktop ({})",
-                    exe.display()
-                ),
-            ));
-        }
+        let exe = crate::update::sibling_cli()?;
         let mut cmd = tokio::process::Command::new(&exe);
         cmd.arg("--json")
             .arg("--data-root")

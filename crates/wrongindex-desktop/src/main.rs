@@ -10,6 +10,7 @@
 mod autostart;
 mod bridge;
 mod dialogs;
+mod update;
 
 use std::time::Duration;
 
@@ -184,6 +185,24 @@ async fn stop_service(bridge: State<'_, Bridge>) -> Res {
     bridge.stop_service().await
 }
 
+/// The latest release on GitHub and whether it is newer (WI-701).
+#[tauri::command]
+async fn update_check() -> Res {
+    update::check().await
+}
+
+/// Download, verify and install the latest release; this window closes and
+/// reopens on the way.
+#[tauri::command]
+fn update_start(updater: State<'_, update::Updater>) -> Res {
+    updater.start()
+}
+
+#[tauri::command]
+fn update_last(updater: State<'_, update::Updater>) -> Res {
+    Ok(updater.last())
+}
+
 /// Follow the daemon event stream and forward events to the WebView.
 ///
 /// `wi://connection` reports connectivity changes; `wi://resync` tells the UI
@@ -265,8 +284,10 @@ fn main() {
         std::process::exit(code);
     }
     let pump_root = root.clone();
+    let updater = update::Updater::new(root.path());
     let result = tauri::Builder::default()
         .manage(Bridge::new(root))
+        .manage(updater)
         .invoke_handler(tauri::generate_handler![
             overview,
             preview_project,
@@ -286,6 +307,9 @@ fn main() {
             set_service_settings,
             start_service,
             stop_service,
+            update_check,
+            update_start,
+            update_last,
         ])
         .on_window_event(|window, event| {
             // Closing the window keeps the desktop shell in the tray; the
@@ -311,17 +335,27 @@ fn main() {
                 true,
                 None::<&str>,
             )?;
+            let updates =
+                MenuItem::with_id(app, "updates", "Check for Updates...", true, None::<&str>)?;
             let stop = MenuItem::with_id(app, "stop", "Stop Index Service...", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Desktop", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let sep2 = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&open, &sep, &pause, &resume, &sep2, &stop, &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[&open, &sep, &pause, &resume, &sep2, &updates, &stop, &quit],
+            )?;
             let mut tray = TrayIconBuilder::with_id("wrongindex")
                 .tooltip("WrongIndex")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open" => show_main(app),
+                    // The check runs and is shown in Settings > Updates.
+                    "updates" => {
+                        show_main(app);
+                        let _ = app.emit("wi://check-updates", json!({}));
+                    }
                     // Stopping the service is confirmed in the window.
                     "stop" => {
                         show_main(app);

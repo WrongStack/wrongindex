@@ -22,7 +22,23 @@ const state = {
   service: null,
   serviceDraft: null,
   serviceBusy: false,
+  // Updates: the last check (from GitHub, through the CLI) and the last
+  // update started from a desktop, as recorded on disk.
+  updates: { check: null, checking: false, last: null, starting: false },
 };
+
+// Per-viewer preferences in the WebView's own storage; the page works the
+// same without it (storage can be unavailable).
+const AUTO_CHECK_KEY = 'wi.updates.autoCheck';
+const LAST_CHECK_KEY = 'wi.updates.lastCheckMs';
+const SEEN_UPDATE_KEY = 'wi.updates.seenAtMs';
+const DAY_MS = 24 * 3600 * 1000;
+function load(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* not kept */ }
+}
 
 // Service settings shown in Settings, with their units and ranges (the
 // daemon validates again and is the authority).
@@ -142,11 +158,13 @@ async function call(cmd, args) {
   }
 }
 
-function confirmDialog(title, body, okLabel) {
+function confirmDialog(title, body, okLabel, danger = true) {
   const d = document.getElementById('confirm');
   document.getElementById('confirm-title').textContent = title;
   document.getElementById('confirm-body').textContent = body;
-  document.getElementById('confirm-ok').textContent = okLabel;
+  const ok = document.getElementById('confirm-ok');
+  ok.textContent = okLabel;
+  ok.className = danger ? 'btn danger' : 'btn';
   return new Promise((resolve) => {
     d.addEventListener('close', () => resolve(d.returnValue === 'ok'), { once: true });
     d.showModal();
@@ -195,6 +213,10 @@ function renderHeader() {
   const meta = document.getElementById('service-meta');
   const start = document.getElementById('btn-start');
   const stop = document.getElementById('btn-stop');
+  const upd = document.getElementById('btn-update');
+  const check = state.updates.check;
+  upd.hidden = !(check && check.updateAvailable);
+  if (!upd.hidden) upd.textContent = `Update available: ${check.latest}`;
   if (!o) {
     conn.textContent = 'Connecting…';
     conn.className = 'conn';
@@ -772,15 +794,132 @@ function settingsView() {
     a.enabled && !a.matchesThisInstall
       ? el('p', { class: 'error' }, `The sign-in entry points to another copy: ${a.command}. Turn the option off and on to use this one.`)
       : null,
+    el('h2', {}, 'Updates'),
+    updatesSection(),
     el('h2', {}, 'Index service'),
     serviceSettingsSection());
+}
+
+function updatesSection() {
+  const u = state.updates;
+  if (!u.last) {
+    invoke('update_last')
+      .then((r) => { u.last = r; render(true); })
+      .catch(() => { u.last = {}; render(true); });
+  }
+  const c = u.check;
+  const l = u.last ?? {};
+  const busy = u.checking || u.starting || !!l.running;
+  const auto = el('input', {
+    type: 'checkbox', id: 'auto-update-check', checked: load(AUTO_CHECK_KEY) === '1',
+    onchange: (e) => {
+      store(AUTO_CHECK_KEY, e.target.checked ? '1' : '0');
+      if (e.target.checked) autoCheck(true);
+      render(true);
+    },
+  });
+  let status = null;
+  if (u.checking) status = el('p', { class: 'note', role: 'status' }, 'Checking GitHub for a newer release…');
+  else if (c?.error) status = el('p', { class: 'error' }, `The update check failed: ${c.error}`);
+  else if (c && c.updateAvailable) {
+    status = el('div', {},
+      el('p', { role: 'status' }, `WrongIndex ${c.latest} is available (this copy: ${c.current}).`),
+      el('p', { class: 'note mono' }, c.release),
+      c.installed
+        ? el('button', { class: 'btn', disabled: busy, onclick: startUpdate }, `Update to ${c.latest}…`)
+        : el('p', { class: 'note' }, 'This copy was not installed by the WrongIndex installer, so it cannot update itself. Install the release from GitHub instead.'));
+  } else if (c) status = el('p', { role: 'status' }, `This is the latest release (${c.current}).`);
+  let lastLine = null;
+  if (l.running || u.starting) lastLine = el('p', { class: 'note', role: 'status' }, 'Updating… This window closes while the new version is installed and opens again afterwards.');
+  else if (l.atMs && l.result) {
+    const r = l.result;
+    lastLine = el('p', { class: 'note' }, r.updated
+      ? `Last update ${when(l.atMs)}: ${r.from} → ${r.to}${r.serviceRestarted ? ', service restarted' : ''}.`
+      : `Last update ${when(l.atMs)}: already the latest release (${r.current}).`);
+  } else if (l.atMs && l.error) lastLine = el('p', { class: 'error' }, `The update started ${when(l.atMs)} failed: ${l.error}`);
+  else if (l.atMs && l.pending) lastLine = el('p', { class: 'note' }, `An update started ${when(l.atMs)} has no result yet; it may still be running.`);
+  return el('div', {},
+    el('p', {}, `This copy: WrongIndex ${l.desktopVersion ?? ''}`),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn subtle', disabled: busy, onclick: checkUpdates }, 'Check for updates')),
+    status,
+    lastLine,
+    el('div', { class: 'row' }, auto, el('label', { for: 'auto-update-check' }, 'Check for updates once a day')),
+    el('p', { class: 'note' }, 'Checks ask GitHub (api.github.com) for the latest WrongIndex release; nothing else is sent. Off unless you turn it on. Updates are verified against the release\'s SHA-256 before anything is installed.'));
+}
+
+async function checkUpdates() {
+  const u = state.updates;
+  u.checking = true;
+  render(true);
+  try {
+    u.check = await invoke('update_check');
+    store(LAST_CHECK_KEY, String(Date.now()));
+  } catch (e) {
+    u.check = { error: errText(e) };
+  }
+  u.checking = false;
+  render(true);
+}
+
+/** The daily check, when turned on. Quiet: only the header shows a result. */
+async function autoCheck(force = false) {
+  if (load(AUTO_CHECK_KEY) !== '1') return;
+  if (!force && Date.now() - Number(load(LAST_CHECK_KEY) || 0) < DAY_MS) return;
+  store(LAST_CHECK_KEY, String(Date.now()));
+  try {
+    state.updates.check = await invoke('update_check');
+    render();
+  } catch { /* shown on the next manual check */ }
+}
+
+async function startUpdate() {
+  const c = state.updates.check;
+  const ok = await confirmDialog(
+    `Update to WrongIndex ${c.latest}?`,
+    'The release is downloaded from GitHub and its SHA-256 checked before anything is installed. The index service stops while the files are replaced and starts again if it was running. This window closes and opens again.',
+    'Update', false);
+  if (!ok) return;
+  state.updates.starting = true;
+  render(true);
+  try {
+    await call('update_start');
+    followUpdate();
+  } catch {
+    state.updates.starting = false;
+    render(true);
+  }
+}
+
+/** Until the window closes for the install, or the update fails before. */
+function followUpdate() {
+  setTimeout(async () => {
+    try { state.updates.last = await invoke('update_last'); } catch { /* keep waiting */ }
+    const l = state.updates.last;
+    if (l && l.running) { followUpdate(); return; }
+    state.updates.starting = false;
+    if (l && l.error) toast(`The update failed: ${l.error}`, true);
+    render(true);
+  }, 2000);
+}
+
+/** Once after a window opens: the outcome of an update it has not shown. */
+async function announceLastUpdate() {
+  let l;
+  try { l = await invoke('update_last'); } catch { return; }
+  state.updates.last = l;
+  if (!l.atMs || l.running || l.pending || String(l.atMs) === load(SEEN_UPDATE_KEY)) return;
+  if (Date.now() - l.atMs > DAY_MS) return;
+  store(SEEN_UPDATE_KEY, String(l.atMs));
+  if (l.result && l.result.updated) toast(`WrongIndex was updated to ${l.result.to}.`);
+  else if (l.error) toast(`The last update failed: ${l.error}`, true);
 }
 
 // ─── navigation ─────────────────────────────────────────────────────────────
 
 function go(view) {
   state.view = view;
-  if (view === 'settings') { state.autostart = null; state.service = null; }
+  if (view === 'settings') { state.autostart = null; state.service = null; state.updates.last = null; }
   if (view !== 'projects') { state.selected = null; state.detail = null; }
   render();
   document.getElementById('main').focus();
@@ -843,6 +982,7 @@ async function stopService() {
 for (const b of document.querySelectorAll('.nav')) b.addEventListener('click', () => go(b.dataset.view));
 document.getElementById('btn-start').addEventListener('click', startService);
 document.getElementById('btn-stop').addEventListener('click', stopService);
+document.getElementById('btn-update').addEventListener('click', () => go('settings'));
 
 listen('wi://event', (e) => {
   state.activity.unshift(e.payload);
@@ -852,6 +992,7 @@ listen('wi://event', (e) => {
 listen('wi://resync', () => scheduleRefresh());
 listen('wi://connection', () => scheduleRefresh());
 listen('wi://confirm-stop', () => stopService());
+listen('wi://check-updates', () => { go('settings'); checkUpdates(); });
 listen('wi://settings', (e) => {
   if (e.payload && e.payload.error) { toast(errText(e.payload.error), true); return; }
   state.service = e.payload;
@@ -863,3 +1004,6 @@ listen('wi://settings', (e) => {
 // Relative times and uptime stay honest without events.
 setInterval(() => { if (!document.hidden) scheduleRefresh(); }, 15000);
 refresh();
+announceLastUpdate();
+autoCheck();
+setInterval(() => autoCheck(), 3600 * 1000);
