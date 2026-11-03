@@ -9,6 +9,9 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 mod diagnostics;
+mod http;
+mod update;
+mod user_path;
 
 use clap::{Args, Parser, Subcommand};
 use serde_json::{Value, json};
@@ -110,6 +113,34 @@ enum Command {
         #[arg(long)]
         wrongstack_home: Option<PathBuf>,
     },
+    /// Install the newest release from GitHub over this installed copy
+    /// (the installer's SHA-256 is checked against the release's SHA256SUMS.txt).
+    SelfUpdate {
+        /// Only report whether a newer release exists.
+        #[arg(long)]
+        check: bool,
+        /// Install this release (a tag such as v0.1.2) instead of the latest;
+        /// an older one is allowed.
+        #[arg(long)]
+        version: Option<String>,
+        /// Download and verify the installer, print its path, install nothing.
+        #[arg(long)]
+        download_only: bool,
+    },
+    /// Installer support (used by the installer and the uninstaller).
+    #[command(hide = true)]
+    Setup {
+        #[command(subcommand)]
+        action: SetupAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SetupAction {
+    /// Put a directory on the user's PATH (once).
+    AddToPath { dir: PathBuf },
+    /// Take a directory off the user's PATH.
+    RemoveFromPath { dir: PathBuf },
 }
 
 #[derive(Debug, Subcommand)]
@@ -329,6 +360,9 @@ fn fail(code: i32, message: impl Into<String>) -> Failure {
 type Outcome = Result<i32, Failure>;
 
 fn main() -> ExitCode {
+    // What a previous self-update moved aside (it could not delete itself);
+    // before parsing, which exits early for --version and --help.
+    update::remove_leftovers();
     let cli = Cli::parse();
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -360,6 +394,23 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        Command::SelfUpdate {
+            check,
+            version,
+            download_only,
+        } => self_update(&root, check, version.as_deref(), download_only, json).await,
+        Command::Setup { action } => {
+            let (dir, add) = match action {
+                SetupAction::AddToPath { dir } => (dir, true),
+                SetupAction::RemoveFromPath { dir } => (dir, false),
+            };
+            let changed = user_path::update(&dir, add)
+                .map_err(|e| fail(exit_code::INTERNAL, format!("user PATH: {e}")))?;
+            if json {
+                print_json(&json!({"changed": changed, "dir": dir}));
+            }
+            Ok(exit_code::SUCCESS)
+        }
         Command::Settings { action } => settings(&root, action, json).await,
         Command::Metrics => {
             let mut c = connect(&root).await?;
@@ -1171,6 +1222,137 @@ async fn job(root: &DataRoot, action: JobAction, json: bool) -> Outcome {
             Ok(exit_code::SUCCESS)
         }
     }
+}
+
+// ─── self-update ────────────────────────────────────────────────────────────
+
+/// Stop the service, if one runs, and wait until it has gone. `true` when it
+/// was running.
+async fn stop_service_for_update(root: &DataRoot) -> Result<bool, Failure> {
+    let mut c = match Client::connect(root, CLIENT_NAME).await {
+        Ok(c) => c,
+        Err(CallError::Unavailable(_)) => return Ok(false),
+        Err(e) => return Err(e.into()),
+    };
+    let instance = c.hello().daemon_instance_id.clone();
+    c.call_raw(method::DAEMON_SHUTDOWN, None, json!({}), None)
+        .await?;
+    drop(c);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while matches!(Discovery::load(root), Ok(d) if d.info.daemon_instance_id == instance) {
+        if Instant::now() >= deadline {
+            return Err(fail(
+                exit_code::TIMEOUT,
+                "the service did not stop; nothing was installed",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Ok(true)
+}
+
+async fn self_update(
+    root: &DataRoot,
+    check: bool,
+    version: Option<&str>,
+    download_only: bool,
+    json: bool,
+) -> Outcome {
+    let failed = |e: String| fail(exit_code::JOB_FAILED, e);
+    let blocking = |e: tokio::task::JoinError| fail(exit_code::INTERNAL, e.to_string());
+    let current = update::Version::parse(env!("CARGO_PKG_VERSION"))
+        .ok_or_else(|| fail(exit_code::INTERNAL, "own version is not a version"))?;
+    let tag = version.map(str::to_string);
+    let release = tokio::task::spawn_blocking(move || update::find(tag.as_deref()))
+        .await
+        .map_err(blocking)?
+        .map_err(failed)?;
+    let summary = update::summary(&current, &release);
+    let newer = release.version > current;
+    if check || (version.is_none() && !newer && !download_only) {
+        if json {
+            print_json(&summary);
+        } else if newer {
+            println!(
+                "{} is available (installed: {}): {}",
+                release.version.text, current.text, release.url
+            );
+            println!("install it with: wrongindex self-update");
+        } else {
+            println!("up to date ({})", current.text);
+        }
+        return Ok(exit_code::SUCCESS);
+    }
+    // Only an installed copy can be updated in place; say so before
+    // downloading anything.
+    let install_dir = if download_only {
+        None
+    } else {
+        Some(update::install_dir().map_err(|e| fail(exit_code::INVALID_INPUT, e))?)
+    };
+    let dir = root.path().join("updates").join(&release.version.text);
+    let r2 = release.clone();
+    let installer = tokio::task::spawn_blocking(move || update::download(&r2, &dir))
+        .await
+        .map_err(blocking)?
+        .map_err(failed)?;
+    if download_only {
+        if json {
+            print_json(&json!({"downloaded": installer, "verified": true, "release": summary}));
+        } else {
+            println!("{} (SHA-256 verified)", installer.display());
+        }
+        return Ok(exit_code::SUCCESS);
+    }
+    let Some(install_dir) = install_dir else {
+        return Err(fail(exit_code::INTERNAL, "no install directory"));
+    };
+    if !json {
+        println!(
+            "installing {} over {} ({})",
+            release.version.text,
+            current.text,
+            install_dir.display()
+        );
+    }
+    let was_running = stop_service_for_update(root).await?;
+    let expected = release.version.clone();
+    let inst = installer.clone();
+    let applied = tokio::task::spawn_blocking(move || {
+        update::apply(&inst, &install_dir, &expected, was_running)
+    })
+    .await
+    .map_err(blocking)?
+    .map_err(failed)?;
+    if let Some(d) = installer.parent() {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    if json {
+        print_json(&json!({
+            "updated": true,
+            "from": current.text,
+            "to": applied.installed,
+            "serviceWasRunning": was_running,
+            "serviceRestarted": applied.restarted_service,
+            "desktopReopened": applied.reopened_desktop,
+        }));
+    } else {
+        println!("updated {} -> {}", current.text, applied.installed);
+        if applied.reopened_desktop {
+            println!("desktop reopened");
+        }
+        if was_running {
+            println!(
+                "service {}",
+                if applied.restarted_service {
+                    "restarted"
+                } else {
+                    "NOT restarted: run `wrongindex daemon start`"
+                }
+            );
+        }
+    }
+    Ok(exit_code::SUCCESS)
 }
 
 // ─── doctor / inspect ───────────────────────────────────────────────────────

@@ -142,8 +142,11 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 
 ## 9. Install, upgrade, uninstall
 
-- Install: run the installer. Silent install: `WrongIndex_<v>_x64-setup.exe /S /D=<dir>`.
-- Upgrade: the installer stops a running service first (`daemon stop`), then replaces the files.
-- Uninstall: Settings > Apps, or `uninstall.exe /S`. This removes the program, the Start menu entry and the sign-in entry, and keeps the data root and every index.
+- Install from GitHub: `irm https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.ps1 | iex` (PowerShell) or `curl -fsSL https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.sh | sh` (Git Bash; it runs install.ps1). It downloads the latest release (or `-Version` / `WRONGINDEX_VERSION`), refuses an installer whose SHA-256 is not the one in the release's `SHA256SUMS.txt`, checks the build-provenance attestation when `gh` is installed, installs silently for the current user (an existing installation in place; `-InstallDir` / `WRONGINDEX_INSTALL_DIR` to choose) and prints the installed version.
+- Install by hand: run the installer. Silent install: `WrongIndex_<v>_x64-setup.exe /S /D=<dir>`. The installer puts the install directory on the user PATH (`HKCU\Environment\Path`, other entries kept as written).
+- Update: `wrongindex self-update` (`--check` only reports; `--version <tag>` installs a specific release, also an older one; `--download-only` downloads and verifies). It downloads the release's installer and `SHA256SUMS.txt`, refuses a mismatch, moves the running CLI aside (`wrongindex.exe.old`, removed on the next run), stops the service, runs the installer silently into the same directory, checks the new version, restarts the service if it was running and reopens the desktop if it was open. `WRONGINDEX_UPDATE_URL` points it at another releases API (a mirror). Only an installed copy (with `uninstall.exe` next to it) updates itself.
+- Upgrade by hand: the installer stops a running service first (`daemon stop`), then replaces the files.
+- Uninstall: Settings > Apps, or `uninstall.exe /S`. This removes the program, the Start menu entry, the sign-in entry and the PATH entry, and keeps the data root and every index.
+- Releases are not code-signed (owner decision): SmartScreen may warn on a downloaded installer; verify with `sha256sum -c SHA256SUMS.txt` and `gh attestation verify <file> --repo WrongStack/wrongindex`.
 - Start at sign-in: desktop Settings > Startup. This writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WrongIndex`.
 - Packaged smoke: `pwsh scripts/release/smoke-installed.ps1 -PlaywrightCore <playwright-core dir>`. It installs into a throw-away directory, drives the installed desktop over WebView2 remote debugging, and uninstalls. It refuses to run when WrongIndex is already installed.

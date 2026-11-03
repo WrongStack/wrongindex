@@ -5,6 +5,10 @@
 ; Both stop it first through the installed CLI; the data root and every
 ; project index stay where they are. An upgrade restarts the service
 ; afterwards if it was running before.
+;
+; The install directory goes on the user's PATH (so `wrongindex` works in a
+; new terminal) and comes off it on uninstall; the CLI edits the value and
+; keeps every other entry as written.
 
 Var WiServiceWasRunning
 
@@ -32,6 +36,8 @@ Var WiServiceWasRunning
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  nsExec::Exec '"$INSTDIR\wrongindex.exe" setup add-to-path "$INSTDIR"'
+  Pop $0
   ${If} $WiServiceWasRunning == "1"
     ; Starts the new service without opening a window, then exits.
     nsExec::Exec '"$INSTDIR\wrongindex-desktop.exe" --start-service'
@@ -41,6 +47,10 @@ Var WiServiceWasRunning
 
 !macro NSIS_HOOK_PREUNINSTALL
   !insertmacro WRONGINDEX_STOP_SERVICE
+  nsExec::Exec '"$INSTDIR\wrongindex.exe" setup remove-from-path "$INSTDIR"'
+  Pop $0
+  ; Left by `wrongindex self-update` (a running CLI cannot delete itself).
+  Delete "$INSTDIR\wrongindex.exe.old"
   ; "Start the index service when I sign in" (Settings) points at this copy.
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "WrongIndex"
 !macroend

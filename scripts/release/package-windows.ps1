@@ -14,8 +14,29 @@ Set-Location $root
 
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $root 'target' }
 $triple = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
+$version = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages |
+  Where-Object name -eq 'wrongindexd').version
+
+# The shipped binaries must all be this version. Cargo keeps an earlier
+# build "fresh" when a version is switched back and then leaves the binary of
+# the other version in target/release, so check, and rebuild clean once.
+function Get-BuiltVersions {
+  [ordered]@{
+    wrongindexd = (& (Join-Path $target 'release\wrongindexd.exe') --build-info | ConvertFrom-Json).version
+    wrongindex  = ((& (Join-Path $target 'release\wrongindex.exe') --version) -split ' ')[-1]
+  }
+}
 cargo build --release --locked -p wrongindexd -p wrongindex-cli
 if ($LASTEXITCODE) { throw 'cargo build failed' }
+$built = Get-BuiltVersions
+if (@($built.Values | Where-Object { $_ -ne $version }).Count) {
+  Write-Host "stale binaries ($(($built.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ')) for version $version; rebuilding them"
+  cargo clean --release -p wrongindexd -p wrongindex-cli -p wrongindex-desktop
+  cargo build --release --locked -p wrongindexd -p wrongindex-cli
+  if ($LASTEXITCODE) { throw 'cargo build failed' }
+  $built = Get-BuiltVersions
+  if (@($built.Values | Where-Object { $_ -ne $version }).Count) { throw "built binaries are not version ${version}: $($built | ConvertTo-Json -Compress)" }
+}
 
 # Tauri sidecars are named <name>-<target triple>.exe at build time and
 # installed as <name>.exe next to the desktop executable, which is where the
@@ -38,6 +59,8 @@ try {
 } finally {
   Pop-Location
 }
+$desktopVersion = (Get-Item (Join-Path $target 'release\wrongindex-desktop.exe')).VersionInfo.ProductVersion
+if ($desktopVersion -ne $version) { throw "wrongindex-desktop.exe is version $desktopVersion, expected $version" }
 
 $out = Join-Path $target 'release\bundle\nsis'
 $manifest = Get-ChildItem $out -Filter *.exe | ForEach-Object {

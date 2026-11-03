@@ -41,7 +41,33 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - Closing or quitting it never stops the service.
 - A strictly read-only profile inspector for WrongStack `index.db` files (schema v5).
 
-## Quick start (Windows)
+## Install (Windows)
+
+PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.ps1 | iex
+```
+
+Git Bash, MSYS2 or Cygwin:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.sh | sh
+```
+
+Both download the latest GitHub release, check the installer against the release's `SHA256SUMS.txt` (and its build-provenance attestation when the GitHub CLI `gh` is installed), install it for the current user (no administrator rights) and put `wrongindex` on your PATH. Running them again updates or repairs an installation. Options: `-Version v0.1.0` / `-InstallDir <dir>` (or `WRONGINDEX_VERSION` / `WRONGINDEX_INSTALL_DIR`).
+
+Update an installed copy:
+
+```powershell
+wrongindex self-update --check   # is there a newer release?
+wrongindex self-update           # install it (service and an open desktop window come back)
+wrongindex self-update --version v0.1.0   # a specific release, also an older one
+```
+
+Releases are not code-signed: Windows SmartScreen may warn on first run of a downloaded installer. Integrity comes from the SHA-256 check and the release's provenance attestation (`gh attestation verify <file> --repo WrongStack/wrongindex`).
+
+## Quick start from source (Windows)
 
 ```powershell
 cargo build --release
@@ -55,7 +81,7 @@ cargo build --release
 
 Without `--index-dir`, the project is registered with the index location WrongStack itself uses (`~/.wrongstack/projects/<slug>/codebase-index`, linked-worktree aware); `wrongindex resolve-index-dir <root>` prints it. Registering a project never modifies the source tree or the index. Use `--data-root <dir>` (or `WRONGINDEX_HOME`) for an isolated instance.
 
-## Windows installer
+## Building the installer
 
 ```powershell
 cargo install tauri-cli --version "=2.12.4" --locked   # once
@@ -64,7 +90,7 @@ pwsh scripts/release/package-windows.ps1
 
 `pwsh scripts/release/smoke-installed.ps1 -PlaywrightCore <dir>` installs that installer into a throw-away directory, drives the installed desktop and service, and uninstalls again (see [docs/operations.md](docs/operations.md)).
 
-This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`) with `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` (commit, supported index profile, toolchain, SQLite, hashes and signature status of every binary) and `THIRD-PARTY-LICENSES.txt` (also installed next to the binaries). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Stop the service (tray: Stop Index Service) before uninstalling or upgrading.
+This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`) with `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` (commit, supported index profile, toolchain, SQLite, hashes and signature status of every binary) and `THIRD-PARTY-LICENSES.txt` (also installed next to the binaries). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Upgrades and uninstalls stop the service first; the installer puts the install directory on the user PATH and the uninstaller takes it off again.
 
 Runtime requirements for native indexing of every language: Python (Python files) and Go (Go files) - without them those files fall back to the regex extractor, as in WrongStack - and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses).
 

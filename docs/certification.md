@@ -77,7 +77,7 @@ Manual items. The runner always records these as `NOT RUN` until a person does t
 |---|---|---|---|
 | M01 | Screen reader pass over every desktop screen | WI-407 | Needs a person with NVDA or Narrator |
 | M02 | Native per-monitor DPI pass on a mixed-DPI setup | WI-407 | Needs mixed-DPI hardware |
-| M03 | Code signing of the installer and binaries | WI-703 | Needs the publisher certificate |
+| M03 | Code signing of the installer and binaries | WI-703 | WAIVED by the owner (2026-11-03): releases ship unsigned; integrity is the SHA-256 check (install.ps1, `self-update`) and the build-provenance attestation |
 | M04 | Real sleep/resume cycle with watched projects | WI-207 | Needs a machine that is put to sleep. The resume path (a 30 s wall-clock gap triggers reconciliation) is unit-tested. |
 | M05 | Install on a clean Windows machine without developer tools | WI-700 | Needs a clean machine or VM. G19 installs on the build machine. |
 
@@ -121,10 +121,10 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-515 | Native incremental and targeted writes | Done | G06, G07 |
 | WI-600..605 | Backend switch, faults, soak, maintenance, security review, rollout | Done | G03, G09, G11, G13 |
 | WI-606 | Native process tree | Done with the helper profile | No Bun indexing engine, no per-project daemon (`tests/process_tree.rs`). Python, Go and the tree-sitter languages run WrongStack's parse-only programs as confined children (§1). |
-| WI-700 | Installer | Done locally | G05, G19. M05 (clean machine) not run. |
-| WI-701 | Autostart, upgrade, uninstall | Done locally | G19 and the WI-701 evidence in status.md |
+| WI-700 | Installer | Done | G05, G19; install from GitHub with `install.ps1` / `install.sh` (SHA-256 and attestation checked). M05 (clean machine) not run. |
+| WI-701 | Autostart, upgrade, uninstall | Done | G19; `wrongindex self-update` (tests in G03, local end-to-end upgrade 0.1.0 -> 0.1.1 in status.md); PATH entry added and removed |
 | WI-702 | Release docs, runbook | Done | `docs/operations.md` |
-| WI-703 | Exact-commit CI, provenance, licenses, checksums, signing | Partial | Release workflow builds from the exact commit, publishes `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests build provenance (G20, G21). Signing is M03 (not run): every binary reports `NotSigned`. |
+| WI-703 | Exact-commit CI, provenance, licenses, checksums, signing | Done (signing waived) | Release workflow builds from the exact commit, publishes `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests build provenance (G20, G21). Signing was waived by the owner (M03): every binary reports `NotSigned`. |
 | WI-704 | Artifact smoke and live WrongStack proof | Done | G16, G17, G19 |
 | WI-705 | Native 1.0 release evidence | This document | Release not published: see §7 |
 
@@ -155,7 +155,7 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 - L1 (supervisor preview) and L2 (compatible preview): met.
 - L3 (native 1.0) profile: met for §1, with the user-approved helper profile and the differences in §5.
-- A 1.0 release is **not** published. It needs: code signing (M03), the adapter branch merged into WrongStack (the owner's decision), and the open manual items (M01, M02, M04, M05) done or explicitly waived.
+- Releases ship unsigned (M03 waived by the owner). A 1.0 release is **not** published yet. It needs: the adapter branch merged into WrongStack (the owner's decision), and the open manual items (M01, M02, M04, M05) done or explicitly waived.
 
 ## 8. Latest run
 

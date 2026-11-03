@@ -37,6 +37,9 @@ try {
   $result.install = $p.ExitCode
   # The license inventory ships next to the binaries (WI-703).
   $result.licensesInstalled = Test-Path (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+  # The install directory goes on the user's PATH (and comes off on uninstall).
+  $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+  $result.onUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
   $cli = Join-Path $dir 'wrongindex.exe'
   & $cli daemon start --wait-seconds 20 | Out-Null
   $add = & $cli --json project add $proj --index-dir (Join-Path $work 'idx') --watch pinned | ConvertFrom-Json
@@ -77,6 +80,8 @@ try {
     $result.uninstall = $u.ExitCode
   }
   Start-Sleep -Seconds 3
+  $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+  $result.leftOnUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
   $result.filesLeft = if (Test-Path $dir) { (Get-ChildItem $dir -Recurse -File | Measure-Object).Count } else { 0 }
   $result.uninstallEntryLeft = [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
@@ -86,6 +91,8 @@ try {
 $failures = @()
 if ($result.install -ne 0) { $failures += "install exit $($result.install)" }
 if (-not $result.licensesInstalled) { $failures += 'THIRD-PARTY-LICENSES.txt not installed' }
+if (-not $result.onUserPath) { $failures += 'install directory not put on the user PATH' }
+if ($result.leftOnUserPath) { $failures += 'install directory left on the user PATH after uninstall' }
 if ($result.freshness -ne 'current') { $failures += "freshness $($result.freshness)" }
 if ($result.guiExit -ne 0) { $failures += "GUI checks exit $($result.guiExit)" }
 if ($result.pausedAfterGui -ne $false) { $failures += 'GUI pause not undone' }

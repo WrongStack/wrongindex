@@ -58,8 +58,14 @@ pub fn spawn_detached(exe: &Path, root: &DataRoot) -> io::Result<Child> {
 }
 
 /// Clear `HANDLE_FLAG_INHERIT` on this process's standard handles.
+///
+/// `Command` passes a child its own inheritable duplicate of an inherited
+/// standard handle, but with inheritance on the child also receives the
+/// original: a grandchild that outlives everyone (the service) would keep a
+/// caller's pipe open through it. A process that starts children which may
+/// start the service (`self-update`) clears its own handles first.
 #[cfg(windows)]
-fn no_inherit_std_handles() {
+pub fn no_inherit_std_handles() {
     use windows_sys::Win32::Foundation::{
         HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation,
     };

@@ -1,11 +1,13 @@
 name: release
 
-# Builds the per-user Windows installer (WI-700) from the exact commit and
-# publishes it with a SHA-256 manifest, the release manifest (WI-703: commit,
-# supported profile, toolchain, Cargo.lock, binary and installer hashes,
-# Authenticode status) and the third-party license inventory: as a workflow
-# artifact on manual runs, and as a draft GitHub release for `v*` tags. The
-# installer and the binaries get a GitHub build-provenance attestation.
+# Builds the per-user Windows installer (WI-700) from the exact commit with
+# a SHA-256 manifest, the release manifest (WI-703: commit, supported
+# profile, toolchain, Cargo.lock, SQLite, binary and installer hashes,
+# Authenticode status) and the third-party license inventory. Manual runs
+# upload them as a workflow artifact; a `v*` tag publishes a GitHub release,
+# which is what install.ps1, install.sh and `wrongindex self-update` install
+# from. The installer and the binaries get a build-provenance attestation.
+# Releases are not code-signed (owner decision, 2026-11-03).
 on:
   workflow_dispatch:
   push:
@@ -23,6 +25,15 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
+      - name: Tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages |
+            Where-Object name -eq 'wrongindexd').version
+          if ($env:TAG -ne "v$version") { throw "tag $env:TAG does not match the workspace version $version" }
       - name: Install pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - name: Test
@@ -50,11 +61,23 @@ jobs:
             target/release/bundle/nsis/SHA256SUMS.txt
             target/release/bundle/nsis/RELEASE-MANIFEST.json
             target/release/bundle/nsis/THIRD-PARTY-LICENSES.txt
-      - name: Draft release
+      - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
           $out = 'target/release/bundle/nsis'
-          gh release create '${{ github.ref_name }}' --draft --title 'WrongIndex ${{ github.ref_name }}' --notes 'Per-user Windows installer. Verify with SHA256SUMS.txt and `gh attestation verify <file> --repo WrongStack/wrongindex`; RELEASE-MANIFEST.json records the commit, supported index profile, toolchain and hashes; THIRD-PARTY-LICENSES.txt lists the bundled components.' (Get-ChildItem $out -Include *.exe,SHA256SUMS.txt,RELEASE-MANIFEST.json,THIRD-PARTY-LICENSES.txt -Recurse).FullName
+          $notes = @(
+            'Per-user Windows installer (not code-signed).',
+            '',
+            'Install or update:',
+            '- PowerShell: `irm https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.ps1 | iex`',
+            '- Git Bash: `curl -fsSL https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.sh | sh`',
+            '- an installed copy: `wrongindex self-update`',
+            '',
+            'Verify by hand: `sha256sum -c SHA256SUMS.txt` and `gh attestation verify <file> --repo WrongStack/wrongindex`. RELEASE-MANIFEST.json records the commit, the supported index profile, the toolchain and every hash; THIRD-PARTY-LICENSES.txt lists the bundled components.'
+          ) -join "`n"
+          $files = (Get-ChildItem $out -Include *.exe,SHA256SUMS.txt,RELEASE-MANIFEST.json,THIRD-PARTY-LICENSES.txt -Recurse).FullName
+          gh release create $env:TAG --title "WrongIndex $env:TAG" --notes $notes --latest @files

@@ -61,6 +61,9 @@ windows = { version = "=0.62.2", features = [
 ] }
 windows-sys = { version = "=0.61.2", features = [
   "Win32_Foundation",
+  "Win32_Networking_WinHttp",
+  "Win32_System_Registry",
+  "Win32_UI_WindowsAndMessaging",
   "Win32_Security",
   "Win32_Security_Authorization",
   "Win32_System_Threading",
