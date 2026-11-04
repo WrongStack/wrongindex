@@ -184,6 +184,16 @@ async fn a_reader_holding_a_transaction_keeps_the_wal_until_it_lets_go() {
     .await;
     let d = &large["data"];
     assert_eq!(d["projectId"], pid, "{d}");
+    // Which program has the index open: this test, which holds the reader.
+    assert!(
+        d["openBy"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|h| h["pid"] == std::process::id()
+                && h["name"].as_str().is_some_and(|n| !n.is_empty())),
+        "{d}"
+    );
     assert!(
         d["walBytes"].as_u64().unwrap() > 2 * d["indexBytes"].as_u64().unwrap(),
         "{d}"

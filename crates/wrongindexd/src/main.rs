@@ -10,6 +10,7 @@ mod dirty;
 mod disk;
 mod engine;
 mod events;
+mod holders;
 mod log;
 mod metrics;
 mod ownership;

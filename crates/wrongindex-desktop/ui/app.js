@@ -317,7 +317,7 @@ function diskBanners() {
     return el('div', { class: 'banner', role: 'status' },
       el('p', {}, `The write-ahead log of ${name} is ${megabytes(r.walBytes)}${times}.`),
       el('p', { class: 'note' }, r.blockedByReader
-        ? `A program has kept a read transaction open on this index since ${when(r.blockedSinceMs)} (a WrongStack session or another reader), so each run adds to the log. WrongIndex folds it into the index as soon as that transaction ends; it never closes other programs' connections.`
+        ? `A program has kept a read transaction open on this index since ${when(r.blockedSinceMs)} (a WrongStack session or another reader), so each run adds to the log.${(r.openBy ?? []).length ? ` Programs with the index open: ${r.openBy.map((h) => `${h.name} (pid ${h.pid})`).join(', ')}.` : ''} WrongIndex folds it into the index as soon as that transaction ends; it never closes other programs' connections.`
         : 'WrongIndex folds it into the index once no reader needs it.'));
   });
   return wals.concat(all.filter((r) => r.resource === 'disk' && r.level !== 'ok').map((r) => {

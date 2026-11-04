@@ -6,7 +6,9 @@
 //! * `index.checkpoint`: the write-ahead log folded into the index and cut
 //!   to zero, or `DATABASE_BUSY` (retryable) while an outside reader holds a
 //!   read transaction - that reader is not disturbed and the log is left as
-//!   it was.
+//!   it was;
+//! * a refusal because the index is open names the programs that have it
+//!   open (here: this test program), for a checkpoint and for a restore.
 
 #![cfg(windows)]
 
@@ -243,6 +245,24 @@ async fn a_checkpoint_folds_the_log_in_or_says_a_reader_holds_it() {
     assert_eq!(busy["kind"], "checkpoint", "{busy}");
     assert_eq!(busy["error"]["code"], "DATABASE_BUSY", "{busy}");
     assert_eq!(busy["error"]["retryable"], true, "{busy}");
+    // Who has it open is named: this test program holds the reader.
+    let me = format!("(pid {})", std::process::id());
+    let said = busy["error"]["message"].as_str().unwrap();
+    assert!(said.contains("Open by: ") && said.contains(&me), "{said}");
+    // A restore is refused the same way, and names it too; nothing changes.
+    let backup = run(&mut c, &pid, method::INDEX_BACKUP, json!({})).await;
+    assert_eq!(backup["state"], "succeeded", "{backup}");
+    let restore = run(
+        &mut c,
+        &pid,
+        method::INDEX_REQUEST,
+        json!({"kind": "restore", "backup": backup["result"]["backup"]}),
+    )
+    .await;
+    assert_eq!(restore["state"], "failed", "{restore}");
+    assert_eq!(restore["error"]["code"], "DATABASE_BUSY", "{restore}");
+    let said = restore["error"]["message"].as_str().unwrap();
+    assert!(said.contains(&me), "{said}");
     // Nothing changed for the reader, and the log is still there.
     assert_eq!(count(&reader, old), 1);
     assert!(wal_bytes(&index) >= held);

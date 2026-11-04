@@ -276,9 +276,17 @@ async fn checkpoint_now(
     dir: std::path::PathBuf,
 ) -> Result<serde_json::Value, ErrorBody> {
     use wrongindex_storage::wal::Checkpoint;
-    let outcome = tokio::task::spawn_blocking(move || wrongindex_storage::wal::truncate(&dir))
-        .await
-        .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?
+    let (outcome, open_by) = tokio::task::spawn_blocking(move || {
+        let outcome = wrongindex_storage::wal::truncate(&dir);
+        let open_by = match outcome {
+            Ok(Checkpoint::Blocked { .. }) => crate::holders::of(&dir),
+            _ => Vec::new(),
+        };
+        (outcome, open_by)
+    })
+    .await
+    .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+    let outcome = outcome
         .map_err(|e| crate::damage::classify(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
     match outcome {
         Checkpoint::Empty => Ok(serde_json::json!({"outcome": "empty", "walBytes": 0})),
@@ -289,7 +297,8 @@ async fn checkpoint_now(
         Checkpoint::Blocked { bytes } => Err(ErrorBody::new(
             ErrorCode::DatabaseBusy,
             format!(
-                "a program holds a read transaction open on the index, so its write-ahead log ({bytes} bytes) cannot be folded in now; nothing was changed. The service tries again by itself every 15 s"
+                "a program holds a read transaction open on the index, so its write-ahead log ({bytes} bytes) cannot be folded in now; nothing was changed. The service tries again by itself every 15 s.{}",
+                crate::holders::suffix(&open_by)
             ),
         )),
     }
@@ -298,17 +307,27 @@ async fn checkpoint_now(
 /// A truncating WAL checkpoint of an owned index (see `wal`), holding the
 /// project's job slot and the ownership guard.
 async fn checkpoint(shared: Arc<Shared>, project_id: String, dir: std::path::PathBuf, _busy: Busy) {
-    let outcome = match shared.owners.begin_run(&project_id) {
-        None => Err("the index is no longer owned by this service".to_string()),
+    let (outcome, open_by) = match shared.owners.begin_run(&project_id) {
+        None => (
+            Err("the index is no longer owned by this service".to_string()),
+            Vec::new(),
+        ),
         Some(_run) => tokio::task::spawn_blocking(move || {
-            wrongindex_storage::wal::truncate(&dir).map_err(|e| e.to_string())
+            let outcome = wrongindex_storage::wal::truncate(&dir).map_err(|e| e.to_string());
+            // Blocked: name who has the index open (see `holders`).
+            let open_by = match outcome {
+                Ok(wrongindex_storage::wal::Checkpoint::Blocked { .. }) => crate::holders::of(&dir),
+                _ => Vec::new(),
+            };
+            (outcome, open_by)
         })
         .await
-        .unwrap_or_else(|e| Err(e.to_string())),
+        .unwrap_or_else(|e| (Err(e.to_string()), Vec::new())),
     };
-    if let Some(change) = shared
-        .wal
-        .finish(&project_id, &outcome, std::time::Instant::now())
+    if let Some(change) =
+        shared
+            .wal
+            .finish(&project_id, &outcome, open_by, std::time::Instant::now())
     {
         if change["level"] == "ok" {
             info!("wal_ok", {"projectId": project_id});
@@ -401,10 +420,20 @@ async fn execute(
             }
             let dir = std::path::PathBuf::from(&project.index_dir);
             let epoch = fence.owner_epoch;
-            let restored = tokio::task::spawn_blocking(move || {
-                let (from, previous) = wrongindex_storage::backup::restore(&dir, &name, epoch)?;
-                let stamp = wrongindex_storage::backup::graph_stamp(&dir);
-                Ok::<_, wrongindex_storage::backup::BackupError>((from, previous, stamp))
+            let (restored, open_by) = tokio::task::spawn_blocking(move || {
+                let restored = (|| {
+                    let (from, previous) = wrongindex_storage::backup::restore(&dir, &name, epoch)?;
+                    let stamp = wrongindex_storage::backup::graph_stamp(&dir);
+                    Ok::<_, wrongindex_storage::backup::BackupError>((from, previous, stamp))
+                })();
+                // In use: name who has it open (see `holders`).
+                let open_by = match &restored {
+                    Err(wrongindex_storage::backup::BackupError::Busy(_)) => {
+                        crate::holders::of(&dir)
+                    }
+                    _ => Vec::new(),
+                };
+                (restored, open_by)
             })
             .await
             .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
@@ -417,7 +446,7 @@ async fn execute(
                     }
                     _ => ErrorCode::Internal,
                 };
-                ErrorBody::new(code, e.to_string())
+                ErrorBody::new(code, format!("{e}{}", crate::holders::suffix(&open_by)))
             })?;
             info!("index_restored", {"projectId": project_id, "from": from.display().to_string()});
             // A backup is older than the checkout: a watched project catches

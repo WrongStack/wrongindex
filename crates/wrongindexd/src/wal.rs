@@ -11,7 +11,8 @@
 //!   reader is never disturbed. It is tried again every [`RETRY`].
 //! * A WAL of at least [`LARGE_MIN_BYTES`] and more than twice its index is
 //!   reported as `large` (`resource.warning` with `resource: "wal"`, whether
-//!   a reader blocks it and since when), and `ok` again once it is cut.
+//!   a reader blocks it, since when, and which programs have the index open:
+//!   `openBy`, see `holders`), and `ok` again once it is cut.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -45,6 +46,9 @@ struct State {
     running: bool,
     /// Reported as large.
     large: bool,
+    /// While blocked: the programs other than this service that had the
+    /// index open at the last attempt.
+    open_by: Vec<crate::holders::Holder>,
 }
 
 /// One owned index as the disk check saw it.
@@ -79,6 +83,7 @@ impl Care {
                 next_try: None,
                 running: false,
                 large: false,
+                open_by: Vec::new(),
             });
             st.dir = s.dir.clone();
             st.wal = s.wal;
@@ -86,6 +91,7 @@ impl Care {
             if s.wal == 0 {
                 st.next_try = None;
                 st.blocked_since_ms = None;
+                st.open_by.clear();
             } else if st.next_try.is_none() && !st.running {
                 st.next_try = Some(now);
             }
@@ -121,13 +127,15 @@ impl Care {
         }
     }
 
-    /// Record a checkpoint's outcome; returns a payload when the report
+    /// Record a checkpoint's outcome (and, when a reader blocked it, the
+    /// programs that had the index open); returns a payload when the report
     /// changes: a large WAL was cut (`ok`), or a large WAL is found blocked
     /// by a reader.
     pub fn finish(
         &self,
         project_id: &str,
         outcome: &Result<Checkpoint, String>,
+        open_by: Vec<crate::holders::Holder>,
         now: Instant,
     ) -> Option<Value> {
         let Ok(mut g) = self.state.lock() else {
@@ -140,6 +148,7 @@ impl Care {
                 info!("wal_truncated", {"projectId": project_id, "bytes": bytes});
                 s.wal = 0;
                 s.blocked_since_ms = None;
+                s.open_by.clear();
                 if s.large {
                     s.large = false;
                     return Some(payload(project_id, s));
@@ -148,14 +157,16 @@ impl Care {
             Ok(Checkpoint::Empty) => {
                 s.wal = 0;
                 s.blocked_since_ms = None;
+                s.open_by.clear();
             }
             Ok(Checkpoint::Blocked { bytes }) => {
                 s.wal = *bytes;
                 s.next_try = Some(now + RETRY);
+                s.open_by = open_by;
                 if s.blocked_since_ms.is_none() {
                     info!("wal_checkpoint_blocked", {
                         "projectId": project_id, "bytes": bytes,
-                        "retrySeconds": RETRY.as_secs(),
+                        "retrySeconds": RETRY.as_secs(), "openBy": s.open_by,
                     });
                     s.blocked_since_ms = Some(wrongindex_registry::now_ms());
                     // Already reported large: now it is known why.
@@ -193,6 +204,7 @@ fn payload(project_id: &str, s: &State) -> Value {
         "largeBytes": LARGE_MIN_BYTES,
         "blockedByReader": s.blocked_since_ms.is_some(),
         "blockedSinceMs": s.blocked_since_ms,
+        "openBy": s.open_by,
     })
 }
 
@@ -227,13 +239,21 @@ mod tests {
         assert_eq!(ch[0].1["blockedByReader"], false);
         care.start("p");
         let blocked = Ok(Checkpoint::Blocked { bytes: 40 * MIB });
-        let again = care.finish("p", &blocked, t0).unwrap();
+        let reader = vec![crate::holders::Holder {
+            pid: 812,
+            name: "bun.exe".into(),
+        }];
+        let again = care.finish("p", &blocked, reader.clone(), t0).unwrap();
         assert_eq!(again["level"], "large");
         assert_eq!(again["blockedByReader"], true);
         assert!(again["blockedSinceMs"].as_i64().unwrap() > 0);
-        // Still blocked on the retry: nothing new to say.
+        assert_eq!(again["openBy"][0]["name"], "bun.exe");
+        assert_eq!(again["openBy"][0]["pid"], 812);
+        // Still blocked on the retry: nothing new to say, but the snapshot
+        // names who has it open now.
         care.start("p");
-        assert!(care.finish("p", &blocked, t0 + RETRY).is_none());
+        assert!(care.finish("p", &blocked, Vec::new(), t0 + RETRY).is_none());
+        assert_eq!(care.warnings()[0]["openBy"], serde_json::json!([]));
     }
 
     #[test]
@@ -249,7 +269,7 @@ mod tests {
         assert!(care.due(t0).is_empty(), "running");
         // Blocked: due again after RETRY, not before.
         let blocked = Ok(Checkpoint::Blocked { bytes: MIB });
-        assert!(care.finish("p", &blocked, t0).is_none());
+        assert!(care.finish("p", &blocked, Vec::new(), t0).is_none());
         assert!(care.due(t0 + RETRY / 2).is_empty());
         care.observe(&seen(MIB, 10 * MIB), &[], t0 + RETRY / 2);
         assert!(
@@ -270,6 +290,7 @@ mod tests {
             .finish(
                 "p",
                 &Ok(Checkpoint::Truncated { bytes: 30 * MIB }),
+                Vec::new(),
                 t0 + RETRY,
             )
             .unwrap();
