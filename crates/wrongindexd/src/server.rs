@@ -673,13 +673,12 @@ fn status_from(
         freshness,
         ownership: ownership.state,
         activity: match last_job.as_ref() {
-            Some(j) if j.state == JobState::Running => {
-                if j.kind == JobKind::Check {
-                    "checking".into()
-                } else {
-                    "indexing".into()
-                }
-            }
+            Some(j) if j.state == JobState::Running => match j.kind {
+                JobKind::Check => "checking".into(),
+                JobKind::Backup => "backing up".into(),
+                JobKind::Checkpoint => "checkpointing".into(),
+                _ => "indexing".into(),
+            },
             _ => "dormant".into(),
         },
         watch_health: ws.watch_health.clone(),
@@ -941,22 +940,34 @@ async fn dispatch_inner(
                 "preserved": { "checkoutRoot": project.checkout_root, "indexDir": project.index_dir },
             }))
         }
-        method::INDEX_REQUEST | method::INDEX_CHECK => {
+        method::INDEX_REQUEST
+        | method::INDEX_CHECK
+        | method::INDEX_BACKUP
+        | method::INDEX_CHECKPOINT => {
             let pid = require_project(&req)?;
-            let params: IndexRequestParams = if req.method == method::INDEX_CHECK {
-                IndexRequestParams {
-                    kind: JobKind::Check,
+            // The maintenance methods are jobs of their own kind (as
+            // `index.request` with that kind).
+            let fixed = match req.method.as_str() {
+                method::INDEX_CHECK => Some(JobKind::Check),
+                method::INDEX_BACKUP => Some(JobKind::Backup),
+                method::INDEX_CHECKPOINT => Some(JobKind::Checkpoint),
+                _ => None,
+            };
+            let params: IndexRequestParams = match fixed {
+                Some(kind) => IndexRequestParams {
+                    kind,
                     paths: Vec::new(),
                     backup: None,
-                }
-            } else {
-                parse(req.params.clone())?
+                },
+                None => parse(req.params.clone())?,
             };
             let mut params_json = to_value(&params)?;
             if params.kind != JobKind::Check {
-                // Write work needs the engine and a valid ownership fence;
-                // the fence travels with the job and is re-validated at run.
-                if !shared.can_write() {
+                // Write work needs the engine (a backup or a checkpoint does
+                // not) and a valid ownership fence; the fence travels with
+                // the job and is re-validated at run.
+                let maintenance = matches!(params.kind, JobKind::Backup | JobKind::Checkpoint);
+                if !maintenance && !shared.can_write() {
                     return Err(ErrorBody::new(
                         ErrorCode::NotImplemented,
                         format!(

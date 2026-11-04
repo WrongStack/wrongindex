@@ -646,11 +646,17 @@ function filesAndErrors(d, id) {
 
 function backupsPanel(d, p) {
   const list = d.backups ?? [];
-  if (!list.length) return null;
+  const owned = d.status.ownership === 'owned';
+  const backUp = el('button', { class: 'btn subtle', disabled: !owned, title: owned ? null : 'Claim ownership first', onclick: async () => {
+    await call('project_action', { projectId: p.projectId, action: 'backup' });
+    toast('Backup queued: a consistent copy of the index, kept with the others.');
+    await refresh();
+  } }, 'Back up now');
   return el('div', {},
     el('h2', {}, 'Index backups'),
-    el('p', { class: 'note' }, 'Taken each time the service took ownership of this index.'),
-    el('table', {},
+    el('p', { class: 'note' }, 'Taken each time the service took ownership of this index, and when you back it up. Only the newest are kept (Settings: Index backups kept per project).'),
+    el('div', { class: 'row' }, backUp),
+    list.length ? el('table', {},
       el('thead', {}, el('tr', {}, ...['Backup', 'Taken', 'Size', ''].map(th))),
       el('tbody', {}, list.map((b) => el('tr', {},
         el('td', { class: 'mono' }, b.name),
@@ -665,7 +671,7 @@ function backupsPanel(d, p) {
           await call('project_action', { projectId: p.projectId, action: 'restore', arg: b.name });
           toast('Restore queued; the current index is backed up first.');
           await refresh();
-        } }, 'Restore…')))))));
+        } }, 'Restore…')))))) : el('p', { class: 'note' }, 'No backups yet.'));
 }
 
 function searchPanel(p) {
@@ -744,6 +750,9 @@ function jobSummary(j) {
     return `verdict ${r.verdict}${i ? (i.ok ? ` · SQLite check passed (${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)})` : ' · SQLite check failed') : ''}${files ? ` · ${files}` : ''}`;
   }
   if (r.restoredFrom) return `restored · generation ${r.generation}`;
+  if (r.backup) return `backed up as ${r.backup} · ${(Number(r.bytes) / 1024 / 1024).toFixed(1)} MiB`;
+  if (r.outcome === 'truncated') return `write-ahead log folded in (${(Number(r.walBytes) / 1024 / 1024).toFixed(1)} MiB)`;
+  if (r.outcome === 'empty') return 'write-ahead log empty';
   if (r.native) {
     const n = r.native;
     const what = n.outcome === 'unchanged' ? 'unchanged'
@@ -1074,12 +1083,24 @@ function render(force = false) {
   lastScreen = screen;
   main.replaceChildren(views[state.view]());
   main.scrollTop = scroll;
-  // A table that scrolls sideways (narrow window, large text) must be
-  // reachable and scrollable from the keyboard.
-  for (const t of main.querySelectorAll('table')) {
+  markScrollableTables();
+}
+
+// A table that scrolls sideways (narrow window, large text) must be
+// reachable and scrollable from the keyboard: a tab stop while it scrolls,
+// none once it fits. Looked at after each render and when the window is
+// resized (a table that fitted may scroll now, with no render in between).
+function markScrollableTables() {
+  for (const t of document.getElementById('main').querySelectorAll('table')) {
     if (t.scrollWidth > t.clientWidth) t.tabIndex = 0;
+    else t.removeAttribute('tabindex');
   }
 }
+let resizeFrame = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(markScrollableTables);
+});
 
 async function startService() {
   toast('Starting the index service…');

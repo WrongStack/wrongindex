@@ -27,7 +27,7 @@ The installer (per user, no administrator rights) puts all three in one director
 Project indexes are not under the data root. Each project keeps its WrongStack index directory, by default `~/.wrongstack/projects/<slug>/codebase-index`; `wrongindex resolve-index-dir <root>` prints it. In that directory WrongIndex adds:
 
 - `.wrongindex-owner.lock` / `.wrongindex-owner.json`: present while the service owns the index;
-- `.wrongindex-backups/`: backups taken at ownership transfers (section 5).
+- `.wrongindex-backups/`: backups taken at ownership transfers and on request (section 5).
 
 Uninstalling keeps the data root and every index.
 
@@ -122,8 +122,9 @@ While the service owns an index, it is the only writer.
   2. An index of another schema version or with extra tables is refused for the native writer and left untouched. WrongStack enrichment rows (concepts, file vectors, subsystems, concept edges) are kept exactly as WrongStack's own indexer keeps them: never rewritten by an indexing run, cleared only by a forced rebuild (the backup keeps them).
   3. A consistent backup is taken (`VACUUM INTO`) before anything is written. If the backup fails, the transfer does not happen.
 - **Releasing** (`ownership.release`) hands the index back. WrongStack in `local` or `auto` mode then writes it again.
-- **Backups**: `wrongindex index <id> --backups` lists them.
+- **Backups**: `wrongindex index <id> --backups` lists them. `wrongindex index <id> --backup --wait` (IPC `index.backup`; desktop: Back up now) takes one on request, the same consistent copy as at a transfer. Do this before upgrading WrongStack, say, or before an experiment. It needs ownership. It reads the index and writes only the backup, dropping the oldest beyond `backupKeep`. It changes nothing about the project's state: a damaged index stays marked damaged, and its bytes are kept. An index that does not exist yet fails with `INVALID_REQUEST`.
 - **Restore**: `wrongindex index <id> --restore <name> --wait` replaces the index with that backup. It needs ownership, and no other process may have the database open. The replaced file is backed up first.
+- **Checkpoint**: `wrongindex index <id> --checkpoint --wait` (IPC `index.checkpoint`) folds the write-ahead log into the index and cuts it to zero now. The service does this by itself after every run, and every 15 seconds while a reader blocks it (section 7). It needs ownership and never waits: while another program holds a read transaction open, the job fails with `DATABASE_BUSY` (retryable), and both that reader and the log are left as they were.
 - **Maintenance rebuild**: `wrongindex index <id> --rebuild --wait` (desktop: Rebuild index…) writes a fresh index even over one the regular writer refuses. The previous file is kept as `index.db.wrongindex-backup-<time>`. An index written by a newer WrongStack is never replaced.
 
 ### Engine per project
@@ -185,7 +186,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `PROFILE_UNSUPPORTED` / "newer WrongStack" | The index was written by a newer or unknown schema | Update WrongIndex; the index is left untouched |
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open | Close WrongStack clients of that project, then retry |
-| A large `index.db-wal` (`resource.warning`, `resource: "wal"`, `blockedByReader: true`) | A program keeps a read transaction open on the index, so the log cannot be folded in | End that program's session or query (often a long-running WrongStack session); the service cuts the log within 15 seconds after |
+| A large `index.db-wal` (`resource.warning`, `resource: "wal"`, `blockedByReader: true`); `index --checkpoint` fails with `DATABASE_BUSY` | A program keeps a read transaction open on the index, so the log cannot be folded in | End that program's session or query (often a long-running WrongStack session); the service cuts the log within 15 seconds after |
 | `DATABASE_CORRUPT`, `watchHealth: index_corrupt`, `verdict: corrupt` | SQLite reports the index damaged (a disk or file system fault, a copy made while it was written, an edit by another tool); nothing writes it any more and the file is kept as it is | `wrongindex index <id> --rebuild --wait` (desktop: Rebuild index…): a fresh index, checked by SQLite, the damaged file kept next to it; or restore a backup. Pending edits run after |
 | `DISK_FULL`, `watchHealth: disk_full` | The drive holding the index has too little free space; nothing was written | Free space on that drive (the message says how much is needed). Watched projects resume by themselves; retry other jobs |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |

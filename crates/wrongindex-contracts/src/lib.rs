@@ -206,6 +206,8 @@ pub mod method {
     pub const INDEX_CHECK: &str = "index.check";
     pub const INDEX_QUERY: &str = "index.query";
     pub const INDEX_BACKUPS: &str = "index.backups";
+    pub const INDEX_BACKUP: &str = "index.backup";
+    pub const INDEX_CHECKPOINT: &str = "index.checkpoint";
     pub const SETTINGS_GET: &str = "settings.get";
     pub const SETTINGS_SET: &str = "settings.set";
     pub const DAEMON_METRICS: &str = "daemon.metrics";
@@ -234,6 +236,8 @@ pub mod method {
         INDEX_CHECK,
         INDEX_QUERY,
         INDEX_BACKUPS,
+        INDEX_BACKUP,
+        INDEX_CHECKPOINT,
         SETTINGS_GET,
         SETTINGS_SET,
         DAEMON_METRICS,
@@ -546,6 +550,15 @@ pub enum JobKind {
     /// Replace the index with one of its backups (taken at each ownership
     /// transfer); the current file is backed up first. Needs ownership.
     Restore,
+    /// Maintenance (`index.backup`): a consistent copy of the index into its
+    /// backups, as at an ownership transfer. Reads the index, writes only
+    /// the backup (and drops the oldest beyond `backupKeep`). Needs
+    /// ownership.
+    Backup,
+    /// Maintenance (`index.checkpoint`): fold the write-ahead log into the
+    /// index and cut it to zero, without waiting for anyone; a reader's open
+    /// transaction makes it fail with `DATABASE_BUSY`. Needs ownership.
+    Checkpoint,
 }
 
 impl JobKind {
@@ -557,6 +570,8 @@ impl JobKind {
             JobKind::Reconcile => "reconcile",
             JobKind::Rebuild => "rebuild",
             JobKind::Restore => "restore",
+            JobKind::Backup => "backup",
+            JobKind::Checkpoint => "checkpoint",
         }
     }
 
@@ -568,6 +583,8 @@ impl JobKind {
             "reconcile" => JobKind::Reconcile,
             "rebuild" => JobKind::Rebuild,
             "restore" => JobKind::Restore,
+            "backup" => JobKind::Backup,
+            "checkpoint" => JobKind::Checkpoint,
             _ => return None,
         })
     }
@@ -837,7 +854,7 @@ mod tests {
             .filter(|l| !l.starts_with("ALL"))
             .filter_map(|l| l.split('"').nth(1))
             .collect();
-        assert_eq!(declared.len(), 26, "{declared:?}");
+        assert_eq!(declared.len(), 28, "{declared:?}");
         for m in &declared {
             assert!(method::ALL.contains(m), "method::ALL lacks {m}");
         }

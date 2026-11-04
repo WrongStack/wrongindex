@@ -27,7 +27,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
 - `wrongindex` CLI, with these commands:
   - `daemon start|status|stop`
   - `project add|list|status|remove`
-  - `index <id> --check|--full|--path|--reconcile|--rebuild|--backups|--restore`
+  - `index <id> --check|--full|--path|--reconcile|--rebuild|--backup|--checkpoint|--backups|--restore`
   - `job status|list|cancel`
   - `search`, `query`
   - `settings get|set`

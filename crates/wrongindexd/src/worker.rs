@@ -194,7 +194,9 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
             }
             // An explicit write job that succeeded closes a watcher circuit
             // (WI-208); the watcher's own batches settle in the supervisor.
-            if ok && done.kind != JobKind::Check {
+            // A check, a backup or a checkpoint put nothing new in place: it
+            // says nothing about what made batches fail or the index damaged.
+            if ok && writes_contents(done.kind) {
                 shared
                     .watch
                     .note_job_succeeded(&done.project_id, &done.job_id);
@@ -206,6 +208,91 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
     }
     // Another project's queued job may be waiting for this slot.
     shared.wake_worker.notify_one();
+}
+
+/// Whether a job of this kind puts new contents in place (an indexing run,
+/// a rebuild, a restore).
+fn writes_contents(kind: JobKind) -> bool {
+    matches!(
+        kind,
+        JobKind::Full
+            | JobKind::Incremental
+            | JobKind::Reconcile
+            | JobKind::Rebuild
+            | JobKind::Restore
+    )
+}
+
+/// `index.backup`: a consistent copy of the index into its backups (see
+/// `wrongindex_storage::backup`), keeping `backupKeep` of them.
+async fn take_backup(
+    shared: &Arc<Shared>,
+    project_id: &str,
+    dir: std::path::PathBuf,
+    epoch: i64,
+) -> Result<serde_json::Value, ErrorBody> {
+    let keep = shared.settings.get().backup_keep;
+    let taken = tokio::task::spawn_blocking(move || {
+        let path = wrongindex_storage::backup::snapshot(&dir, epoch, keep)?;
+        let kept = wrongindex_storage::backup::list(&dir).len();
+        Ok::<_, wrongindex_storage::backup::BackupError>((path, kept))
+    })
+    .await
+    .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+    let (path, kept) = taken.map_err(|e| {
+        use wrongindex_storage::backup::BackupError;
+        match &e {
+            BackupError::Busy(_) => ErrorBody::new(ErrorCode::DatabaseBusy, e.to_string()),
+            _ => crate::damage::classify(crate::disk::classify(ErrorBody::new(
+                ErrorCode::Internal,
+                e.to_string(),
+            ))),
+        }
+    })?;
+    let Some(path) = path else {
+        return Err(ErrorBody::new(
+            ErrorCode::InvalidRequest,
+            "there is no index to back up yet (index.db is missing)",
+        ));
+    };
+    let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    info!("index_backed_up", {"projectId": project_id, "backup": name, "bytes": bytes});
+    Ok(serde_json::json!({
+        "backup": name,
+        "path": path.display().to_string(),
+        "bytes": bytes,
+        "kept": kept,
+    }))
+}
+
+/// `index.checkpoint`: the write-ahead log folded into the index and cut to
+/// zero, never waiting on a reader (see `wrongindex_storage::wal`).
+async fn checkpoint_now(
+    project_id: &str,
+    dir: std::path::PathBuf,
+) -> Result<serde_json::Value, ErrorBody> {
+    use wrongindex_storage::wal::Checkpoint;
+    let outcome = tokio::task::spawn_blocking(move || wrongindex_storage::wal::truncate(&dir))
+        .await
+        .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?
+        .map_err(|e| crate::damage::classify(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
+    match outcome {
+        Checkpoint::Empty => Ok(serde_json::json!({"outcome": "empty", "walBytes": 0})),
+        Checkpoint::Truncated { bytes } => {
+            info!("wal_checkpointed", {"projectId": project_id, "walBytes": bytes, "by": "request"});
+            Ok(serde_json::json!({"outcome": "truncated", "walBytes": bytes}))
+        }
+        Checkpoint::Blocked { bytes } => Err(ErrorBody::new(
+            ErrorCode::DatabaseBusy,
+            format!(
+                "a program holds a read transaction open on the index, so its write-ahead log ({bytes} bytes) cannot be folded in now; nothing was changed. The service tries again by itself every 15 s"
+            ),
+        )),
+    }
 }
 
 /// A truncating WAL checkpoint of an owned index (see `wal`), holding the
@@ -343,6 +430,30 @@ async fn execute(
                 "graphStamp": stamp,
                 "generation": generation,
             }))
+        }
+        JobKind::Backup | JobKind::Checkpoint => {
+            let params = params.unwrap_or_default();
+            let fence: OwnerFence =
+                serde_json::from_value(params["fence"].clone()).map_err(|_| {
+                    ErrorBody::new(ErrorCode::OwnerConflict, "job carries no ownership fence")
+                })?;
+            let pid = project_id.to_string();
+            shared
+                .registry(move |r| r.validate_fence(&pid, &fence))
+                .await?;
+            let _run = shared.owners.begin_run(project_id).ok_or_else(|| {
+                ErrorBody::new(
+                    ErrorCode::OwnerConflict,
+                    "ownership guard not held by this instance",
+                )
+            })?;
+            ensure_room(&project.index_dir, kind).await?;
+            let dir = std::path::PathBuf::from(&project.index_dir);
+            if kind == JobKind::Backup {
+                take_backup(shared, project_id, dir, fence.owner_epoch).await
+            } else {
+                checkpoint_now(project_id, dir).await
+            }
         }
         JobKind::Full | JobKind::Incremental | JobKind::Reconcile | JobKind::Rebuild => {
             // A missing root is not an empty project: nothing is indexed and

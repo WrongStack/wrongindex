@@ -81,13 +81,15 @@ fn exhaustive_job_state(s: JobState) {
     }
 }
 
-const JOB_KINDS: [JobKind; 6] = [
+const JOB_KINDS: [JobKind; 8] = [
     JobKind::Check,
     JobKind::Incremental,
     JobKind::Full,
     JobKind::Reconcile,
     JobKind::Rebuild,
     JobKind::Restore,
+    JobKind::Backup,
+    JobKind::Checkpoint,
 ];
 
 fn exhaustive_job_kind(k: JobKind) {
@@ -97,7 +99,9 @@ fn exhaustive_job_kind(k: JobKind) {
         | JobKind::Full
         | JobKind::Reconcile
         | JobKind::Rebuild
-        | JobKind::Restore => {}
+        | JobKind::Restore
+        | JobKind::Backup
+        | JobKind::Checkpoint => {}
     }
 }
 

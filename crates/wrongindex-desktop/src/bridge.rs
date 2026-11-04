@@ -75,6 +75,8 @@ pub enum ProjectAction {
     Rebuild,
     /// Replace the index with a named backup (`index.backups`).
     Restore(String),
+    /// Back the index up now (`index.backup`).
+    Backup,
     /// Queue a failed or canceled write job again, same kind and paths.
     Retry(String),
     /// The engine that writes this project's index.
@@ -90,6 +92,7 @@ impl ProjectAction {
             "reconcile" => Self::Reconcile,
             "remove" => Self::Remove,
             "rebuild" => Self::Rebuild,
+            "backup" => Self::Backup,
             "restore" => Self::Restore(
                 arg.filter(|a| is_backup_name(a))
                     .ok_or_else(|| UiError::new("INVALID_REQUEST", "restore needs a backup name"))?
@@ -130,6 +133,7 @@ impl ProjectAction {
             Self::Reconcile => (method::INDEX_REQUEST, json!({"kind": "reconcile"})),
             Self::Remove => (method::PROJECT_DETACH, json!({})),
             Self::Rebuild => (method::INDEX_REQUEST, json!({"kind": "rebuild"})),
+            Self::Backup => (method::INDEX_BACKUP, json!({})),
             Self::Restore(name) => (
                 method::INDEX_REQUEST,
                 json!({"kind": "restore", "backup": name}),
@@ -518,6 +522,7 @@ mod tests {
             ("claim", None, method::OWNERSHIP_ACQUIRE),
             ("release", None, method::OWNERSHIP_RELEASE),
             ("check", None, method::INDEX_CHECK),
+            ("backup", None, method::INDEX_BACKUP),
             ("reconcile", None, method::INDEX_REQUEST),
             ("remove", None, method::PROJECT_DETACH),
             ("rebuild", None, method::INDEX_REQUEST),

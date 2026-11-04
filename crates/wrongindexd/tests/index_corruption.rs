@@ -308,6 +308,15 @@ async fn a_damaged_index_is_left_alone_until_a_verified_rebuild() {
         "published"
     );
 
+    // A backup on request copies the damaged file (evidence) and puts
+    // nothing new in place: the project stays marked damaged.
+    let backup = run(&mut c, &pid, method::INDEX_BACKUP, json!({})).await;
+    assert_eq!(backup["state"], "succeeded", "{backup}");
+    assert_eq!(std::fs::read(&db).unwrap(), bytes, "the index was written");
+    let s = status(&mut c, &pid).await;
+    assert_eq!(s["watchHealth"], "index_corrupt", "{s}");
+    assert!(s["pendingPaths"].as_u64().unwrap() >= 1, "{s}");
+
     // 5. The maintenance rebuild: the damaged file kept byte for byte, the
     //    new index checked, the pending edit indexed by itself.
     let job = run(

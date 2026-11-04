@@ -257,6 +257,16 @@ struct IndexArgs {
     /// current file is backed up first. Needs ownership.
     #[arg(long, value_name = "NAME", conflicts_with_all = ["check", "reconcile", "rebuild", "full", "paths", "backups"])]
     restore: Option<String>,
+    /// Back the index up now (a consistent copy, as at an ownership
+    /// transfer; the oldest beyond `backupKeep` are dropped). Needs
+    /// ownership.
+    #[arg(long, conflicts_with_all = ["check", "reconcile", "rebuild", "full", "paths", "backups", "restore"])]
+    backup: bool,
+    /// Fold the index's write-ahead log into it and cut the log to zero.
+    /// Never waits: fails with DATABASE_BUSY while a program holds a read
+    /// transaction open. Needs ownership.
+    #[arg(long, conflicts_with_all = ["check", "reconcile", "rebuild", "full", "paths", "backups", "restore", "backup"])]
+    checkpoint: bool,
     /// Wait until the job reaches a terminal state.
     #[arg(long)]
     wait: bool,
@@ -1064,6 +1074,10 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
     }
     let kind = if args.restore.is_some() {
         "restore"
+    } else if args.backup {
+        "backup"
+    } else if args.checkpoint {
+        "checkpoint"
     } else if args.rebuild {
         "rebuild"
     } else if args.full {
@@ -1077,7 +1091,7 @@ async fn index(root: &DataRoot, args: IndexArgs, json: bool) -> Outcome {
     } else {
         return Err(fail(
             exit_code::INVALID_INPUT,
-            "choose one of --check, --full, --path <p>, --reconcile, --rebuild, --backups, --restore <name>",
+            "choose one of --check, --full, --path <p>, --reconcile, --rebuild, --backup, --checkpoint, --backups, --restore <name>",
         ));
     };
     let mut c = connect(root).await?;
@@ -1153,6 +1167,7 @@ fn report_job(job: &JobRecord, json: bool) -> Outcome {
         }
         if let Some(result) = &job.result {
             print_inspection_summary(result);
+            print_maintenance(result);
         }
     }
     Ok(match job.state {
@@ -1208,6 +1223,26 @@ fn print_inspection_summary(r: &Value) {
                 );
             }
         }
+    }
+}
+
+/// What a backup or a checkpoint did.
+fn print_maintenance(r: &Value) {
+    if let Some(name) = r["backup"].as_str() {
+        println!(
+            "  backup:   {name} ({} bytes; {} kept)",
+            r["bytes"].as_u64().unwrap_or(0),
+            r["kept"].as_u64().unwrap_or(0)
+        );
+        println!("  path:     {}", r["path"].as_str().unwrap_or("?"));
+    }
+    match r["outcome"].as_str() {
+        Some("truncated") => println!(
+            "  write-ahead log: {} bytes folded into the index, cut to zero",
+            r["walBytes"].as_u64().unwrap_or(0)
+        ),
+        Some("empty") => println!("  write-ahead log: empty, nothing to do"),
+        _ => {}
     }
 }
 

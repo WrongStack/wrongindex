@@ -152,9 +152,14 @@ fn index_bytes(index_dir: &Path) -> u64 {
 pub fn needed(kind: JobKind, index_dir: &Path) -> u64 {
     let copy = match kind {
         JobKind::Incremental | JobKind::Check => 0,
-        JobKind::Full | JobKind::Reconcile | JobKind::Rebuild | JobKind::Restore => {
-            index_bytes(index_dir)
-        }
+        // A backup is a complete copy too.
+        JobKind::Full
+        | JobKind::Reconcile
+        | JobKind::Rebuild
+        | JobKind::Restore
+        | JobKind::Backup => index_bytes(index_dir),
+        // The log's pages move into the index, which may grow by as much.
+        JobKind::Checkpoint => wrongindex_storage::wal::wal_bytes(index_dir),
     };
     FULL_BYTES.saturating_add(copy)
 }

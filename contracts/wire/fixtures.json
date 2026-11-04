@@ -113,7 +113,9 @@
       "full",
       "reconcile",
       "rebuild",
-      "restore"
+      "restore",
+      "backup",
+      "checkpoint"
     ],
     "JobState": [
       "queued",
@@ -150,6 +152,8 @@
     "index.check",
     "index.query",
     "index.backups",
+    "index.backup",
+    "index.checkpoint",
     "settings.get",
     "settings.set",
     "daemon.metrics",
