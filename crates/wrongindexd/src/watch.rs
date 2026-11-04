@@ -27,7 +27,7 @@ use notify::{RecursiveMode, Watcher};
 use serde::Serialize;
 use serde_json::json;
 use tokio::sync::{mpsc, watch as tokio_watch};
-use wrongindex_contracts::{Freshness, JobKind, JobState, Ownership, WatchPolicy};
+use wrongindex_contracts::{Freshness, JobKind, JobState, Ownership, WatchMode, WatchPolicy};
 use wrongindex_discovery::{DEFAULT_IGNORE_DIRS, Gitignore, lang};
 
 use crate::dirty::{Batch, DebounceConfig, DirtySet};
@@ -95,6 +95,8 @@ struct ProjectWatch {
     /// SQLite reported the index damaged (see `damage`): what it said. No
     /// work is sent until a rebuild, a restore or a passing check.
     corrupt: Option<String>,
+    /// The project's `watchMode` when it was attached.
+    mode: WatchMode,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -165,6 +167,15 @@ impl Supervisor {
             s.poll_interval_seconds.saturating_mul(1000),
             Ordering::SeqCst,
         );
+    }
+
+    /// The `watchMode` the project was attached with, while it is watched.
+    fn attached_mode(&self, project_id: &str) -> Option<WatchMode> {
+        self.projects.lock().ok().and_then(|g| {
+            g.get(project_id)
+                .filter(|w| w.watcher.is_some())
+                .map(|w| w.mode)
+        })
     }
 
     /// Whether the project is watched by polling.
@@ -514,9 +525,14 @@ impl Supervisor {
         project_id: &str,
         root: &Path,
         index_dir: &Path,
+        mode: WatchMode,
     ) -> Result<&'static str, String> {
         let overflowed = Arc::new(AtomicBool::new(false));
-        let watching = match crate::poll::refused(root) {
+        let reason = match mode {
+            WatchMode::Poll => Some("polling chosen for this project (watchMode poll)".to_string()),
+            WatchMode::Auto => crate::poll::refused(root),
+        };
+        let watching = match reason {
             None => Watching::Native(self.native(project_id, root, overflowed.clone())?),
             Some(reason) => {
                 let every_ms = self.poll_every_ms.load(Ordering::SeqCst);
@@ -547,6 +563,7 @@ impl Supervisor {
         w.retry_at = None;
         w.initial_done = false;
         w.disk_wait = None;
+        w.mode = mode;
         // Watcher first, then the full attach reconciliation (a poller asks
         // for it after its first pass).
         if !polled {
@@ -1075,6 +1092,16 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             root_unavailable(shared, &p.project_id);
             continue;
         }
+        // The project's watch mode changed: watch it anew (next round).
+        if let Some(mode) = shared.watch.attached_mode(&p.project_id)
+            && mode != p.watch_mode
+        {
+            shared.watch.detach(&p.project_id);
+            info!("watch_mode_changed", {
+                "projectId": p.project_id, "from": mode.as_str(), "to": p.watch_mode.as_str(),
+            });
+            continue;
+        }
         // Polling turned off: a polled project can no longer be watched.
         if attached
             && shared.watch.poll_every_ms.load(Ordering::SeqCst) == 0
@@ -1106,9 +1133,11 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             &p.project_id,
             Path::new(&p.checkout_root),
             Path::new(&p.index_dir),
+            p.watch_mode,
         ) {
             Ok(health) => info!("watch_attached", {
                 "projectId": p.project_id, "policy": p.watch_policy.as_str(), "watchHealth": health,
+                "watchMode": p.watch_mode.as_str(),
             }),
             Err(e) => set_failure(shared, &p.project_id, format!("watcher: {e}")),
         }

@@ -132,6 +132,10 @@
       "releasing",
       "recovery_required"
     ],
+    "WatchMode": [
+      "auto",
+      "poll"
+    ],
     "WatchPolicy": [
       "session",
       "pinned",
@@ -400,6 +404,7 @@
       "projectId": "p_0123456789abcdef0123456789abcdef",
       "registeredAtMs": 1793600000000,
       "repositoryIdentity": "git:4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "watchMode": "auto",
       "watchPolicy": "session"
     },
     "ProjectStatus": {
@@ -460,6 +465,7 @@
         "projectId": "p_0123456789abcdef0123456789abcdef",
         "registeredAtMs": 1793600000000,
         "repositoryIdentity": "git:4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "watchMode": "auto",
         "watchPolicy": "session"
       },
       "reconcileReason": null,
@@ -486,6 +492,7 @@
         "projectId": "p_0123456789abcdef0123456789abcdef",
         "registeredAtMs": 1793600000000,
         "repositoryIdentity": "git:4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "watchMode": "auto",
         "watchPolicy": "session"
       }
     },

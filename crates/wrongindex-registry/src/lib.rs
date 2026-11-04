@@ -15,12 +15,12 @@ use serde_json::Value;
 use wrongindex_contracts::{
     BASELINE_PROFILE_ID, Backend, BackendPreference, ErrorBody, ErrorCode, JobKind, JobRecord,
     JobState, OwnerFence, Ownership, OwnershipStatus, ProjectRecord, RegisterProjectParams,
-    WatchPolicy,
+    WatchMode, WatchPolicy,
 };
 
 pub use identity::{PathIdentity, resolve_identity};
 
-pub const REGISTRY_SCHEMA_VERSION: i64 = 4;
+pub const REGISTRY_SCHEMA_VERSION: i64 = 5;
 
 /// Idempotency receipts expire after this long.
 pub const RECEIPT_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -127,6 +127,13 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
         "per-project backend preference",
         r#"
     ALTER TABLE projects ADD COLUMN backend_preference TEXT NOT NULL DEFAULT 'auto';
+    "#,
+    ),
+    (
+        5,
+        "per-project watch mode",
+        r#"
+    ALTER TABLE projects ADD COLUMN watch_mode TEXT NOT NULL DEFAULT 'auto';
     "#,
     ),
 ];
@@ -313,6 +320,7 @@ impl Registry {
             configuration_revision: 1,
             registered_at_ms: now_ms(),
             backend_preference: BackendPreference::Auto,
+            watch_mode: WatchMode::Auto,
         };
         tx.execute(
             "INSERT INTO projects (project_id, display_name, checkout_root, canonical_checkout_key,
@@ -410,6 +418,30 @@ impl Registry {
                 "UPDATE projects SET backend_preference = ?2, configuration_revision = configuration_revision + 1
                  WHERE project_id = ?1",
                 params![project_id, preference.as_str()],
+            )
+            .map_err(db_err)?;
+        if n == 0 {
+            return Err(ErrorBody::new(
+                ErrorCode::ProjectNotFound,
+                format!("no project '{project_id}'"),
+            ));
+        }
+        self.get_project(project_id)
+    }
+
+    /// Change how the project's changes are found while it is watched. Not
+    /// a configuration change of what is written: the revision (and so the
+    /// write fence) stays, and work in flight runs on.
+    pub fn set_watch_mode(
+        &mut self,
+        project_id: &str,
+        mode: WatchMode,
+    ) -> Result<ProjectRecord, ErrorBody> {
+        let n = self
+            .conn
+            .execute(
+                "UPDATE projects SET watch_mode = ?2 WHERE project_id = ?1",
+                params![project_id, mode.as_str()],
             )
             .map_err(db_err)?;
         if n == 0 {
@@ -1166,12 +1198,13 @@ struct Transition<'a> {
 
 const PROJECT_COLUMNS: &str = "project_id, display_name, checkout_root, canonical_checkout_key, \
     index_dir, canonical_index_key, repository_identity, compatibility_profile, watch_policy, \
-    backend, configuration_revision, registered_at_ms, backend_preference";
+    backend, configuration_revision, registered_at_ms, backend_preference, watch_mode";
 
 fn project_from_row(r: &Row<'_>) -> rusqlite::Result<ProjectRecord> {
     let policy: String = r.get(8)?;
     let backend: String = r.get(9)?;
     let preference: String = r.get(12)?;
+    let mode: String = r.get(13)?;
     Ok(ProjectRecord {
         project_id: r.get(0)?,
         display_name: r.get(1)?,
@@ -1184,6 +1217,7 @@ fn project_from_row(r: &Row<'_>) -> rusqlite::Result<ProjectRecord> {
         watch_policy: WatchPolicy::parse(&policy).unwrap_or(WatchPolicy::Disabled),
         backend: Backend::parse(&backend).unwrap_or(Backend::Unsupported),
         backend_preference: BackendPreference::parse(&preference).unwrap_or_default(),
+        watch_mode: WatchMode::parse(&mode).unwrap_or_default(),
         configuration_revision: r.get(10)?,
         registered_at_ms: r.get(11)?,
     })
@@ -1293,6 +1327,52 @@ mod tests {
             reg.get_project(&p.project_id).unwrap_err().code,
             ErrorCode::ProjectNotFound
         );
+    }
+
+    #[test]
+    fn watch_mode_is_kept_without_a_revision_change_and_migrates_to_auto() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("registry.db");
+        let (pid, revision) = {
+            let mut reg = Registry::open(&db).unwrap();
+            let (p, _) = reg
+                .register_project(&params(tmp.path(), &tmp.path().join("idx")))
+                .unwrap();
+            assert_eq!(p.watch_mode, WatchMode::Auto);
+            let q = reg.set_watch_mode(&p.project_id, WatchMode::Poll).unwrap();
+            assert_eq!(q.watch_mode, WatchMode::Poll);
+            // How changes are found, not what is written: no fence moves.
+            assert_eq!(q.configuration_revision, p.configuration_revision);
+            assert_eq!(
+                reg.set_watch_mode("p_missing", WatchMode::Poll)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ProjectNotFound
+            );
+            (p.project_id, p.configuration_revision)
+        };
+        // Kept across a restart.
+        assert_eq!(
+            Registry::open(&db)
+                .unwrap()
+                .get_project(&pid)
+                .unwrap()
+                .watch_mode,
+            WatchMode::Poll
+        );
+        // A registry from before schema 5: its projects come back `auto`.
+        Connection::open(&db)
+            .unwrap()
+            .execute_batch(
+                "ALTER TABLE projects DROP COLUMN watch_mode;
+                 DELETE FROM registry_migrations WHERE version = 5;",
+            )
+            .unwrap();
+        let reg = Registry::open(&db).unwrap();
+        assert_eq!(reg.schema_version().unwrap(), 5);
+        let p = reg.get_project(&pid).unwrap();
+        assert_eq!(p.watch_mode, WatchMode::Auto);
+        assert_eq!(p.configuration_revision, revision);
     }
 
     #[test]

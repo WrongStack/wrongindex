@@ -85,6 +85,10 @@ const ENGINE = {
   native: 'Native engine only',
   legacy: 'Compatibility worker (WrongStack engine)',
 };
+const WATCH_MODE = {
+  auto: 'Automatic (the system reports changes; polling where it cannot)',
+  poll: 'Polling (a share that never reports changes)',
+};
 const BACKEND = {
   native: 'WrongIndex native engine',
   legacy: 'Compatibility worker (WrongStack engine)',
@@ -432,6 +436,8 @@ function detailView() {
   const owned = s.ownership === 'owned';
   const engine = el('select', { id: 'engine-choice' },
     ...['auto', 'native', 'legacy'].map((v) => el('option', { value: v, selected: v === (p.backendPreference ?? 'auto') }, ENGINE[v])));
+  const watchMode = el('select', { id: 'watch-mode' },
+    ...['auto', 'poll'].map((v) => el('option', { value: v, selected: v === (p.watchMode ?? 'auto') }, WATCH_MODE[v])));
   const journal = d.ownership?.journal ?? [];
   return el('section', {},
     el('button', { class: 'btn subtle back', onclick: () => { state.selected = null; state.detail = null; render(); } }, '← All projects'),
@@ -442,7 +448,7 @@ function detailView() {
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
       el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
         retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' || s.watchHealth === 'index_corrupt' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null,
-        pollingNote(s.polling)),
+        pollingNote(s.polling, p.watchMode)),
       el('div', { class: 'k' }, 'Integrity'), integrityCell(s.lastCheck),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
@@ -497,6 +503,14 @@ function detailView() {
         if (engine.value === (p.backendPreference ?? 'auto')) return;
         await call('project_action', { projectId: id, action: 'backend', arg: engine.value });
         toast(`Engine choice applied by the service: ${ENGINE[engine.value]}. ${owned ? 'A reconciliation with it is queued.' : ''}`);
+        await refresh();
+      } }, 'Apply')),
+    el('div', { class: 'row', style: 'margin-top:8px' },
+      el('label', { for: 'watch-mode' }, 'Find changes by '), watchMode,
+      el('button', { class: 'btn subtle', onclick: async () => {
+        if (watchMode.value === (p.watchMode ?? 'auto')) return;
+        await call('project_action', { projectId: id, action: 'watchmode', arg: watchMode.value });
+        toast(`Applied by the service: ${WATCH_MODE[watchMode.value]}. A watched project is watched anew with it within seconds.`);
         await refresh();
       } }, 'Apply')),
     filesAndErrors(d, id),
@@ -564,15 +578,16 @@ function contentsNote(c) {
 /** A plain next step for an error message (compatibility §, plan 2.4). */
 // Polling (the checkout's file system reports no changes): how often, and
 // when it last looked. An overdue pass means the project is not current.
-function pollingNote(p) {
+function pollingNote(p, mode) {
   if (!p) return null;
+  const why = mode === 'poll' ? 'as chosen for this project' : 'this file system does not report changes';
   const every = `${Math.round(Number(p.everyMs) / 1000)} s`;
   const last = p.lastPassMs
     ? `last pass ${ago(p.lastPassMs)} (${p.files} files, ${p.passMs} ms)`
     : 'first pass under way';
   const text = p.overdue
     ? `Polled every ${every}, but no pass came when one was due (${last}): not reported current.`
-    : `Polled every ${every}: this file system does not report changes; ${last}.`;
+    : `Polled every ${every}: ${why}; ${last}.`;
   return el('div', { class: p.overdue ? 'error' : 'note', role: 'status', title: p.reason }, text);
 }
 

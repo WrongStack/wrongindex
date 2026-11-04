@@ -289,6 +289,38 @@ impl BackendPreference {
     }
 }
 
+/// How a watched project's changes are found (`project.configure`
+/// `watchMode`). Not a configuration change of what is written: the
+/// revision stays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchMode {
+    /// The operating system's change notifications, or polling where the
+    /// checkout's file system refuses them.
+    #[default]
+    Auto,
+    /// Always poll (`pollIntervalSeconds`): for a share whose server
+    /// accepts the request for notifications but never sends any.
+    Poll,
+}
+
+impl WatchMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WatchMode::Auto => "auto",
+            WatchMode::Poll => "poll",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "auto" => WatchMode::Auto,
+            "poll" => WatchMode::Poll,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WatchPolicy {
@@ -446,6 +478,9 @@ pub struct ProjectRecord {
     /// Engine choice for this project (WI-600).
     #[serde(default)]
     pub backend_preference: BackendPreference,
+    /// How its changes are found while it is watched.
+    #[serde(default)]
+    pub watch_mode: WatchMode,
 }
 
 /// Separate state dimensions (architecture §4). M1 only populates the subset it

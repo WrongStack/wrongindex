@@ -179,6 +179,14 @@ fn exhaustive_backend_preference(b: BackendPreference) {
     }
 }
 
+const WATCH_MODES: [WatchMode; 2] = [WatchMode::Auto, WatchMode::Poll];
+
+fn exhaustive_watch_mode(m: WatchMode) {
+    match m {
+        WatchMode::Auto | WatchMode::Poll => {}
+    }
+}
+
 fn to<T: serde::Serialize>(v: T) -> Value {
     serde_json::to_value(v).expect("contract types serialize")
 }
@@ -198,6 +206,7 @@ fn project() -> ProjectRecord {
         configuration_revision: 3,
         registered_at_ms: 1_793_600_000_000,
         backend_preference: BackendPreference::Auto,
+        watch_mode: WatchMode::Auto,
     }
 }
 
@@ -276,6 +285,7 @@ pub fn samples() -> Value {
     BACKEND_PREFERENCES
         .into_iter()
         .for_each(exhaustive_backend_preference);
+    WATCH_MODES.into_iter().for_each(exhaustive_watch_mode);
 
     let hello = Hello {
         daemon_instance_id: "d_0123456789abcdef".into(),
@@ -336,6 +346,7 @@ pub fn samples() -> Value {
         "WatchPolicy": WATCH_POLICIES.iter().map(to).collect::<Vec<_>>(),
         "Backend": BACKENDS.iter().map(to).collect::<Vec<_>>(),
         "BackendPreference": BACKEND_PREFERENCES.iter().map(to).collect::<Vec<_>>(),
+        "WatchMode": WATCH_MODES.iter().map(to).collect::<Vec<_>>(),
     });
     let types = json!({
         "AuthRequest": to(AuthRequest {

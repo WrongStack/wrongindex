@@ -26,7 +26,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
 - Compatibility worker (`--engine <WrongStack dir>`): runs WrongStack's own indexer for indexes the native writer leaves alone.
 - `wrongindex` CLI, with these commands:
   - `daemon start|status|stop`
-  - `project add|list|status|remove`
+  - `project add|list|status|remove|policy|backend|watch-mode`
   - `index <id> --check|--full|--path|--reconcile|--rebuild|--backup|--checkpoint|--backups|--restore`
   - `job status|list|cancel`
   - `search`, `query`

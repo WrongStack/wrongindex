@@ -116,6 +116,7 @@ fn every_fixture_round_trips_through_its_rust_type() {
                 "WatchPolicy" => round_trip::<WatchPolicy>(name, v),
                 "Backend" => round_trip::<Backend>(name, v),
                 "BackendPreference" => round_trip::<BackendPreference>(name, v),
+                "WatchMode" => round_trip::<WatchMode>(name, v),
                 other => panic!("enum {other} has no round-trip check"),
             }
         }

@@ -6,6 +6,11 @@
 //!   not cause a run; the status says it is polled and how;
 //! * with polling off such a project is reported failed, at attach and when
 //!   the setting changes while it is polled;
+//! * polling chosen for a project (`watchMode: poll`, for a share whose
+//!   server accepts the request but never reports): a local checkout that
+//!   reports changes is polled anyway, keeps its mode across a restart, and
+//!   goes back to the system's notifications with `auto`, no revision
+//!   change either way;
 //! * a real WSL share (`--ignored`, `WRONGINDEX_TEST_WSL_DISTRO`): the file
 //!   system refuses change notifications, which is found without any hook,
 //!   and edits made there are indexed.
@@ -278,6 +283,104 @@ async fn with_polling_off_such_a_checkout_is_reported_failed() {
             .is_some_and(|e| e.contains("test hook") && e.contains("pollIntervalSeconds 0")),
         "{ev}"
     );
+}
+
+async fn configure(c: &mut Client, pid: &str, patch: Value) -> Value {
+    c.call_raw(method::PROJECT_CONFIGURE, Some(pid), patch, None)
+        .await
+        .unwrap()
+}
+
+async fn health(stream: &mut EventStream, pid: &str, want: &'static str) {
+    event_until(stream, want, |e| {
+        e["kind"] == "project.state"
+            && e["projectId"] == pid
+            && e["data"]["watchHealth"] == want
+            && e["data"]["freshness"] == "current"
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn polling_can_be_chosen_for_a_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let home = base.join("home");
+    let root = base.join("demo");
+    write_project(&root);
+    let (d, mut c) = start_with(&home, &[]).await;
+    settings(&mut c, json!({"pollIntervalSeconds": 1})).await;
+    let mut stream = subscribe(&home, &mut c).await;
+    let pid = register(&mut c, &root, &base.join("idx")).await;
+    health(&mut stream, &pid, "native").await;
+    let s = status(&mut c, &pid).await;
+    assert_eq!(s["project"]["watchMode"], "auto", "{s}");
+    let revision = s["project"]["configurationRevision"].clone();
+
+    // Polling chosen: watched anew by polling, though the folder reports.
+    let p = configure(&mut c, &pid, json!({"watchMode": "poll"})).await;
+    assert_eq!(p["watchMode"], "poll", "{p}");
+    assert_eq!(p["configurationRevision"], revision, "{p}");
+    health(&mut stream, &pid, "polling").await;
+    let s = status(&mut c, &pid).await;
+    assert!(
+        s["polling"]["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("watchMode poll")),
+        "{s}"
+    );
+    std::fs::write(
+        root.join("src/m2.ts"),
+        "export function editedWhilePolledByChoice(): number { return 2; }\n",
+    )
+    .unwrap();
+    until_hits(
+        &mut c,
+        &pid,
+        "editedWhilePolledByChoice",
+        true,
+        Duration::from_secs(30),
+    )
+    .await;
+
+    // Kept across a restart.
+    drop(stream);
+    drop(c);
+    drop(d);
+    let (_d, mut c) = start_with(&home, &[]).await;
+    let mut stream = subscribe(&home, &mut c).await;
+    health(&mut stream, &pid, "polling").await;
+
+    // Back to the system's notifications.
+    let p = configure(&mut c, &pid, json!({"watchMode": "auto"})).await;
+    assert_eq!(p["configurationRevision"], revision, "{p}");
+    health(&mut stream, &pid, "native").await;
+    assert!(status(&mut c, &pid).await.get("polling").is_none());
+    std::fs::write(
+        root.join("src/m4.ts"),
+        "export function editedWithNotifications(): number { return 4; }\n",
+    )
+    .unwrap();
+    until_hits(
+        &mut c,
+        &pid,
+        "editedWithNotifications",
+        true,
+        Duration::from_secs(30),
+    )
+    .await;
+
+    // Anything else is refused.
+    let bad = c
+        .call_raw(
+            method::PROJECT_CONFIGURE,
+            Some(&pid),
+            json!({"watchMode": "fast"}),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(bad.to_string().contains("INVALID_REQUEST"), "{bad}");
 }
 
 /// A real file system without change notifications: a WSL distribution's

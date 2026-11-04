@@ -81,6 +81,8 @@ pub enum ProjectAction {
     Retry(String),
     /// The engine that writes this project's index.
     Backend(wrongindex_contracts::BackendPreference),
+    /// How a watched project's changes are found.
+    WatchMode(wrongindex_contracts::WatchMode),
 }
 
 impl ProjectAction {
@@ -107,6 +109,12 @@ impl ProjectAction {
                 arg.and_then(wrongindex_contracts::BackendPreference::parse)
                     .ok_or_else(|| {
                         UiError::new("INVALID_REQUEST", "backend must be auto, native, or legacy")
+                    })?,
+            ),
+            "watchmode" => Self::WatchMode(
+                arg.and_then(wrongindex_contracts::WatchMode::parse)
+                    .ok_or_else(|| {
+                        UiError::new("INVALID_REQUEST", "watch mode must be auto or poll")
                     })?,
             ),
             "policy" => Self::Policy(arg.and_then(WatchPolicy::parse).ok_or_else(|| {
@@ -148,6 +156,7 @@ impl ProjectAction {
                 method::PROJECT_CONFIGURE,
                 json!({"backendPreference": b.as_str()}),
             ),
+            Self::WatchMode(m) => (method::PROJECT_CONFIGURE, json!({"watchMode": m.as_str()})),
         }
     }
 }
@@ -533,6 +542,14 @@ mod tests {
             assert_eq!(ProjectAction::parse(a, arg).unwrap().request().0, m, "{a}");
         }
         assert!(ProjectAction::parse("backend", Some("bun")).is_err());
+        assert_eq!(
+            ProjectAction::parse("watchmode", Some("poll"))
+                .unwrap()
+                .request(),
+            (method::PROJECT_CONFIGURE, json!({"watchMode": "poll"}))
+        );
+        assert!(ProjectAction::parse("watchmode", Some("fast")).is_err());
+        assert!(ProjectAction::parse("watchmode", None).is_err());
         assert_eq!(
             ProjectAction::parse("backend", Some("legacy"))
                 .unwrap()

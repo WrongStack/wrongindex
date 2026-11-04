@@ -229,6 +229,14 @@ enum ProjectAction {
         id: String,
         policy: String,
     },
+    /// How a watched project's changes are found: auto (the system's change
+    /// notifications, polling where the file system refuses them) or poll
+    /// (always poll, every `pollIntervalSeconds`: for a share whose server
+    /// accepts the request but never reports a change).
+    WatchMode {
+        id: String,
+        mode: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -855,9 +863,14 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                 println!("  index:      {}", s.project.index_dir);
                 println!("  profile:    {}", s.project.compatibility_profile);
                 println!(
-                    "  watch:      {} ({})   backend: {}",
+                    "  watch:      {} ({}{})   backend: {}",
                     s.project.watch_policy.as_str(),
                     s.watch_health,
+                    if s.project.watch_mode == wrongindex_contracts::WatchMode::Poll {
+                        ", watch mode poll"
+                    } else {
+                        ""
+                    },
                     s.project.backend.as_str()
                 );
                 println!(
@@ -960,6 +973,31 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                     "{id}: engine {} (configuration revision {}); a reconciliation is queued when the project is owned",
                     v["backendPreference"].as_str().unwrap_or("?"),
                     v["configurationRevision"]
+                );
+            }
+            Ok(exit_code::SUCCESS)
+        }
+        ProjectAction::WatchMode { id, mode } => {
+            if wrongindex_contracts::WatchMode::parse(&mode).is_none() {
+                return Err(fail(
+                    exit_code::INVALID_INPUT,
+                    "watch mode must be auto or poll",
+                ));
+            }
+            let v = c
+                .call_raw(
+                    method::PROJECT_CONFIGURE,
+                    Some(&id),
+                    json!({"watchMode": mode}),
+                    None,
+                )
+                .await?;
+            if json {
+                print_json(&v);
+            } else {
+                println!(
+                    "{id}: watch mode {}; a watched project is watched anew with it within seconds",
+                    v["watchMode"].as_str().unwrap_or("?")
                 );
             }
             Ok(exit_code::SUCCESS)

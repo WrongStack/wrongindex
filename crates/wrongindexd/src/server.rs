@@ -1336,19 +1336,27 @@ async fn dispatch_inner(
                 watch_policy: Option<WatchPolicy>,
                 #[serde(default)]
                 backend_preference: Option<BackendPreference>,
+                #[serde(default)]
+                watch_mode: Option<wrongindex_contracts::WatchMode>,
             }
             let p: ConfigureParams = parse(req.params)?;
-            if p.watch_policy.is_none() && p.backend_preference.is_none() {
+            if p.watch_policy.is_none() && p.backend_preference.is_none() && p.watch_mode.is_none()
+            {
                 return Err(ErrorBody::new(
                     ErrorCode::InvalidRequest,
-                    "nothing to configure: give watchPolicy and/or backendPreference",
+                    "nothing to configure: give watchPolicy, backendPreference and/or watchMode",
                 ));
             }
             if let Some(pref) = p.backend_preference {
                 // Refuse before changing anything.
                 shared.backend_for(pref)?;
             }
-            let (pid2, policy, pref) = (pid.clone(), p.watch_policy, p.backend_preference);
+            let (pid2, policy, pref, mode) = (
+                pid.clone(),
+                p.watch_policy,
+                p.backend_preference,
+                p.watch_mode,
+            );
             let before = shared
                 .registry({
                     let pid = pid.clone();
@@ -1359,6 +1367,11 @@ async fn dispatch_inner(
                 .registry(move |r| {
                     if let Some(policy) = policy {
                         r.configure_project(&pid2, policy)?;
+                    }
+                    // How changes are found: the supervisor watches the
+                    // project anew with it (no revision change).
+                    if let Some(mode) = mode {
+                        r.set_watch_mode(&pid2, mode)?;
                     }
                     match pref {
                         Some(pref) => r.set_backend_preference(&pid2, pref),
@@ -1395,13 +1408,14 @@ async fn dispatch_inner(
                 }
                 info!("backend_preference_changed", {"projectId": project.project_id, "from": before.backend_preference.as_str(), "to": project.backend_preference.as_str()});
             }
-            info!("project_configured", {"projectId": project.project_id, "watchPolicy": project.watch_policy.as_str(), "revision": project.configuration_revision});
+            info!("project_configured", {"projectId": project.project_id, "watchPolicy": project.watch_policy.as_str(), "watchMode": project.watch_mode.as_str(), "revision": project.configuration_revision});
             shared.events.publish(
                 "project.configured",
                 Some(&project.project_id),
                 json!({
                     "watchPolicy": project.watch_policy.as_str(),
                     "backendPreference": project.backend_preference.as_str(),
+                    "watchMode": project.watch_mode.as_str(),
                     "configurationRevision": project.configuration_revision,
                 }),
             );
