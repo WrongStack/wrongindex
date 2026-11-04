@@ -134,7 +134,11 @@ pub fn resolve_links_locally(p: &Path) -> Result<PathBuf, String> {
 /// which made every targeted run there fail (found 2026-11-04) - and only
 /// the part of `p` below the root is looked at: `p` must lie under the root
 /// as spelled, and a link below the root is refused, never followed (its
-/// target may name yet another machine).
+/// target may name yet another machine). A component that cannot be looked
+/// at (anything but "not found") is refused too. For reads only: a link the
+/// server resolves itself (an SMB server following its own symbolic links)
+/// cannot be seen from here, so nothing is written through this path
+/// (`sage::remap` keeps [`resolve_links_locally`]).
 pub fn resolve_within(root: &Path, p: &Path) -> Result<PathBuf, String> {
     if local_form(&root.to_string_lossy()).is_ok() {
         return resolve_links_locally(p);
@@ -154,7 +158,14 @@ pub fn resolve_within(root: &Path, p: &Path) -> Result<PathBuf, String> {
             }
             Ok(_) => {}
             // Missing: nothing below it exists either.
-            Err(_) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+            // Cannot tell whether it is a link: fail closed.
+            Err(e) => {
+                return Err(format!(
+                    "{} (cannot tell whether it is a link: {e})",
+                    cur.display()
+                ));
+            }
         }
     }
     Ok(full)

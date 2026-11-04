@@ -23,7 +23,7 @@ and how, is in [docs/status.md](docs/status.md).
 
 ### Fixed
 
-- Every targeted run (each watcher batch, `index --path`) of a checkout on a share failed with "a targeted path leaves the checkout through a link". The check that keeps runs inside the checkout refused every path on a share, including the checkout's own, so a watched project there failed every edit and was eventually parked. A checkout the user put on a share is now taken as it is spelled; a link below its root is still refused, never followed.
+- Every targeted run (each watcher batch, `index --path`) of a checkout on a share failed with "a targeted path leaves the checkout through a link". The check that keeps runs inside the checkout refused every path on a share, including the checkout's own, so a watched project there failed every edit and was eventually parked. A checkout the user put on a share is now taken as it is spelled. A link below its root is still refused, never followed, and so is a path whose parts cannot be looked at. Nothing is written through a share: SAGE memory stores there are not updated after a file move.
 
 - A backup restored under a watched project left edits made after the backup out of the index, while the project was reported `current`. A restore now reconciles a watched project with its checkout before it is called current again.
 - `index --check`, the desktop's Check index and `wrongindex inspect` called a damaged index `compatible` and writable. They now run SQLite's own check of every page and of the full-text index, and report `verdict: corrupt` with what SQLite found. This includes a full-text index that no longer matches its content and still answers queries, wrongly. Reads of a damaged index answer `DATABASE_CORRUPT` (it was `INDEX_DEGRADED`).

@@ -64,7 +64,7 @@ A watcher batch (or `wrongindex index <id> --path ...`) runs as WrongStack's tar
 - What polling cannot see is a rewrite that keeps both size and modification time; the content check finds it.
 - With `pollIntervalSeconds` 0 such a project is not watched: `watchHealth: failed`, and `lastError` says why.
 
-A checkout on a share is indexed as it is spelled. Links below its root are not followed (a targeted run through one is refused). Before 2026-11-04 every targeted run there was refused as leaving the machine, so a watched project on a share failed every edit and was eventually parked.
+A checkout on a share is indexed as it is spelled. Links below its root are not followed: a targeted run through one is refused, and so is a path whose parts cannot be looked at. Nothing is written through a share. WrongStack's SAGE memory stores (`.wrongstack/memories`) in such a checkout are therefore not updated after a file move, because a link the server resolves itself cannot be seen from Windows. Before 2026-11-04 every targeted run there was refused as leaving the machine, so a watched project on a share failed every edit and was eventually parked.
 
 `project status` reports `lastVerifiedMs`: when a whole-project run (the watcher's, periodic, or asked for) last went through, so the index agreed with the checkout then. `lastIndexedMs` is the last run of any kind. The desktop shows both.
 
