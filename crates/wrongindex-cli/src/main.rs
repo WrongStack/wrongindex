@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 mod diagnostics;
 mod http;
+mod installed;
 mod update;
 mod user_path;
 
@@ -142,6 +143,10 @@ enum SetupAction {
     AddToPath { dir: PathBuf },
     /// Take a directory off the user's PATH.
     RemoveFromPath { dir: PathBuf },
+    /// End every process running from this directory (other than this one)
+    /// and wait until each has exited: after `daemon stop`, for a service of
+    /// another data root that still holds the installed files.
+    StopInstalled { dir: PathBuf },
 }
 
 #[derive(Debug, Subcommand)]
@@ -418,10 +423,25 @@ async fn run(cli: Cli) -> Outcome {
             version,
             download_only,
         } => self_update(&root, check, version.as_deref(), download_only, json).await,
+        Command::Setup {
+            action: SetupAction::StopInstalled { dir },
+        } => {
+            let stopped = installed::stop_installed(&dir)
+                .map_err(|e| fail(exit_code::INTERNAL, format!("stop installed: {e}")))?;
+            if json {
+                print_json(&json!({"stopped": stopped}));
+            } else {
+                for s in &stopped {
+                    println!("ended {} ({})", s.pid, s.program);
+                }
+            }
+            Ok(exit_code::SUCCESS)
+        }
         Command::Setup { action } => {
             let (dir, add) = match action {
                 SetupAction::AddToPath { dir } => (dir, true),
                 SetupAction::RemoveFromPath { dir } => (dir, false),
+                SetupAction::StopInstalled { .. } => unreachable!("handled above"),
             };
             let changed = user_path::update(&dir, add)
                 .map_err(|e| fail(exit_code::INTERNAL, format!("user PATH: {e}")))?;

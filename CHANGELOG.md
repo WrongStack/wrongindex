@@ -27,6 +27,7 @@ and how, is in [docs/status.md](docs/status.md).
 
 ### Fixed
 
+- An uninstall left `wrongindexd.exe` behind, with that service still running, when a service had been started with another data root (`--data-root`); an upgrade could not replace it. The installer and the uninstaller stop the service as before and then end whatever still runs from the install directory (`wrongindex setup stop-installed`), sparing what started them. Upgrading and uninstalling with the service running and the window open is now checked by `scripts/release/smoke-uninstall-running.ps1`.
 - Desktop: a table that started to scroll sideways after the window was made narrower could not be reached with the keyboard until the view refreshed. Tables are now marked when the window is resized too.
 - Every targeted run (each watcher batch, `index --path`) of a checkout on a share failed with "a targeted path leaves the checkout through a link". The check that keeps runs inside the checkout refused every path on a share, including the checkout's own, so a watched project there failed every edit and was eventually parked. A checkout the user put on a share is now taken as it is spelled. A link below its root is still refused, never followed, and so is a path whose parts cannot be looked at. Nothing is written through a share: SAGE memory stores there are not updated after a file move.
 

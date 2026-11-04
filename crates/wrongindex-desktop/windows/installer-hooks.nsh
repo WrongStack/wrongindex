@@ -2,8 +2,9 @@
 ;
 ; The service (wrongindexd.exe) keeps running after the desktop window is
 ; closed, so its files would be locked during an upgrade or an uninstall.
-; Both stop it first through the installed CLI; the data root and every
-; project index stay where they are. An upgrade restarts the service
+; Both stop it first through the installed CLI (gracefully, then whatever
+; still runs from the install directory); the data root and every project
+; index stay where they are. An upgrade restarts the service
 ; afterwards if it was running before.
 ;
 ; The install directory goes on the user's PATH (so `wrongindex` works in a
@@ -16,6 +17,12 @@ Var WiServiceWasRunning
   ${If} ${FileExists} "$INSTDIR\wrongindex.exe"
     nsExec::Exec '"$INSTDIR\wrongindex.exe" daemon stop --wait-seconds 30'
     Pop $0 ; exit code; a service that is not running is not an error
+    ; `daemon stop` reaches only the service of the data root this user's
+    ; environment names. One started with another (`--data-root`) would keep
+    ; its files locked: end whatever still runs from here, except what
+    ; started this. (A CLI older than 0.1.2 lacks the command; harmless.)
+    nsExec::Exec '"$INSTDIR\wrongindex.exe" setup stop-installed "$INSTDIR"'
+    Pop $0
     ; The discovery record goes before the process exits; give it a moment
     ; to release its executable.
     Sleep 1500
