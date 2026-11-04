@@ -10,7 +10,8 @@
 //! * a maintenance rebuild keeps the damaged file byte for byte, checks the
 //!   new index, and the pending edit is indexed by itself;
 //! * a damaged full-text index that still answers queries: the check finds
-//!   it, writes stop, and answers say the index is damaged.
+//!   it, writes stop, and answers say the index is damaged;
+//! * the scheduled check (`integrityCheckHours`) finds it with nobody asking.
 
 #![cfg(windows)]
 
@@ -37,10 +38,15 @@ fn long(p: &Path) -> PathBuf {
 }
 
 async fn start(home: &Path) -> (Daemon, Client) {
+    start_with(home, &[]).await
+}
+
+async fn start_with(home: &Path, env: &[(&str, &str)]) -> (Daemon, Client) {
     let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
         .arg("--data-root")
         .arg(home)
         .env_remove("WRONGINDEX_ENGINE")
+        .envs(env.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -460,4 +466,83 @@ async fn a_damaged_index_is_restored_from_a_backup_after_a_check() {
     let s = status(&mut c, &pid).await;
     assert_eq!(s["lastError"], Value::Null, "{s}");
     search(&mut c, &pid, "fn_3_4").await.unwrap();
+}
+
+/// Nobody asks: the scheduled health check (`integrityCheckHours`; seconds
+/// under the debug-only `WRONGINDEX_DEBUG_CHECK_EVERY_SECS`) checks the owned
+/// index, shows its time and result in the project's status, finds a damaged
+/// full-text index, stops writes, and is not repeated on a damaged index.
+#[tokio::test(flavor = "multi_thread")]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "the schedule hook exists in debug builds only"
+)]
+async fn the_scheduled_check_finds_damage_nobody_asked_about() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let home = base.join("home");
+    let (_d, mut c) = start_with(&home, &[("WRONGINDEX_DEBUG_CHECK_EVERY_SECS", "3")]).await;
+    let mut stream = subscribe(&home, &mut c).await;
+    let (pid, _root, index_dir, _) = project(&mut c, &mut stream, &base).await;
+
+    // A first scheduled check: in the status, with its time and result.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let first = loop {
+        let s = status(&mut c, &pid).await;
+        if s["lastCheck"]["state"] == "succeeded" {
+            break s["lastCheck"].clone();
+        }
+        assert!(Instant::now() < deadline, "no scheduled check: {s}");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    };
+    assert_eq!(first["params"]["scheduled"], true, "{first}");
+    assert_eq!(first["result"]["verdict"], "compatible", "{first}");
+    assert_eq!(first["result"]["integrity"]["ok"], true, "{first}");
+    assert!(first["completedAtMs"].as_i64().is_some(), "{first}");
+
+    {
+        let conn = rusqlite::Connection::open(index_dir.join("index.db")).unwrap();
+        conn.execute(
+            "UPDATE symbols_fts_content SET c0 = 'nothing like it' WHERE id = (SELECT min(id) FROM symbols_fts_content)",
+            [],
+        )
+        .unwrap();
+    }
+    let stopped = event_until(&mut stream, "index_corrupt state", |e| {
+        e["kind"] == "project.state"
+            && e["projectId"] == pid
+            && e["data"]["watchHealth"] == "index_corrupt"
+    })
+    .await;
+    assert!(
+        stopped["data"]["lastError"]
+            .as_str()
+            .unwrap()
+            .contains("symbols_fts"),
+        "{stopped}"
+    );
+    let s = status(&mut c, &pid).await;
+    assert_eq!(s["lastCheck"]["params"]["scheduled"], true, "{s}");
+    assert_eq!(s["lastCheck"]["result"]["verdict"], "corrupt", "{s}");
+
+    // Not checked again on a timer while it is known damaged.
+    let before = check_jobs(&mut c, &pid).await;
+    tokio::time::sleep(Duration::from_secs(8)).await;
+    assert_eq!(check_jobs(&mut c, &pid).await, before, "checked again");
+}
+
+async fn check_jobs(c: &mut Client, pid: &str) -> usize {
+    c.call_raw(
+        method::JOB_LIST,
+        None,
+        json!({"projectId": pid, "limit": 100}),
+        None,
+    )
+    .await
+    .unwrap()["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|j| j["kind"] == "check")
+        .count()
 }

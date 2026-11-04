@@ -15,6 +15,8 @@ and how, is in [docs/status.md](docs/status.md).
 
 - A damaged index. When SQLite reports an index damaged in a run, a read or a check, the service stops writing it: write jobs fail with `DATABASE_CORRUPT` and say that nothing was written. Before, they failed as `NOT_IMPLEMENTED`, and in `auto` they went to the compatibility worker. A watched project shows `watchHealth: index_corrupt` and keeps its edits pending without retrying or parking. The file is kept as it is. A maintenance rebuild keeps it byte for byte next to the new index, which must pass SQLite's own check before the rebuild succeeds; pending edits then run by themselves. The desktop's Overview and `wrongindex doctor` name damaged indexes.
 
+- Scheduled health checks. Each index the service owns is checked once a day (`integrityCheckHours`, 0-720, 0 = off) when its project is idle: the profile, and SQLite's own check of every page and of the full-text index. That is how a damaged full-text index, which still answers queries wrongly, is found without anyone asking. `project status` and `events --snapshot` carry the latest check as `lastCheck`; the desktop shows its result and time under Integrity (Settings: "Check owned indexes every").
+
 ### Fixed
 
 - `index --check`, the desktop's Check index and `wrongindex inspect` called a damaged index `compatible` and writable. They now run SQLite's own check of every page and of the full-text index, and report `verdict: corrupt` with what SQLite found. This includes a full-text index that no longer matches its content and still answers queries, wrongly. Reads of a damaged index answer `DATABASE_CORRUPT` (it was `INDEX_DEGRADED`).

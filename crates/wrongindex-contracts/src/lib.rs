@@ -481,6 +481,10 @@ pub struct ProjectStatus {
     /// probe per 15 minutes until a batch or an explicit job succeeds.
     #[serde(default)]
     pub parked: bool,
+    /// The project's latest health check (`check` job: profile and SQLite's
+    /// own consistency check), asked for or scheduled (`integrityCheckHours`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_check: Option<JobRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -669,6 +673,10 @@ pub struct DaemonSettings {
     /// Background indexing paused: watcher batches wait (freshness is not
     /// current); explicit requests and queries still run.
     pub paused: bool,
+    /// Hours between scheduled health checks of each index this service
+    /// owns (SQLite's own check of every page and of the full-text index);
+    /// 0 = only when asked.
+    pub integrity_check_hours: u64,
 }
 
 impl Default for DaemonSettings {
@@ -682,6 +690,7 @@ impl Default for DaemonSettings {
             backup_keep: 3,
             watch_park_after_failures: 8,
             paused: false,
+            integrity_check_hours: 24,
         }
     }
 }
@@ -713,6 +722,7 @@ impl DaemonSettings {
             2,
             100,
         )?;
+        range("integrityCheckHours", self.integrity_check_hours, 0, 720)?;
         Ok(())
     }
 }

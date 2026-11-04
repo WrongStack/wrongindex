@@ -554,6 +554,7 @@ pub async fn run(
     let mut tick = tokio::time::interval(Duration::from_millis(50));
     let mut last_reconcile = Instant::now() - Duration::from_secs(10);
     let mut last_disk = Instant::now() - DISK_CHECK;
+    let mut last_schedule = Instant::now();
     let mut last_wall = std::time::SystemTime::now();
     loop {
         tokio::select! {
@@ -579,6 +580,13 @@ pub async fn run(
                         last_disk = Instant::now();
                     }
                     check_disk(&shared, &projects, monitor_due).await;
+                    if let Some(s) = crate::schedule::Schedule::from_hours(
+                        shared.settings.get().integrity_check_hours,
+                    ) && last_schedule.elapsed() >= s.round()
+                    {
+                        last_schedule = Instant::now();
+                        schedule_checks(&shared, &projects, s).await;
+                    }
                     crate::server::publish_state_changes(&shared).await;
                 }
                 settle_finished(&shared).await;
@@ -712,6 +720,83 @@ async fn check_disk(
             warn!("disk_space_low", change.clone());
         }
         shared.events.publish("resource.warning", None, change);
+    }
+}
+
+/// Admit the scheduled health check that is due first, if any (see
+/// `schedule`): one per round.
+async fn schedule_checks(
+    shared: &Arc<Shared>,
+    projects: &[wrongindex_contracts::ProjectRecord],
+    s: crate::schedule::Schedule,
+) {
+    if shared.watch.is_paused() {
+        return;
+    }
+    let running: Vec<String> = shared
+        .progress
+        .lock()
+        .map(|p| p.keys().cloned().collect())
+        .unwrap_or_default();
+    for p in projects {
+        let pid = p.project_id.clone();
+        if !shared.owners.holds(&pid) {
+            continue;
+        }
+        let ws = shared.watch.status(&pid);
+        let watcher_busy = ws.pending_paths > 0
+            || ws.inflight_job.is_some()
+            || ws.reconcile_reason.is_some()
+            || running.contains(&pid);
+        let p2 = pid.clone();
+        let Ok((last_check, queued)) = shared
+            .registry(move |r| {
+                Ok((
+                    r.latest_job_of_kind(&p2, JobKind::Check)?,
+                    r.latest_job(&p2)?
+                        .is_some_and(|j| matches!(j.state, JobState::Queued | JobState::Running)),
+                ))
+            })
+            .await
+        else {
+            continue;
+        };
+        let candidate = crate::schedule::Candidate {
+            owned: true,
+            known_damaged: shared.watch.corrupt(&pid).is_some(),
+            busy: watcher_busy || queued,
+            last_check: last_check.as_ref(),
+        };
+        if !crate::schedule::due(
+            s,
+            shared.started_at_ms,
+            wrongindex_registry::now_ms(),
+            &candidate,
+        ) {
+            continue;
+        }
+        let p3 = pid.clone();
+        match shared
+            .registry(move |r| {
+                r.admit_job(
+                    &p3,
+                    JobKind::Check,
+                    &crate::schedule::params(),
+                    "schedule",
+                    None,
+                )
+            })
+            .await
+        {
+            Ok(a) => {
+                info!("integrity_check_scheduled", {"projectId": pid, "jobId": a.job.job_id});
+                shared.wake_worker.notify_one();
+            }
+            Err(e) => {
+                warn!("integrity_check_not_scheduled", {"projectId": pid, "error": e.message})
+            }
+        }
+        return;
     }
 }
 

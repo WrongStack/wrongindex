@@ -75,6 +75,7 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
   - Or restore a backup (section 5).
   - Pending edits run after either.
 - A write job that finds the file sound again (say it was replaced by hand), or a check that passes, also ends the stop.
+- Every index the service owns is also checked on a schedule: once per `integrityCheckHours` (default 24). The check waits until the project is idle and background indexing is not paused, and it never runs in the first 10 minutes after the service starts. It is an ordinary `check` job marked `scheduled`. A damaged full-text index can still answer queries, wrongly, and this is how it is found without anyone asking. An index already known to be damaged is not checked again on a timer. `project status` reports the latest check as `lastCheck`; the desktop shows its result and time under Integrity.
 - `wrongindex index <id> --check` (desktop: Check index) and `wrongindex inspect <dir>` run SQLite's check of every page and of the full-text index. They report `verdict: corrupt` with `integrity.problems`, without writing anything. The check reads the whole file: about 2 seconds for a 340 MB index.
 
 ## 4. Settings
@@ -91,6 +92,7 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
 | `backupKeep` | 3 | 1-20 | Backups kept per index |
 | `watchParkAfterFailures` | 8 | 2-100 | Failed watcher runs in a row after which a project is parked |
 | `paused` | false | — | Background indexing paused (explicit requests and queries still run) |
+| `integrityCheckHours` | 24 | 0-720 | Hours between scheduled health checks of each index the service owns (see §3, "A damaged index"); 0 = only when asked |
 
 Changes apply immediately and survive restarts. An unknown key, an out-of-range value or a stale `expectedRevision` is refused, and nothing changes.
 

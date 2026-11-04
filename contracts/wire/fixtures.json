@@ -217,6 +217,7 @@
     },
     "DaemonSettings": {
       "backupKeep": 3,
+      "integrityCheckHours": 24,
       "nativeMemoryMb": 0,
       "parallelJobs": 2,
       "paused": false,

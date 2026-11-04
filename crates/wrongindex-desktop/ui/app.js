@@ -50,6 +50,7 @@ const SERVICE_FIELDS = [
   { key: 'sessionGraceSeconds', label: 'Keep watching after the last client', unit: 's', min: 0, max: 3600 },
   { key: 'backupKeep', label: 'Index backups kept per project', unit: '', min: 1, max: 20 },
   { key: 'watchParkAfterFailures', label: 'Park a project after failed runs in a row', unit: '', min: 2, max: 100, note: 'A parked project is retried once every 15 minutes until a run succeeds.' },
+  { key: 'integrityCheckHours', label: 'Check owned indexes every', unit: 'h', min: 0, max: 720, note: "SQLite's own check of every page and of the full-text index, read-only (about 2 s for a 340 MB index). 0 = only when you use Check index." },
 ];
 const ACTIVITY_CAP = 200;
 
@@ -439,6 +440,7 @@ function detailView() {
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
       el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
         retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' || s.watchHealth === 'index_corrupt' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
+      el('div', { class: 'k' }, 'Integrity'), integrityCell(s.lastCheck),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
@@ -517,6 +519,22 @@ function progressText(pr) {
   const files = pr.files ? ` (${pr.files} files)` : '';
   const done = pr.done ? ` — finished in ${pr.ms} ms` : '…';
   return `${label}${files}${done} · ${ago(pr.atMs)}`;
+}
+
+/** The latest health check (`lastCheck`): what it found, and when. */
+function integrityCell(j) {
+  if (!j) return el('div', { class: 'note' }, 'Not checked yet');
+  if (j.state === 'queued' || j.state === 'running') return el('div', {}, 'Checking…');
+  const at = `checked ${ago(j.completedAtMs)}${j.params?.scheduled ? ' (scheduled)' : ''}`;
+  if (j.error) return el('div', { class: 'error' }, `Check failed: ${j.error.message} · ${at}`);
+  const r = j.result ?? {};
+  const i = r.integrity;
+  if (r.verdict === 'corrupt' || (i && !i.ok)) {
+    const what = (i?.problems ?? []).join('\n').split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('***'));
+    return el('div', { class: 'error' }, `Damaged${what ? `: ${what}` : ''} · ${at}`);
+  }
+  if (!i) return el('div', {}, `${r.verdict ?? 'checked'} · ${at}`);
+  return el('div', {}, `Passed · ${at} · ${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)}`);
 }
 
 /** A plain next step for an error message (compatibility §, plan 2.4). */
@@ -665,7 +683,7 @@ function jobsTable(jobs) {
     el('thead', {}, el('tr', {}, ...['Job', 'Kind', 'State', 'Admitted', 'Finished', 'Result', ''].map(th))),
     el('tbody', {}, jobs.map((j) => el('tr', {},
       el('td', { class: 'mono' }, j.jobId),
-      el('td', {}, j.kind),
+      el('td', {}, j.params?.scheduled ? `${j.kind} (scheduled)` : j.kind),
       el('td', {}, badge(j.state, {})),
       el('td', {}, when(j.admittedAtMs)),
       el('td', {}, when(j.completedAtMs)),

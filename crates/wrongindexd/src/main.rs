@@ -13,6 +13,7 @@ mod events;
 mod log;
 mod metrics;
 mod ownership;
+mod schedule;
 mod server;
 mod settings;
 mod wal;
