@@ -52,8 +52,11 @@ pub fn stop_installed(dir: &Path) -> Result<Vec<Stopped>, String> {
         WaitForSingleObject,
     };
 
-    let dir = std::fs::canonicalize(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let dir = key(&dir.to_string_lossy());
+    // The directory as named and as it really is: a path with 8.3 short
+    // names (`RUNNER~1`) and its long spelling are the same files, and a
+    // process's program is reported the way it was started.
+    let real = std::fs::canonicalize(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let dirs = [key(&dir.to_string_lossy()), key(&real.to_string_lossy())];
     let me = unsafe { GetCurrentProcessId() };
     // Every process with its parent.
     let mut parents = std::collections::HashMap::new();
@@ -97,7 +100,7 @@ pub fn stop_installed(dir: &Path) -> Result<Vec<Stopped>, String> {
             let named =
                 QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut len) != 0;
             let program = String::from_utf16_lossy(&buf[..len as usize]);
-            if named && inside(&dir, &key(&program)) && TerminateProcess(h, 1) != 0 {
+            if named && from(&dirs, &program) && TerminateProcess(h, 1) != 0 {
                 // Until it is gone its files stay locked.
                 WaitForSingleObject(h, 10_000);
                 stopped.push(Stopped { pid, program });
@@ -106,6 +109,15 @@ pub fn stop_installed(dir: &Path) -> Result<Vec<Stopped>, String> {
         }
     }
     Ok(stopped)
+}
+
+/// Whether `program` lies in one of `dirs` ([`key`] spellings), as reported
+/// or as it really is (its long spelling).
+#[cfg(windows)]
+fn from(dirs: &[String], program: &str) -> bool {
+    let within = |p: &str| dirs.iter().any(|d| inside(d, &key(p)));
+    within(program)
+        || std::fs::canonicalize(program).is_ok_and(|real| within(&real.to_string_lossy()))
 }
 
 /// `me` and the processes that started it, as far as they are still known
@@ -183,8 +195,11 @@ mod tests {
     #[test]
     fn processes_running_from_the_directory_are_ended() {
         let tmp = tempfile::tempdir().unwrap();
-        let app = tmp.path().join("app");
+        // A name long enough to get an 8.3 short name where the volume
+        // makes them (the CI runner's temp path is one: `RUNNER~1`).
+        let app = tmp.path().join("installed application");
         std::fs::create_dir_all(&app).unwrap();
+        let short = short_path(&app);
         let system = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
         let ping = std::path::Path::new(&system).join(r"System32\PING.EXE");
         let copy = app.join("ping.exe");
@@ -196,15 +211,28 @@ mod tests {
                 .spawn()
                 .unwrap()
         };
-        let mut inside_child = spawn(&copy);
         let mut outside_child = spawn(&ping);
-        std::thread::sleep(std::time::Duration::from_millis(300));
-
-        let stopped = stop_installed(&app).unwrap();
-        assert_eq!(stopped.len(), 1, "{stopped:?}");
-        assert_eq!(stopped[0].pid, inside_child.id());
-        // Ended and waited for: it has exited, and its program can go.
-        assert!(inside_child.try_wait().unwrap().is_some());
+        // Started through one spelling, the directory named in the other:
+        // the same files either way.
+        for (started, named) in [
+            (short.join("ping.exe"), app.clone()),
+            (copy.clone(), short.clone()),
+        ] {
+            let mut inside_child = spawn(&started);
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let stopped = stop_installed(&named).unwrap();
+            assert_eq!(
+                stopped.len(),
+                1,
+                "{} from {}: {stopped:?}",
+                named.display(),
+                started.display()
+            );
+            assert_eq!(stopped[0].pid, inside_child.id());
+            // Ended and waited for: it has exited.
+            assert!(inside_child.try_wait().unwrap().is_some());
+        }
+        // Its program can go.
         std::fs::remove_file(&copy).unwrap();
         // The same program elsewhere runs on.
         assert!(outside_child.try_wait().unwrap().is_none());
@@ -212,5 +240,23 @@ mod tests {
         let _ = outside_child.wait();
         // Nothing left there: nothing to do.
         assert!(stop_installed(&app).unwrap().is_empty());
+    }
+
+    /// The 8.3 spelling of `p` (the same path where the volume makes none).
+    #[cfg(windows)]
+    fn short_path(p: &std::path::Path) -> std::path::PathBuf {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let wide: Vec<u16> = p.as_os_str().encode_wide().chain(Some(0)).collect();
+        let mut buf = vec![0u16; 1024];
+        // SAFETY: both buffers outlive the call; the length bounds the write.
+        let n = unsafe {
+            windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(
+                wide.as_ptr(),
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+            )
+        } as usize;
+        assert!(n > 0 && n < buf.len(), "GetShortPathNameW failed");
+        std::path::PathBuf::from(std::ffi::OsString::from_wide(&buf[..n]))
     }
 }
