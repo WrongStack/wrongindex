@@ -885,6 +885,26 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                     let at = j.completed_at_ms.unwrap_or(j.admitted_at_ms);
                     println!("  checked:    {} ({})", ago(now, at), j.state.as_str());
                 }
+                if let Some(p) = &s.polling {
+                    let last = p.last_pass_ms.map_or("first pass under way".into(), |at| {
+                        format!(
+                            "last pass {} ({} files, {} ms)",
+                            ago(now, at),
+                            p.files,
+                            p.pass_ms
+                        )
+                    });
+                    println!(
+                        "  polled:     every {} s, {last}{}",
+                        p.every_ms / 1000,
+                        if p.overdue {
+                            "; OVERDUE - not current"
+                        } else {
+                            ""
+                        }
+                    );
+                    println!("              {}", p.reason);
+                }
             }
             Ok(exit_code::SUCCESS)
         }

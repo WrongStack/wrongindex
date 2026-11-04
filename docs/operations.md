@@ -57,13 +57,22 @@ A watcher batch (or `wrongindex index <id> --path ...`) runs as WrongStack's tar
 - *Periodic reconciliation.* Every watched project gets a whole-project run once per `reconcileMinutes` (default 15) after its last one, spread by a fixed per-project delay of up to a tenth of the period. It waits while the project has work pending, running or failing, and while background indexing is paused. It is a `reconcile` job marked `periodic`. When nothing changed it writes and publishes nothing; files Git reports clean whose stored stamp matches are not even read, so it costs about what discovery costs (no-op runs measured 0.4 to 3.6 s for checkouts of 1,500 to 6,200 files). Freshness stays `current` while it runs, because no change is known. A run that finds one logs `reconcile_found_changes` and counts it under `missedChanges` in the metrics.
 - *Content check.* The scheduled health check (`integrityCheckHours`, below) also reads every indexed file and compares its bytes with what was indexed. Git decides "clean" from a file's size and timestamps, so a file rewritten with the same size and its old timestamp (a restore, a sync tool, a build step that keeps times) looks unchanged to Git and to the periodic run. Only this comparison finds it. Files that differ are indexed again by the watcher's targeted run, as if their events had come. The check reports what it found under `contents` (`checked`, `changed`, `missing`, `skipped`, up to ten paths); the desktop shows it under Integrity. Only regular files under the checkout root are read, never a link or a path outside it, and never a file over the 5 MiB index limit.
 
+**A file system that reports no changes.** Some file systems refuse Windows' change notifications altogether: a WSL distribution's share (`\\wsl.localhost\...`), WebDAV, and many network and user-mode file systems. Before a project is watched, the service asks the file system. Where it refuses, the project is **polled**. The checkout is walked every `pollIntervalSeconds` (default 5), and every indexable file whose size or modification time changed since the pass before is indexed by the same targeted run an event would have caused. The walk skips what the watcher ignores anyway: the always-ignored directories such as `node_modules`, the root `.gitignore`, and the index directory. It never follows links. Such a project shows `watchHealth: polling`, and `project status` reports `polling`: the reason, the interval, when the last pass ended, how long it took and how many files it looked at. The desktop shows this under Watch.
+- The first pass only records what is there, and the attach reconciliation runs after it, so nothing changed in between is missed.
+- A pass that takes long spaces the next one out (at least twice its own duration).
+- A polled project is `current` only while its passes keep coming. When one is overdue, `polling.overdue` is true and freshness is `degraded`.
+- What polling cannot see is a rewrite that keeps both size and modification time; the content check finds it.
+- With `pollIntervalSeconds` 0 such a project is not watched: `watchHealth: failed`, and `lastError` says why.
+
+A checkout on a share is indexed as it is spelled. Links below its root are not followed (a targeted run through one is refused). Before 2026-11-04 every targeted run there was refused as leaving the machine, so a watched project on a share failed every edit and was eventually parked.
+
 `project status` reports `lastVerifiedMs`: when a whole-project run (the watcher's, periodic, or asked for) last went through, so the index agreed with the checkout then. `lastIndexedMs` is the last run of any kind. The desktop shows both.
 
 Freshness is reported separately from activity. `current` means the watcher is attached, nothing is pending and the last run succeeded. The other states are:
 
 - `pending`: edits are waiting, or the service is paused.
-- `degraded`: the last run failed, the project is parked, or it waits for disk space (below).
-- `unavailable`: the checkout root is missing, or watching failed.
+- `degraded`: the last run failed, the project is parked, it waits for disk space (below), or a polled project's pass is overdue.
+- `unavailable`: the checkout root is missing, or watching failed (including a file system without change notifications while polling is off).
 - `unknown`: the project is not watched.
 
 A failed watcher run keeps its paths pending and is retried after 2 s, doubling per failure up to 60 s; new edits do not skip the wait. After `watchParkAfterFailures` failures in a row (default 8) the project is **parked**: `watchHealth: parked`, freshness `degraded`, one probe attempt every 15 minutes. `project status` reports `consecutiveFailures`, `nextRetryMs` and `parked`; the desktop shows them under Watch. Any explicit index job for the project that succeeds (Reconcile, Retry, `index <id> --full`) closes the circuit and pending edits run at once. A successful probe does the same.
@@ -100,6 +109,7 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
 | `paused` | false | — | Background indexing paused (explicit requests and queries still run) |
 | `integrityCheckHours` | 24 | 0-720 | Hours between scheduled health checks of each index the service owns: SQLite's check, and every indexed file compared with what was indexed (see §3, "A damaged index" and "Edits no event reported"); 0 = only when asked |
 | `reconcileMinutes` | 15 | 0-1440 | Minutes between periodic reconciliations of each watched project (see §3, "Edits no event reported"); 0 = off |
+| `pollIntervalSeconds` | 5 | 0-3600 | Seconds between passes over a watched checkout whose file system reports no changes (see §3, "A file system that reports no changes"); 0 = never poll, such a project is reported failed |
 
 Changes apply immediately and survive restarts. An unknown key, an out-of-range value or a stale `expectedRevision` is refused, and nothing changes.
 
@@ -149,8 +159,8 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
   - queue depth;
   - `reconciliations`: whole-project runs sent, by reason (`attach`, `resumed`, `restored`, `event_queue_overflow`, `watcher_rescan`, `periodic`, ...);
   - `missedChanges`: runs and files that found changes no watch event had reported, by who found them (`periodic` reconciliation, content `check`);
-  - the enforced limits (queued jobs 1000, frame 8 MiB, dirty paths per project 10000, log 5 MiB, index file read limit 5 MiB) and the schedules (`integrityCheckHours`, `reconcileMinutes`).
-- Log events of the schedules: `periodic_reconcile_scheduled`, `reconcile_found_changes` (with the number of files), `integrity_check_scheduled`, `content_drift` (a check found files that differ; `queued` says whether they are being indexed again), `watch_reconcile` (for example after a restore).
+  - the enforced limits (queued jobs 1000, frame 8 MiB, dirty paths per project 10000, log 5 MiB, index file read limit 5 MiB) and the schedules (`integrityCheckHours`, `reconcileMinutes`, `pollIntervalSeconds`).
+- Log events of the schedules: `periodic_reconcile_scheduled`, `reconcile_found_changes` (with the number of files), `integrity_check_scheduled`, `content_drift` (a check found files that differ; `queued` says whether they are being indexed again), `watch_reconcile` (for example after a restore). `watch_polling` names a project that is polled, and why; `watch_attached` carries the `watchHealth` it got.
 - `logs/wrongindexd.log`: one JSON object per line; no tokens and no source text.
 - `wrongindex diagnostics export --output bundle.json [--redact-paths]` (desktop: Diagnostics) writes a bounded bundle. It contains health, metrics, settings, projects, recent jobs and the log tail; it never contains the token or source code. `--dry-run` shows the categories and sizes first.
 - `wrongindex events [--project <id>] [--snapshot]` follows the service's event stream:
@@ -180,6 +190,8 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `DISK_FULL`, `watchHealth: disk_full` | The drive holding the index has too little free space; nothing was written | Free space on that drive (the message says how much is needed). Watched projects resume by themselves; retry other jobs |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |
 | Edits are not picked up, `freshness: current`; `reconcile_found_changes` or `missedChanges` in the metrics | The watcher does not see some changes (a network drive, a tool that keeps timestamps); the periodic reconciliation or the check finds them later | `wrongindex index <id> --check --wait` compares every file now. For a checkout on a network drive, lower `reconcileMinutes` |
+| `watchHealth: polling` | The checkout's file system reports no changes (a WSL share, WebDAV, a network or user-mode file system); it is walked every `pollIntervalSeconds` | Nothing to do. For a large checkout on a slow share, raise `pollIntervalSeconds`; `polling.passMs` in `project status` shows what a pass costs |
+| `watchHealth: failed`, `lastError` "... polling is off (pollIntervalSeconds 0)" | The checkout's file system reports no changes and polling is turned off | `wrongindex settings set pollIntervalSeconds=5`; watching starts at the next attempt (within a minute) |
 | Files missing from search | Files over 5 MiB are not indexed (as in WrongStack) | Listed under Files and errors / `oversizedFiles` in the job result |
 
 ## 9. Install, upgrade, uninstall

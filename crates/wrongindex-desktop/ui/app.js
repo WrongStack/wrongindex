@@ -52,6 +52,7 @@ const SERVICE_FIELDS = [
   { key: 'watchParkAfterFailures', label: 'Park a project after failed runs in a row', unit: '', min: 2, max: 100, note: 'A parked project is retried once every 15 minutes until a run succeeds.' },
   { key: 'integrityCheckHours', label: 'Check owned indexes every', unit: 'h', min: 0, max: 720, note: "SQLite's own check of every page and of the full-text index, and every indexed file read and compared with what was indexed; files that differ are indexed again. Read-only (a few seconds for a large project). 0 = only when you use Check index." },
   { key: 'reconcileMinutes', label: 'Reconcile watched projects every', unit: 'min', min: 0, max: 1440, note: "A whole-project run that finds changes the watcher never reported (a network drive, a lost event). Nothing is written when nothing changed. 0 = off." },
+  { key: 'pollIntervalSeconds', label: 'Poll file systems without change notifications every', unit: 's', min: 0, max: 3600, note: 'A watched checkout on a file system that does not report changes (a WSL share, WebDAV, some network and user-mode file systems) is walked this often; files whose size or time changed are indexed. 0 = never poll: such a project is reported failed.' },
 ];
 const ACTIVITY_CAP = 200;
 
@@ -440,7 +441,8 @@ function detailView() {
       el('div', { class: 'k' }, 'Ownership'), el('div', {}, badge(s.ownership, OWNERSHIP)),
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
       el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
-        retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' || s.watchHealth === 'index_corrupt' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
+        retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' || s.watchHealth === 'index_corrupt' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null,
+        pollingNote(s.polling)),
       el('div', { class: 'k' }, 'Integrity'), integrityCell(s.lastCheck),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
@@ -560,6 +562,20 @@ function contentsNote(c) {
 }
 
 /** A plain next step for an error message (compatibility §, plan 2.4). */
+// Polling (the checkout's file system reports no changes): how often, and
+// when it last looked. An overdue pass means the project is not current.
+function pollingNote(p) {
+  if (!p) return null;
+  const every = `${Math.round(Number(p.everyMs) / 1000)} s`;
+  const last = p.lastPassMs
+    ? `last pass ${ago(p.lastPassMs)} (${p.files} files, ${p.passMs} ms)`
+    : 'first pass under way';
+  const text = p.overdue
+    ? `Polled every ${every}, but no pass came when one was due (${last}): not reported current.`
+    : `Polled every ${every}: this file system does not report changes; ${last}.`;
+  return el('div', { class: p.overdue ? 'error' : 'note', role: 'status', title: p.reason }, text);
+}
+
 // Watcher retry state (WI-208): failures back automatic runs off; after the
 // configured number in a row the project is parked.
 function retryNote(s) {

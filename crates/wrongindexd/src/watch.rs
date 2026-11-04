@@ -9,7 +9,9 @@
 //!
 //! Attach order (indexing-pipeline §1): register the OS watcher first, then
 //! queue a full reconciliation; events arriving during that scan stay in the
-//! dirty set and run afterwards, so nothing falls into a gap.
+//! dirty set and run afterwards, so nothing falls into a gap. A checkout
+//! whose file system reports no changes is polled instead (see `poll`); the
+//! poller's first pass comes before the reconciliation there.
 //!
 //! Scheduling: at most one automatic job per project. Ready batches become
 //! fenced jobs (incremental with paths, or full for reconciliation); a
@@ -17,7 +19,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -48,7 +50,23 @@ pub enum WatchMsg {
         project_id: String,
         message: String,
     },
+    /// A poller's first pass is done: what is there now is its baseline,
+    /// so the attach reconciliation can run (see `poll`).
+    Armed {
+        project_id: String,
+    },
 }
+
+/// How a project is watched.
+enum Watching {
+    /// The operating system reports changes.
+    Native(#[allow(dead_code)] notify::RecommendedWatcher),
+    /// Its file system does not: the checkout is walked (see `poll`).
+    Poll(crate::poll::Poller),
+}
+
+/// `watchHealth` of a project watched by polling.
+pub const POLLING: &str = "polling";
 
 struct Lease {
     project_id: String,
@@ -58,7 +76,7 @@ struct Lease {
 
 #[derive(Default)]
 struct ProjectWatch {
-    watcher: Option<notify::RecommendedWatcher>,
+    watcher: Option<Watching>,
     root: PathBuf,
     index_dir: PathBuf,
     gitignore: Option<Gitignore>,
@@ -98,6 +116,8 @@ pub struct WatchStatus {
     /// The circuit parked the project: one probe per 15 minutes until a
     /// batch or an explicit job succeeds.
     pub parked: bool,
+    /// Watched by polling: how, and whether a pass is overdue.
+    pub polling: Option<wrongindex_contracts::PollingStatus>,
 }
 
 pub struct Supervisor {
@@ -107,6 +127,8 @@ pub struct Supervisor {
     cfg: Mutex<DebounceConfig>,
     grace: Mutex<Duration>,
     paused: AtomicBool,
+    /// `pollIntervalSeconds` in ms, shared with every poller; 0 = no polling.
+    poll_every_ms: Arc<AtomicU64>,
 }
 
 impl Supervisor {
@@ -120,6 +142,9 @@ impl Supervisor {
                 cfg: Mutex::new(DebounceConfig::default()),
                 grace: Mutex::new(LAST_CLIENT_GRACE),
                 paused: AtomicBool::new(false),
+                poll_every_ms: Arc::new(AtomicU64::new(
+                    wrongindex_contracts::DaemonSettings::default().poll_interval_seconds * 1000,
+                )),
             },
             rx,
         )
@@ -136,6 +161,18 @@ impl Supervisor {
             *g = Duration::from_secs(s.session_grace_seconds);
         }
         self.paused.store(s.paused, Ordering::SeqCst);
+        self.poll_every_ms.store(
+            s.poll_interval_seconds.saturating_mul(1000),
+            Ordering::SeqCst,
+        );
+    }
+
+    /// Whether the project is watched by polling.
+    fn is_polling(&self, project_id: &str) -> bool {
+        self.projects.lock().is_ok_and(|g| {
+            g.get(project_id)
+                .is_some_and(|w| matches!(w.watcher, Some(Watching::Poll(_))))
+        })
     }
 
     fn debounce(&self) -> DebounceConfig {
@@ -274,6 +311,10 @@ impl Supervisor {
                 .and_then(|w| w.dirty.retry_in(now))
                 .map(|d| d.as_millis() as u64),
             parked,
+            polling: w.and_then(|w| match &w.watcher {
+                Some(Watching::Poll(p)) => Some(p.status()),
+                _ => None,
+            }),
         }
     }
 
@@ -362,7 +403,9 @@ impl Supervisor {
         {
             return Freshness::Pending;
         }
-        if last_error.is_some() {
+        // Polling: current only while its passes keep coming (one pass long
+        // ago says nothing about now).
+        if last_error.is_some() || status.polling.as_ref().is_some_and(|p| p.overdue) {
             return Freshness::Degraded;
         }
         Freshness::Current
@@ -383,6 +426,13 @@ impl Supervisor {
                 if let Some(w) = projects.get_mut(&project_id) {
                     w.dirty.mark_reconcile("watcher_error", now);
                     w.last_error = Some(message);
+                }
+            }
+            WatchMsg::Armed { project_id } => {
+                if let Some(w) = projects.get_mut(&project_id)
+                    && matches!(w.watcher, Some(Watching::Poll(_)))
+                {
+                    w.dirty.mark_reconcile("attach", now);
                 }
             }
             WatchMsg::Event {
@@ -456,11 +506,63 @@ impl Supervisor {
         }
     }
 
-    fn attach(&self, project_id: &str, root: &Path, index_dir: &Path) -> Result<(), String> {
+    /// Watch `root`: through the operating system's change notifications,
+    /// or by polling where its file system refuses them. Returns the watch
+    /// health.
+    fn attach(
+        &self,
+        project_id: &str,
+        root: &Path,
+        index_dir: &Path,
+    ) -> Result<&'static str, String> {
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let watching = match crate::poll::refused(root) {
+            None => Watching::Native(self.native(project_id, root, overflowed.clone())?),
+            Some(reason) => {
+                let every_ms = self.poll_every_ms.load(Ordering::SeqCst);
+                if every_ms == 0 {
+                    return Err(format!("{reason}; polling is off (pollIntervalSeconds 0)"));
+                }
+                info!("watch_polling", {"projectId": project_id, "reason": reason, "everyMs": every_ms});
+                Watching::Poll(crate::poll::Poller::start(
+                    project_id,
+                    root,
+                    index_dir,
+                    self.poll_every_ms.clone(),
+                    reason,
+                    self.tx.clone(),
+                )?)
+            }
+        };
+        let polled = matches!(watching, Watching::Poll(_));
+        let mut projects = self.projects.lock().map_err(|_| "poisoned".to_string())?;
+        let w = projects.entry(project_id.to_string()).or_default();
+        w.watcher = Some(watching);
+        w.root = wrongindex_storage::wrongstack_paths::node_resolve(root);
+        w.index_dir = wrongindex_storage::wrongstack_paths::node_resolve(index_dir);
+        w.gitignore = Some(Gitignore::load(root));
+        w.health = if polled { POLLING } else { "native" };
+        w.overflowed = overflowed;
+        w.last_error = None;
+        w.retry_at = None;
+        w.initial_done = false;
+        w.disk_wait = None;
+        // Watcher first, then the full attach reconciliation (a poller asks
+        // for it after its first pass).
+        if !polled {
+            w.dirty.mark_reconcile("attach", Instant::now());
+        }
+        Ok(w.health)
+    }
+
+    fn native(
+        &self,
+        project_id: &str,
+        root: &Path,
+        flag: Arc<AtomicBool>,
+    ) -> Result<notify::RecommendedWatcher, String> {
         let tx = self.tx.clone();
         let pid = project_id.to_string();
-        let overflowed = Arc::new(AtomicBool::new(false));
-        let flag = overflowed.clone();
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let msg = match res {
                 Ok(ev) => WatchMsg::Event {
@@ -482,21 +584,7 @@ impl Supervisor {
         watcher
             .watch(root, RecursiveMode::Recursive)
             .map_err(|e| e.to_string())?;
-        let mut projects = self.projects.lock().map_err(|_| "poisoned".to_string())?;
-        let w = projects.entry(project_id.to_string()).or_default();
-        w.watcher = Some(watcher);
-        w.root = wrongindex_storage::wrongstack_paths::node_resolve(root);
-        w.index_dir = wrongindex_storage::wrongstack_paths::node_resolve(index_dir);
-        w.gitignore = Some(Gitignore::load(root));
-        w.health = "native";
-        w.overflowed = overflowed;
-        w.last_error = None;
-        w.retry_at = None;
-        w.initial_done = false;
-        w.disk_wait = None;
-        // Watcher first, then the full attach reconciliation.
-        w.dirty.mark_reconcile("attach", Instant::now());
-        Ok(())
+        Ok(watcher)
     }
 
     fn detach(&self, project_id: &str) {
@@ -987,6 +1075,19 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             root_unavailable(shared, &p.project_id);
             continue;
         }
+        // Polling turned off: a polled project can no longer be watched.
+        if attached
+            && shared.watch.poll_every_ms.load(Ordering::SeqCst) == 0
+            && shared.watch.is_polling(&p.project_id)
+        {
+            shared.watch.detach(&p.project_id);
+            set_failure(
+                shared,
+                &p.project_id,
+                "watcher: polling is off (pollIntervalSeconds 0)".into(),
+            );
+            continue;
+        }
         if attached || retry_at.is_some_and(|r| now < r) {
             continue;
         }
@@ -1006,9 +1107,9 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             Path::new(&p.checkout_root),
             Path::new(&p.index_dir),
         ) {
-            Ok(()) => {
-                info!("watch_attached", {"projectId": p.project_id, "policy": p.watch_policy.as_str()})
-            }
+            Ok(health) => info!("watch_attached", {
+                "projectId": p.project_id, "policy": p.watch_policy.as_str(), "watchHealth": health,
+            }),
             Err(e) => set_failure(shared, &p.project_id, format!("watcher: {e}")),
         }
     }
@@ -1195,6 +1296,43 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
             }
             Err(e) => set_failure(shared, &pid, format!("admission: {e}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod polling_tests {
+    use super::*;
+
+    #[test]
+    fn a_polled_project_is_current_only_while_its_passes_keep_coming() {
+        let mut s = WatchStatus {
+            watching: true,
+            watch_health: POLLING.into(),
+            pending_paths: 0,
+            reconcile_reason: None,
+            inflight_job: None,
+            sessions: 0,
+            overflows: 0,
+            last_error: None,
+            initial_scan_done: true,
+            consecutive_failures: 0,
+            retry_in_ms: None,
+            parked: false,
+            polling: Some(wrongindex_contracts::PollingStatus {
+                reason: "r".into(),
+                every_ms: 5_000,
+                last_pass_ms: Some(1),
+                pass_ms: 3,
+                files: 2,
+                overdue: false,
+            }),
+        };
+        assert_eq!(Supervisor::freshness(&s, None), Freshness::Current);
+        s.polling.as_mut().unwrap().overdue = true;
+        assert_eq!(Supervisor::freshness(&s, None), Freshness::Degraded);
+        // Known pending work still says pending.
+        s.pending_paths = 1;
+        assert_eq!(Supervisor::freshness(&s, None), Freshness::Pending);
     }
 }
 

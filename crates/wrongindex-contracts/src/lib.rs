@@ -491,6 +491,35 @@ pub struct ProjectStatus {
     /// few paths included.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verified_ms: Option<i64>,
+    /// While the project is watched by polling (`watchHealth: polling`):
+    /// its file system reports no changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub polling: Option<PollingStatus>,
+}
+
+/// How a project whose file system reports no changes is watched: its
+/// checkout is walked every `pollIntervalSeconds` and each indexable file's
+/// size and modification time compared with the pass before.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PollingStatus {
+    /// Why the operating system's change notifications are not used.
+    pub reason: String,
+    /// Time between passes (`pollIntervalSeconds`; a pass that takes long
+    /// spaces the next one out).
+    pub every_ms: u64,
+    /// Epoch ms the last pass over the checkout ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_pass_ms: Option<i64>,
+    /// How long the last pass took.
+    #[serde(default)]
+    pub pass_ms: u64,
+    /// Files the last pass looked at.
+    #[serde(default)]
+    pub files: u64,
+    /// No pass ended when one was due: the project is not reported current.
+    #[serde(default)]
+    pub overdue: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -687,6 +716,10 @@ pub struct DaemonSettings {
     /// (a whole-project run that finds what the watcher never reported);
     /// 0 = off.
     pub reconcile_minutes: u64,
+    /// Seconds between passes over a watched checkout whose file system
+    /// reports no changes (a WSL share, WebDAV, some user-mode file
+    /// systems); 0 = never poll: such a project is reported failed.
+    pub poll_interval_seconds: u64,
 }
 
 impl Default for DaemonSettings {
@@ -702,6 +735,7 @@ impl Default for DaemonSettings {
             paused: false,
             integrity_check_hours: 24,
             reconcile_minutes: 15,
+            poll_interval_seconds: 5,
         }
     }
 }
@@ -735,6 +769,7 @@ impl DaemonSettings {
         )?;
         range("integrityCheckHours", self.integrity_check_hours, 0, 720)?;
         range("reconcileMinutes", self.reconcile_minutes, 0, 1_440)?;
+        range("pollIntervalSeconds", self.poll_interval_seconds, 0, 3_600)?;
         Ok(())
     }
 }

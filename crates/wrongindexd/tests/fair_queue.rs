@@ -44,7 +44,14 @@ fn copy_dir(src: &Path, dst: &Path) {
     }
 }
 
-const STALL_SECS: u64 = 40;
+/// How long the slow project's native child stalls. The test kills the
+/// service long before that; it is long because listing the child through
+/// WMI took up to 37 s on a busy machine (2026-11-04), and a child whose
+/// stall ran out before the kill published legitimately, which read as a
+/// publication after the service died.
+const STALL_SECS: u64 = 180;
+/// The other project's job must finish well within this.
+const FAST_SECS: u64 = 20;
 
 async fn start(home: &Path) -> (Daemon, Client) {
     let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
@@ -141,7 +148,7 @@ async fn a_slow_project_does_not_hold_up_another() {
             break j;
         }
         assert!(
-            admitted.elapsed() < Duration::from_secs(STALL_SECS / 2),
+            admitted.elapsed() < Duration::from_secs(FAST_SECS),
             "the other project's job waited for the slow one: {j}"
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -161,6 +168,13 @@ async fn a_slow_project_does_not_hold_up_another() {
     // it would publish `index.db` after the ownership lock is gone (INV-01).
     let children = child_pids(_d.0.id());
     assert!(!children.is_empty(), "the slow native child is running");
+    // Only meaningful while the child is still in its stall: one that ran
+    // out has finished its run, and publishing it was right.
+    assert!(
+        started.elapsed() < Duration::from_secs(STALL_SECS),
+        "the test took {:?}, longer than the stall; nothing is proven",
+        started.elapsed()
+    );
     drop(_d);
     let deadline = Instant::now() + Duration::from_secs(10);
     while children.iter().any(|p| alive(*p)) {

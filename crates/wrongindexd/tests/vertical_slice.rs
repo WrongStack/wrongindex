@@ -572,6 +572,9 @@ async fn event_stream_orders_replays_and_resynchronizes() {
         .unwrap();
 
     // Registration, then the job lifecycle, strictly in sequence order.
+    // `project.state` is a sample the supervisor takes about once a second,
+    // whenever its round comes: it may fall anywhere in between (it did on a
+    // loaded machine, 2026-11-04), so it is left out of the comparisons.
     let mut seen = Vec::new();
     let mut last_seq = start_seq;
     while seen.last().map(String::as_str) != Some("job.finished") {
@@ -585,7 +588,9 @@ async fn event_stream_orders_replays_and_resynchronizes() {
             assert_eq!(ev["data"]["jobId"], json!(job.job.job_id));
             assert_eq!(ev["data"]["state"], "succeeded");
         }
-        seen.push(ev["kind"].as_str().unwrap().to_string());
+        if ev["kind"] != "project.state" {
+            seen.push(ev["kind"].as_str().unwrap().to_string());
+        }
     }
     assert_eq!(
         seen,
@@ -603,8 +608,14 @@ async fn event_stream_orders_replays_and_resynchronizes() {
         .subscribe(Some(start_seq + 1), Some(&instance), Some(&pid))
         .await
         .unwrap();
-    assert_eq!(ack["replayed"], 3);
-    assert_eq!(next_event(&mut replay).await["kind"], "job.queued");
+    assert!(ack["replayed"].as_u64().unwrap() >= 3, "{ack}");
+    let first = loop {
+        let ev = next_event(&mut replay).await;
+        if ev["kind"] != "project.state" {
+            break ev;
+        }
+    };
+    assert_eq!(first["kind"], "job.queued");
 
     // Another instance's position is meaningless: the client must resync.
     let (ack, _) = client(&root)
@@ -619,7 +630,7 @@ async fn event_stream_orders_replays_and_resynchronizes() {
         .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
         .await
         .unwrap();
-    assert_eq!(snap["seq"].as_u64().unwrap(), last_seq);
+    assert!(snap["seq"].as_u64().unwrap() >= last_seq, "{snap}");
     assert_eq!(snap["projects"][0]["project"]["projectId"], json!(pid));
     assert_eq!(snap["projects"][0]["lastJob"]["state"], "succeeded");
 
@@ -629,7 +640,9 @@ async fn event_stream_orders_replays_and_resynchronizes() {
     let stopping = tokio::spawn(async move { daemon.stop(&root).await });
     let mut kinds = Vec::new();
     while let Ok(Ok(Some(ev))) = tokio::time::timeout(Duration::from_secs(20), live.next()).await {
-        kinds.push(ev["kind"].as_str().unwrap_or_default().to_string());
+        if ev["kind"] != "project.state" {
+            kinds.push(ev["kind"].as_str().unwrap_or_default().to_string());
+        }
     }
     assert_eq!(kinds, ["daemon.draining"]);
     stopping.await.unwrap();

@@ -163,7 +163,7 @@ fn discover_git(root: &Path, extra_ignore: &[&str], gi: &Gitignore) -> Option<Di
             std::fs::symlink_metadata(f).is_ok_and(|m| m.file_type().is_symlink())
                 // Resolved by reading link targets: a link to a share is
                 // never opened (WI-604) and counts as outside.
-                && wrongindex_storage::git_containment::resolve_links_locally(Path::new(f))
+                && wrongindex_storage::git_containment::resolve_within(root, Path::new(f))
                     .map_or(true, |real| {
                     let key = comparable(&real.to_string_lossy());
                     key != root_key

@@ -701,6 +701,7 @@ fn status_from(
         // Filled in where they are shown (not part of `project.state`).
         last_check: None,
         last_verified_ms: None,
+        polling: ws.polling.clone(),
     }
 }
 
@@ -1262,6 +1263,7 @@ async fn dispatch_inner(
                 "watchParkAfterFailures": settings.watch_park_after_failures,
                 "integrityCheckHours": settings.integrity_check_hours,
                 "reconcileMinutes": settings.reconcile_minutes,
+                "pollIntervalSeconds": settings.poll_interval_seconds,
             });
             Ok(m)
         }

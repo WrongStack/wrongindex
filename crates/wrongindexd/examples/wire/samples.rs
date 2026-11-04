@@ -309,6 +309,16 @@ pub fn samples() -> Value {
         parked: true,
         last_check: None,
         last_verified_ms: None,
+        polling: Some(wrongindex_contracts::PollingStatus {
+            reason:
+                "the file system does not report changes (ReadDirectoryChangesW: Windows error 1)"
+                    .into(),
+            every_ms: 5_000,
+            last_pass_ms: Some(1_793_600_000_400),
+            pass_ms: 38,
+            files: 412,
+            overdue: false,
+        }),
     };
     let enums = json!({
         "ErrorCode": ERROR_CODES

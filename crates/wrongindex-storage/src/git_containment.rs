@@ -127,6 +127,61 @@ pub fn resolve_links_locally(p: &Path) -> Result<PathBuf, String> {
     }
 }
 
+/// Where `p` really is, for containment in the checkout at `root`. A local
+/// checkout: [`resolve_links_locally`]. A checkout the user placed on a
+/// share (`\\host\share\...`, a WSL distribution's `\\wsl.localhost\...`)
+/// is taken as given - [`resolve_links_locally`] refuses every path on it,
+/// which made every targeted run there fail (found 2026-11-04) - and only
+/// the part of `p` below the root is looked at: `p` must lie under the root
+/// as spelled, and a link below the root is refused, never followed (its
+/// target may name yet another machine).
+pub fn resolve_within(root: &Path, p: &Path) -> Result<PathBuf, String> {
+    if local_form(&root.to_string_lossy()).is_ok() {
+        return resolve_links_locally(p);
+    }
+    let root = node_resolve(root);
+    let full = node_resolve(p);
+    let rel = below(&root, &full).ok_or_else(|| full.display().to_string())?;
+    let mut cur = root;
+    for c in rel.components() {
+        cur.push(c.as_os_str());
+        match std::fs::symlink_metadata(&cur) {
+            Ok(m) if m.file_type().is_symlink() => {
+                return Err(format!(
+                    "{} (a link in a checkout on a share is not followed)",
+                    cur.display()
+                ));
+            }
+            Ok(_) => {}
+            // Missing: nothing below it exists either.
+            Err(_) => break,
+        }
+    }
+    Ok(full)
+}
+
+/// `p` relative to `root`, component by component (letter case ignored on
+/// Windows); `None` when `p` is not under `root`.
+fn below(root: &Path, p: &Path) -> Option<PathBuf> {
+    let same = |a: &std::ffi::OsStr, b: &std::ffi::OsStr| {
+        if cfg!(windows) {
+            a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        } else {
+            a == b
+        }
+    };
+    let mut rest = p.components();
+    for r in root.components() {
+        if !rest
+            .next()
+            .is_some_and(|c| same(c.as_os_str(), r.as_os_str()))
+        {
+            return None;
+        }
+    }
+    Some(rest.as_path().to_path_buf())
+}
+
 /// Read a file through its link-free local path. `Ok(None)` only when it
 /// does not exist; any other read failure or non-UTF-8 content fails the
 /// vet (fail closed: Git may read bytes this code would have skipped).
@@ -402,6 +457,36 @@ mod tests {
         assert_eq!(link_target_form(r"\??\C:\x").unwrap(), r"C:\x");
         assert_eq!(link_target_form(r"C:\x").unwrap(), r"C:\x");
         assert_eq!(link_target_form(r"..\x").unwrap(), r"..\x");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_checkout_on_a_share_is_taken_as_given() {
+        // Lexical: what lies under the root as spelled (any letter case).
+        let root = Path::new(r"\\wsl.localhost\Ubuntu\tmp\p");
+        assert_eq!(
+            below(root, Path::new(r"\\WSL.localhost\ubuntu\tmp\p\src\a.ts")),
+            Some(PathBuf::from(r"src\a.ts"))
+        );
+        assert_eq!(below(root, root), Some(PathBuf::new()));
+        for outside in [
+            r"\\wsl.localhost\Ubuntu\tmp\pq\a.ts",
+            r"\\wsl.localhost\Ubuntu\tmp\a.ts",
+            r"\\other.invalid\Ubuntu\tmp\p\a.ts",
+            r"C:\tmp\p\a.ts",
+        ] {
+            assert_eq!(below(root, Path::new(outside)), None, "{outside}");
+        }
+        // Outside the share checkout: refused before anything is looked up
+        // (`..` is collapsed first).
+        let up = resolve_within(root, Path::new(r"\\wsl.localhost\Ubuntu\tmp\p\..\q\a.ts"));
+        assert!(matches!(&up, Err(t) if t.contains(r"tmp\q")), "{up:?}");
+        let off = resolve_within(root, Path::new(r"\\attacker.invalid\s\a.ts"));
+        assert!(off.is_err(), "{off:?}");
+        // A local checkout: as before.
+        let (_t, local, _gd) = checkout();
+        let f = local.join("src").join("a.ts");
+        assert_eq!(resolve_within(&local, &f), resolve_links_locally(&f));
     }
 
     fn checkout() -> (tempfile::TempDir, PathBuf, PathBuf) {

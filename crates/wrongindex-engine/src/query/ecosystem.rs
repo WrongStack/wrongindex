@@ -220,7 +220,8 @@ fn source(project_root: &str, rel: &[&str]) -> Result<Option<PathBuf>, QueryErro
         let sep = std::path::MAIN_SEPARATOR;
         f.starts_with(&format!("{}{sep}", r.trim_end_matches(sep)))
     };
-    let real = wrongindex_storage::git_containment::resolve_links_locally(&p).ok();
+    let real =
+        wrongindex_storage::git_containment::resolve_within(Path::new(project_root), &p).ok();
     let real_root =
         wrongindex_storage::git_containment::resolve_links_locally(Path::new(project_root)).ok();
     let ok = real.as_ref().is_some_and(|real| {

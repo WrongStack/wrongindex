@@ -221,6 +221,7 @@
       "nativeMemoryMb": 0,
       "parallelJobs": 2,
       "paused": false,
+      "pollIntervalSeconds": 5,
       "reconcileMinutes": 15,
       "sessionGraceSeconds": 120,
       "watchDebounceMs": 400,
@@ -434,6 +435,14 @@
       "ownership": "owned",
       "parked": true,
       "pendingPaths": 2,
+      "polling": {
+        "everyMs": 5000,
+        "files": 412,
+        "lastPassMs": 1793600000400,
+        "overdue": false,
+        "passMs": 38,
+        "reason": "the file system does not report changes (ReadDirectoryChangesW: Windows error 1)"
+      },
       "project": {
         "backend": "native",
         "backendPreference": "auto",

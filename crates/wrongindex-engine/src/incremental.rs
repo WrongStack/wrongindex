@@ -572,16 +572,19 @@ impl Containment {
 
     /// `Err` (refusal) when `path` leaves the checkout through a link.
     fn check(&self, path: &str) -> Result<(), NativeError> {
-        let inside = wrongindex_storage::git_containment::resolve_links_locally(Path::new(path))
-            .ok()
-            .is_some_and(|real| {
-                let real = real.to_string_lossy();
-                relative_inside(&self.root, &real).is_some()
-                    || self
-                        .real_root
-                        .as_deref()
-                        .is_some_and(|r| relative_inside(r, &real).is_some())
-            });
+        let inside = wrongindex_storage::git_containment::resolve_within(
+            Path::new(&self.root),
+            Path::new(path),
+        )
+        .ok()
+        .is_some_and(|real| {
+            let real = real.to_string_lossy();
+            relative_inside(&self.root, &real).is_some()
+                || self
+                    .real_root
+                    .as_deref()
+                    .is_some_and(|r| relative_inside(r, &real).is_some())
+        });
         if inside {
             Ok(())
         } else {

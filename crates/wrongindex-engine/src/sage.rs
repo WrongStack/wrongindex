@@ -599,9 +599,9 @@ pub struct Remapped {
 /// otherwise. Links are resolved by reading their targets, never opened
 /// (security review WI-604), so nothing outside the checkout is written.
 fn contained(project_root: &Path, p: &Path) -> Option<std::path::PathBuf> {
-    use wrongindex_storage::git_containment::resolve_links_locally;
+    use wrongindex_storage::git_containment::{resolve_links_locally, resolve_within};
     use wrongindex_storage::wrongstack_paths::node_resolve;
-    let real = resolve_links_locally(p).ok()?;
+    let real = resolve_within(project_root, p).ok()?;
     let key = |p: &Path| {
         let s = node_resolve(p).to_string_lossy().into_owned();
         if cfg!(windows) { s.to_lowercase() } else { s }
