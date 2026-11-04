@@ -179,6 +179,19 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
                 "kind": done.kind.as_str(), "state": done.state.as_str(), "ok": ok,
             });
             crate::events::job_event(&shared, "job.finished", &done);
+            // A periodic reconciliation that changed the index found what
+            // no watcher event had reported (see `schedule`).
+            if ok
+                && crate::schedule::is_periodic(&done)
+                && let Some(n) = done.result.as_ref().and_then(files_changed)
+                && n > 0
+            {
+                shared.metrics.missed("periodic", n);
+                warn!("reconcile_found_changes", {
+                    "projectId": done.project_id, "jobId": done.job_id, "files": n,
+                    "generation": done.result.as_ref().map(|r| r["generation"].clone()),
+                });
+            }
             // An explicit write job that succeeded closes a watcher circuit
             // (WI-208); the watcher's own batches settle in the supervisor.
             if ok && done.kind != JobKind::Check {
@@ -254,8 +267,17 @@ async fn execute(
             } else if inspection.integrity.as_ref().is_some_and(|i| i.ok) {
                 shared.watch.clear_corrupt(project_id, "check");
             }
-            serde_json::to_value(inspection)
-                .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))
+            let sound = matches!(
+                inspection.verdict,
+                wrongindex_storage::Verdict::Compatible
+                    | wrongindex_storage::Verdict::CompatibleWithUnknownData
+            ) && inspection.integrity.as_ref().is_none_or(|i| i.ok);
+            let mut out = serde_json::to_value(inspection)
+                .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+            if sound {
+                out["contents"] = check_contents(shared, &project).await;
+            }
+            Ok(out)
         }
         JobKind::Restore => {
             let params = params.unwrap_or_default();
@@ -311,6 +333,9 @@ async fn execute(
                 ErrorBody::new(code, e.to_string())
             })?;
             info!("index_restored", {"projectId": project_id, "from": from.display().to_string()});
+            // A backup is older than the checkout: a watched project catches
+            // up before it is called current again.
+            shared.watch.mark_reconcile(project_id, "restored");
             let generation = publish(shared, project_id, fence, stamp.clone()).await?;
             Ok(serde_json::json!({
                 "restoredFrom": from.display().to_string(),
@@ -804,6 +829,62 @@ async fn publish(
         }),
     );
     Ok(publication.generation)
+}
+
+/// The deeper verification (see `wrongindex_storage::contents`): every
+/// indexed file read and compared with what was indexed. A watched project
+/// gets the files that differ indexed (WrongStack's targeted run, as if
+/// their events had come); otherwise the result only says what differs.
+async fn check_contents(
+    shared: &Arc<Shared>,
+    project: &wrongindex_contracts::ProjectRecord,
+) -> serde_json::Value {
+    let db = Path::new(&project.index_dir).join("index.db");
+    let root = std::path::PathBuf::from(&project.checkout_root);
+    let verified = tokio::task::spawn_blocking(move || {
+        wrongindex_storage::contents::verify(
+            &db,
+            &root,
+            wrongindex_engine::native::MAX_INDEX_FILE_BYTES,
+        )
+    })
+    .await;
+    let contents = match verified {
+        Ok(Ok(c)) => c,
+        Ok(Err(e)) => return json!({"error": e.to_string()}),
+        Err(e) => return json!({"error": e.to_string()}),
+    };
+    let mut out = serde_json::to_value(contents.summary()).unwrap_or_default();
+    if contents.agrees() {
+        return out;
+    }
+    let pid = &project.project_id;
+    // Nothing pending before: no event had reported these.
+    let unreported = shared.watch.settled(pid);
+    let queued = shared.watch.mark_paths(pid, contents.differing());
+    out["queued"] = json!(queued);
+    let n = (contents.changed.len() + contents.missing.len()) as u64;
+    if unreported {
+        shared.metrics.missed("check", n);
+    }
+    warn!("content_drift", {
+        "projectId": pid, "changed": contents.changed.len(),
+        "missing": contents.missing.len(), "queued": queued,
+    });
+    out
+}
+
+/// Files a whole-project run changed (rows added, rewritten or deleted);
+/// `None` when its result does not say (a fresh build writes every file).
+fn files_changed(result: &serde_json::Value) -> Option<u64> {
+    let native = &result["native"];
+    match native["outcome"].as_str() {
+        Some("unchanged") => Some(0),
+        Some("updated") => native["changedFiles"].as_u64(),
+        Some(_) => None,
+        // The compatibility worker: WrongStack's own count of parsed files.
+        None => result["filesIndexed"].as_u64(),
+    }
 }
 
 async fn record_failure(shared: &Arc<Shared>, project_id: &str, msg: &str) {

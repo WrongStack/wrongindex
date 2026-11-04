@@ -308,6 +308,7 @@ pub fn samples() -> Value {
         next_retry_ms: Some(1_793_600_900_000),
         parked: true,
         last_check: None,
+        last_verified_ms: None,
     };
     let enums = json!({
         "ErrorCode": ERROR_CODES

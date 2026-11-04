@@ -221,6 +221,7 @@
       "nativeMemoryMb": 0,
       "parallelJobs": 2,
       "paused": false,
+      "reconcileMinutes": 15,
       "sessionGraceSeconds": 120,
       "watchDebounceMs": 400,
       "watchMaxWaitMs": 2000,

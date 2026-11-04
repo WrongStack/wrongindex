@@ -499,6 +499,9 @@ async fn the_scheduled_check_finds_damage_nobody_asked_about() {
     assert_eq!(first["result"]["verdict"], "compatible", "{first}");
     assert_eq!(first["result"]["integrity"]["ok"], true, "{first}");
     assert!(first["completedAtMs"].as_i64().is_some(), "{first}");
+    // Every indexed file read and compared, all agreeing.
+    assert_eq!(first["result"]["contents"]["checked"], 121, "{first}");
+    assert_eq!(first["result"]["contents"]["changed"], 0, "{first}");
 
     {
         let conn = rusqlite::Connection::open(index_dir.join("index.db")).unwrap();

@@ -485,6 +485,12 @@ pub struct ProjectStatus {
     /// own consistency check), asked for or scheduled (`integrityCheckHours`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_check: Option<JobRecord>,
+    /// When a whole-project run (full, reconcile or rebuild; asked for, the
+    /// watcher's, or periodic) last went through: the index then agreed with
+    /// the checkout. `lastIndexedMs` is the last run of any kind, a run on a
+    /// few paths included.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_verified_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -677,6 +683,10 @@ pub struct DaemonSettings {
     /// owns (SQLite's own check of every page and of the full-text index);
     /// 0 = only when asked.
     pub integrity_check_hours: u64,
+    /// Minutes between periodic reconciliations of each watched project
+    /// (a whole-project run that finds what the watcher never reported);
+    /// 0 = off.
+    pub reconcile_minutes: u64,
 }
 
 impl Default for DaemonSettings {
@@ -691,6 +701,7 @@ impl Default for DaemonSettings {
             watch_park_after_failures: 8,
             paused: false,
             integrity_check_hours: 24,
+            reconcile_minutes: 15,
         }
     }
 }
@@ -723,6 +734,7 @@ impl DaemonSettings {
             100,
         )?;
         range("integrityCheckHours", self.integrity_check_hours, 0, 720)?;
+        range("reconcileMinutes", self.reconcile_minutes, 0, 1_440)?;
         Ok(())
     }
 }

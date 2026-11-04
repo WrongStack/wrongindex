@@ -108,7 +108,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-200..203 | Projects, leases, watcher, dirty sets | Done | G03/G04 |
 | WI-204 | Fair scheduler, bounded slots | Done | `tests/fair_queue.rs` (a stalled project holds one slot while another project's job finishes); `parallelJobs` 1-8; per-run memory cap; bounded queue (`QUEUE_SATURATED`); soak G11 |
 | WI-205, WI-206 | Discovery, attach scan | Done | G14, G03 |
-| WI-207 | Overflow, restart, sleep/resume, root restore | Done | Restart, overflow and root loss/restore tested (`watch_root.rs`); suspend detection unit-tested; a real sleep/resume passed (M04, 2026-11-04) |
+| WI-207 | Overflow, restart, sleep/resume, root restore, periodic reconciliation | Done | Restart, overflow and root loss/restore tested (`watch_root.rs`); suspend detection unit-tested; a real sleep/resume passed (M04, 2026-11-04). Indexing-pipeline §10's periodic policy (2026-11-04): an edit whose events were lost is found by the periodic reconciliation (`reconcileMinutes`), a same-size rewrite with the old timestamp - which Git and so a whole-project run take for unchanged - by the check's file comparison, and a restore under a watched project reconciles it (`tests/reconcile.rs`) |
 | WI-208 | Cancel, deadlines, retry, circuit | Done | Cancel and deadlines; backoff 2-60 s; parking after `watchParkAfterFailures` failures, reported in status and the desktop, closed by an explicit success (`tests/watch_circuit.rs`) |
 | WI-209 | Metrics, logs, quotas | Done | G03 |
 | WI-300..302 | Compatibility worker, routing, read ops | Done | G08 (671/671 operations identical through the daemon), G09 |

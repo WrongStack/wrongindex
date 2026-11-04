@@ -57,6 +57,12 @@ struct Inner {
     durations: BTreeMap<String, Series>,
     /// Native phase durations.
     phases: BTreeMap<String, Series>,
+    /// Whole-project reconciliations by reason (attach, resumed,
+    /// event_queue_overflow, periodic, ...).
+    reconciliations: BTreeMap<String, u64>,
+    /// Changes no watcher event had reported, by who found them
+    /// (`periodic` reconciliation, content `check`): runs and files.
+    missed: BTreeMap<String, (u64, u64)>,
 }
 
 #[derive(Default)]
@@ -88,6 +94,27 @@ impl Metrics {
         }
     }
 
+    /// A whole-project reconciliation was sent (reasons are a fixed set in
+    /// the code; bounded anyway).
+    pub fn reconciliation(&self, reason: &str) {
+        if let Ok(mut g) = self.inner.lock()
+            && reason.len() <= 64
+            && (g.reconciliations.len() < 64 || g.reconciliations.contains_key(reason))
+        {
+            *g.reconciliations.entry(reason.to_string()).or_default() += 1;
+        }
+    }
+
+    /// `files` changed files that no watcher event had reported, found by
+    /// `by` (`periodic` or `check`).
+    pub fn missed(&self, by: &'static str, files: u64) {
+        if let Ok(mut g) = self.inner.lock() {
+            let e = g.missed.entry(by.to_string()).or_default();
+            e.0 += 1;
+            e.1 += files;
+        }
+    }
+
     pub fn snapshot(&self) -> Value {
         let Ok(g) = self.inner.lock() else {
             return json!({});
@@ -96,6 +123,10 @@ impl Metrics {
             "jobs": g.jobs,
             "jobDurations": g.durations.iter().map(|(k, s)| (k.clone(), s.summary())).collect::<BTreeMap<_, _>>(),
             "nativePhases": g.phases.iter().map(|(k, s)| (k.clone(), s.summary())).collect::<BTreeMap<_, _>>(),
+            "reconciliations": g.reconciliations,
+            "missedChanges": g.missed.iter().map(|(k, (runs, files))| {
+                (k.clone(), json!({"runs": runs, "files": files}))
+            }).collect::<BTreeMap<_, _>>(),
         })
     }
 }
@@ -113,7 +144,16 @@ mod tests {
         m.job_finished("full", "failed", 5);
         m.phase("discover", 100);
         m.phase(&"x".repeat(65), 1);
+        m.reconciliation("periodic");
+        m.reconciliation("periodic");
+        m.reconciliation("attach");
+        m.missed("periodic", 3);
+        m.missed("periodic", 1);
         let s = m.snapshot();
+        assert_eq!(s["reconciliations"]["periodic"], 2);
+        assert_eq!(s["reconciliations"]["attach"], 1);
+        assert_eq!(s["missedChanges"]["periodic"]["runs"], 2);
+        assert_eq!(s["missedChanges"]["periodic"]["files"], 4);
         assert_eq!(s["jobs"]["full"]["succeeded"], 4);
         assert_eq!(s["jobs"]["full"]["failed"], 1);
         assert_eq!(s["jobDurations"]["full"]["count"], 5);

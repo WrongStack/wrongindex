@@ -6,6 +6,7 @@
 
 pub mod backup;
 pub mod content_hash;
+pub mod contents;
 pub mod git_containment;
 pub mod inspect;
 pub mod integrity;

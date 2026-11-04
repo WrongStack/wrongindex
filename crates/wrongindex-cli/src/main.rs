@@ -875,6 +875,16 @@ async fn project(root: &DataRoot, action: ProjectAction, json: bool) -> Outcome 
                         j.state.as_str()
                     );
                 }
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_millis() as i64);
+                if let Some(at) = s.last_verified_ms {
+                    println!("  verified:   {} (whole-project run)", ago(now, at));
+                }
+                if let Some(j) = &s.last_check {
+                    let at = j.completed_at_ms.unwrap_or(j.admitted_at_ms);
+                    println!("  checked:    {} ({})", ago(now, at), j.state.as_str());
+                }
             }
             Ok(exit_code::SUCCESS)
         }
@@ -1167,6 +1177,7 @@ fn print_inspection_summary(r: &Value) {
                 );
             }
         }
+        print_contents(&r["contents"]);
         if let Some(findings) = r["findings"].as_array() {
             for f in findings {
                 println!(
@@ -1177,6 +1188,51 @@ fn print_inspection_summary(r: &Value) {
                 );
             }
         }
+    }
+}
+
+/// How long ago `at_ms` was, roughly.
+fn ago(now_ms: i64, at_ms: i64) -> String {
+    let s = (now_ms - at_ms).max(0) / 1000;
+    match s {
+        0..60 => format!("{s} s ago"),
+        60..3_600 => format!("{} min ago", s / 60),
+        3_600..86_400 => format!("{} h ago", s / 3_600),
+        _ => format!("{} days ago", s / 86_400),
+    }
+}
+
+/// A check's content verification (every indexed file read and compared).
+fn print_contents(c: &Value) {
+    if !c.is_object() {
+        return;
+    }
+    if let Some(e) = c["error"].as_str() {
+        println!("  contents: not compared ({e})");
+        return;
+    }
+    let (changed, missing) = (
+        c["changed"].as_u64().unwrap_or(0),
+        c["missing"].as_u64().unwrap_or(0),
+    );
+    if changed + missing == 0 {
+        println!(
+            "  contents: {} files as indexed ({} ms)",
+            c["checked"], c["durationMs"]
+        );
+        return;
+    }
+    println!(
+        "  contents: {changed} changed and {missing} missing of {} files since they were indexed{}",
+        c["checked"].as_u64().unwrap_or(0) + missing,
+        if c["queued"] == true {
+            "; queued for indexing"
+        } else {
+            ""
+        }
+    );
+    for f in c["sample"].as_array().into_iter().flatten() {
+        println!("    {}", f.as_str().unwrap_or("?"));
     }
 }
 

@@ -50,7 +50,8 @@ const SERVICE_FIELDS = [
   { key: 'sessionGraceSeconds', label: 'Keep watching after the last client', unit: 's', min: 0, max: 3600 },
   { key: 'backupKeep', label: 'Index backups kept per project', unit: '', min: 1, max: 20 },
   { key: 'watchParkAfterFailures', label: 'Park a project after failed runs in a row', unit: '', min: 2, max: 100, note: 'A parked project is retried once every 15 minutes until a run succeeds.' },
-  { key: 'integrityCheckHours', label: 'Check owned indexes every', unit: 'h', min: 0, max: 720, note: "SQLite's own check of every page and of the full-text index, read-only (about 2 s for a 340 MB index). 0 = only when you use Check index." },
+  { key: 'integrityCheckHours', label: 'Check owned indexes every', unit: 'h', min: 0, max: 720, note: "SQLite's own check of every page and of the full-text index, and every indexed file read and compared with what was indexed; files that differ are indexed again. Read-only (a few seconds for a large project). 0 = only when you use Check index." },
+  { key: 'reconcileMinutes', label: 'Reconcile watched projects every', unit: 'min', min: 0, max: 1440, note: "A whole-project run that finds changes the watcher never reported (a network drive, a lost event). Nothing is written when nothing changed. 0 = off." },
 ];
 const ACTIVITY_CAP = 200;
 
@@ -444,6 +445,9 @@ function detailView() {
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
+      el('div', { class: 'k' }, 'Last verified'), el('div', {}, s.lastVerifiedMs
+        ? `${when(s.lastVerifiedMs)} · whole project`
+        : el('span', { class: 'note' }, 'Not yet')),
       el('div', { class: 'k' }, 'Written by'), el('div', {}, BACKEND[p.backend] ?? p.backend),
       el('div', { class: 'k' }, 'Checkout'), el('div', { class: 'mono' }, p.checkoutRoot),
       el('div', { class: 'k' }, 'Index directory'), el('div', { class: 'mono' }, p.indexDir),
@@ -534,7 +538,25 @@ function integrityCell(j) {
     return el('div', { class: 'error' }, `Damaged${what ? `: ${what}` : ''} · ${at}`);
   }
   if (!i) return el('div', {}, `${r.verdict ?? 'checked'} · ${at}`);
-  return el('div', {}, `Passed · ${at} · ${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)}`);
+  return el('div', {}, `Passed · ${at} · ${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)}`,
+    contentsNote(r.contents));
+}
+
+/** A check's comparison of every indexed file with what was indexed. */
+function contentsText(c) {
+  if (!c) return '';
+  if (c.error) return `files not compared: ${c.error}`;
+  const off = (c.changed ?? 0) + (c.missing ?? 0);
+  if (!off) return `${c.checked} files as indexed`;
+  const parts = [c.changed ? `${c.changed} changed` : '', c.missing ? `${c.missing} missing` : ''].filter(Boolean).join(', ');
+  return `${parts} since indexed${c.queued ? ' — being indexed again' : ''}`;
+}
+
+function contentsNote(c) {
+  const t = contentsText(c);
+  if (!t) return null;
+  const off = (c.changed ?? 0) + (c.missing ?? 0);
+  return el('div', { class: off && !c.queued ? 'error' : 'note' }, t);
 }
 
 /** A plain next step for an error message (compatibility §, plan 2.4). */
@@ -683,7 +705,7 @@ function jobsTable(jobs) {
     el('thead', {}, el('tr', {}, ...['Job', 'Kind', 'State', 'Admitted', 'Finished', 'Result', ''].map(th))),
     el('tbody', {}, jobs.map((j) => el('tr', {},
       el('td', { class: 'mono' }, j.jobId),
-      el('td', {}, j.params?.scheduled ? `${j.kind} (scheduled)` : j.kind),
+      el('td', {}, j.params?.scheduled ? `${j.kind} (scheduled)` : j.params?.periodic ? `${j.kind} (periodic)` : j.kind),
       el('td', {}, badge(j.state, {})),
       el('td', {}, when(j.admittedAtMs)),
       el('td', {}, when(j.completedAtMs)),
@@ -702,7 +724,8 @@ function jobSummary(j) {
   if (!r) return '';
   if (r.verdict) {
     const i = r.integrity;
-    return `verdict ${r.verdict}${i ? (i.ok ? ` · SQLite check passed (${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)})` : ' · SQLite check failed') : ''}`;
+    const files = contentsText(r.contents);
+    return `verdict ${r.verdict}${i ? (i.ok ? ` · SQLite check passed (${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)})` : ' · SQLite check failed') : ''}${files ? ` · ${files}` : ''}`;
   }
   if (r.restoredFrom) return `restored · generation ${r.generation}`;
   if (r.native) {

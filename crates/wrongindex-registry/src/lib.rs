@@ -603,6 +603,24 @@ impl Registry {
             .map_err(db_err)
     }
 
+    /// The project's newest successful whole-project run (full, reconcile or
+    /// rebuild): the last time the index was found to agree with the
+    /// checkout.
+    pub fn latest_verification(&self, project_id: &str) -> Result<Option<JobRecord>, ErrorBody> {
+        self.conn
+            .query_row(
+                &format!(
+                    "SELECT {JOB_COLUMNS} FROM jobs WHERE project_id = ?1
+                       AND kind IN ('full', 'reconcile', 'rebuild') AND state = 'succeeded'
+                     ORDER BY completed_at_ms DESC, job_id LIMIT 1"
+                ),
+                params![project_id],
+                job_from_row,
+            )
+            .optional()
+            .map_err(db_err)
+    }
+
     /// Queued jobs in admission order (FIFO).
     pub fn queued_jobs(&self) -> Result<Vec<JobRecord>, ErrorBody> {
         let mut stmt = self
@@ -695,11 +713,15 @@ impl Registry {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(db_err)?;
-        // Health checks are counted apart: a day of watcher edits must not
-        // push a project's last check out of its history.
+        // Health checks and whole-project runs are counted apart: a day of
+        // watcher edits must not push a project's last check or last
+        // verification out of its history.
         let old_jobs = "SELECT job_id FROM (
                SELECT job_id, ROW_NUMBER() OVER (
-                 PARTITION BY project_id, kind = 'check'
+                 PARTITION BY project_id, CASE
+                   WHEN kind = 'check' THEN 1
+                   WHEN kind IN ('full', 'reconcile', 'rebuild') THEN 2
+                   ELSE 0 END
                  ORDER BY admitted_at_ms DESC, job_id DESC) AS rn
                FROM jobs WHERE state IN ('succeeded', 'failed', 'canceled'))
              WHERE rn > ?1";
@@ -1373,26 +1395,34 @@ mod tests {
         assert_eq!(reg.prune_history(2, 500).unwrap().0, 0);
     }
 
-    /// A day of watcher edits does not push the last health check out.
+    /// A day of watcher edits does not push the last health check or the
+    /// last whole-project run out.
     #[test]
-    fn the_last_check_outlives_many_edits() {
+    fn the_last_check_and_verification_outlive_many_edits() {
         let tmp = tempfile::tempdir().unwrap();
         let mut reg = Registry::open_in_memory().unwrap();
         let (p, _) = reg
             .register_project(&params(tmp.path(), &tmp.path().join("idx")))
             .unwrap();
-        let mut run = |kind| {
+        let mut run = |kind, ok: bool| {
             let j = reg
                 .admit_job(&p.project_id, kind, &json!({}), "t", None)
                 .unwrap()
                 .job;
             assert!(reg.mark_running(&j.job_id).unwrap());
-            reg.complete_job(&j.job_id, Ok(json!({}))).unwrap();
+            let outcome = if ok {
+                Ok(json!({}))
+            } else {
+                Err(ErrorBody::new(ErrorCode::Internal, "no"))
+            };
+            reg.complete_job(&j.job_id, outcome).unwrap();
             std::thread::sleep(std::time::Duration::from_millis(2));
             j.job_id
         };
-        let check = run(JobKind::Check);
-        let edits: Vec<String> = (0..5).map(|_| run(JobKind::Incremental)).collect();
+        let check = run(JobKind::Check, true);
+        let verified = run(JobKind::Reconcile, true);
+        let failed = run(JobKind::Full, false);
+        let edits: Vec<String> = (0..5).map(|_| run(JobKind::Incremental, true)).collect();
         assert_eq!(
             reg.latest_job_of_kind(&p.project_id, JobKind::Check)
                 .unwrap()
@@ -1400,14 +1430,19 @@ mod tests {
                 .job_id,
             check
         );
+        // A failed whole-project run verified nothing.
+        let last = reg.latest_verification(&p.project_id).unwrap().unwrap();
+        assert_eq!(last.job_id, verified);
         assert_eq!(reg.prune_history(2, 500).unwrap().0, 3);
         assert_eq!(reg.get_job(&check).unwrap().state, JobState::Succeeded);
+        assert_eq!(reg.get_job(&verified).unwrap().state, JobState::Succeeded);
+        assert_eq!(reg.get_job(&failed).unwrap().state, JobState::Failed);
         assert_eq!(
             reg.get_job(&edits[0]).unwrap_err().code,
             ErrorCode::JobNotFound
         );
         assert_eq!(
-            reg.latest_job_of_kind(&p.project_id, JobKind::Full)
+            reg.latest_job_of_kind(&p.project_id, JobKind::Rebuild)
                 .unwrap(),
             None
         );

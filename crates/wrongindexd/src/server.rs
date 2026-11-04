@@ -634,7 +634,7 @@ async fn stream_events<C>(
 /// Observable status of one project (registry + watcher state).
 async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStatus, ErrorBody> {
     let p2 = pid.clone();
-    let (project, last_job, ownership, publication, last_check) = shared
+    let (project, last_job, ownership, publication, last_check, verified) = shared
         .registry(move |r| {
             Ok((
                 r.get_project(&p2)?,
@@ -642,11 +642,13 @@ async fn project_status(shared: &Arc<Shared>, pid: String) -> Result<ProjectStat
                 r.ownership_status(&p2)?,
                 r.publication_state(&p2)?,
                 r.latest_job_of_kind(&p2, JobKind::Check)?,
+                r.latest_verification(&p2)?,
             ))
         })
         .await?;
     let mut status = status_from(shared, project, last_job, ownership, publication);
     status.last_check = last_check;
+    status.last_verified_ms = verified.and_then(|j| j.completed_at_ms);
     Ok(status)
 }
 
@@ -696,8 +698,9 @@ fn status_from(
         consecutive_failures: ws.consecutive_failures,
         next_retry_ms: ws.retry_in_ms.map(|ms| now_ms() + ms as i64),
         parked: ws.parked,
-        // Filled in where it is shown (not part of `project.state`).
+        // Filled in where they are shown (not part of `project.state`).
         last_check: None,
+        last_verified_ms: None,
     }
 }
 
@@ -1258,6 +1261,7 @@ async fn dispatch_inner(
                 "backupKeep": settings.backup_keep,
                 "watchParkAfterFailures": settings.watch_park_after_failures,
                 "integrityCheckHours": settings.integrity_check_hours,
+                "reconcileMinutes": settings.reconcile_minutes,
             });
             Ok(m)
         }

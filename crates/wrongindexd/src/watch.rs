@@ -396,6 +396,10 @@ impl Supervisor {
                 if w.watcher.is_none() {
                     return;
                 }
+                #[cfg(debug_assertions)]
+                if events_lost() {
+                    return;
+                }
                 if rescan || w.overflowed.swap(false, Ordering::SeqCst) {
                     w.dirty.mark_reconcile(
                         if rescan {
@@ -508,6 +512,59 @@ impl Supervisor {
         }
     }
 
+    /// Watched, its first reconciliation done, nothing pending, in flight,
+    /// failing, waiting for disk space or known damaged: a project the
+    /// watcher believes current.
+    pub fn settled(&self, project_id: &str) -> bool {
+        self.projects.lock().is_ok_and(|g| {
+            g.get(project_id).is_some_and(|w| {
+                w.watcher.is_some()
+                    && w.initial_done
+                    && w.dirty.is_empty()
+                    && w.inflight.is_none()
+                    && w.dirty.failures() == 0
+                    && w.disk_wait.is_none()
+                    && w.corrupt.is_none()
+            })
+        })
+    }
+
+    /// Files found to differ from the index go to the watcher's next batch
+    /// (WrongStack's targeted run, as if their events had come). `false`
+    /// when the project is not watched.
+    pub fn mark_paths<'a>(
+        &self,
+        project_id: &str,
+        paths: impl Iterator<Item = &'a String>,
+    ) -> bool {
+        let cfg = self.debounce();
+        let Ok(mut p) = self.projects.lock() else {
+            return false;
+        };
+        let Some(w) = p.get_mut(project_id).filter(|w| w.watcher.is_some()) else {
+            return false;
+        };
+        let now = Instant::now();
+        for path in paths {
+            w.dirty.mark(path.clone(), now, &cfg);
+        }
+        true
+    }
+
+    /// A watched project re-reconciles with its checkout (say an older index
+    /// was put back). `false` when it is not watched.
+    pub fn mark_reconcile(&self, project_id: &str, reason: &str) -> bool {
+        let Ok(mut p) = self.projects.lock() else {
+            return false;
+        };
+        let Some(w) = p.get_mut(project_id).filter(|w| w.watcher.is_some()) else {
+            return false;
+        };
+        w.dirty.mark_reconcile(reason, Instant::now());
+        info!("watch_reconcile", {"projectId": project_id, "reason": reason});
+        true
+    }
+
     /// Every attached project re-reconciles (e.g. after a suspend).
     pub fn mark_all_reconcile(&self, reason: &str) {
         let now = Instant::now();
@@ -533,6 +590,15 @@ impl Supervisor {
     }
 }
 
+/// Test hook, debug builds only: while the file named by
+/// `WRONGINDEX_DEBUG_DROP_EVENTS_FILE` exists, watch events are lost without
+/// a word, as an OS queue that overflowed silently or a share that never
+/// reports would lose them.
+#[cfg(debug_assertions)]
+fn events_lost() -> bool {
+    std::env::var_os("WRONGINDEX_DEBUG_DROP_EVENTS_FILE").is_some_and(|f| Path::new(&f).exists())
+}
+
 /// The supervisor checks in about once a second; a wall-clock gap far
 /// beyond that means the machine slept (or the clock jumped).
 const SUSPEND_GAP: Duration = Duration::from_secs(30);
@@ -554,7 +620,8 @@ pub async fn run(
     let mut tick = tokio::time::interval(Duration::from_millis(50));
     let mut last_reconcile = Instant::now() - Duration::from_secs(10);
     let mut last_disk = Instant::now() - DISK_CHECK;
-    let mut last_schedule = Instant::now();
+    let mut last_check_round = Instant::now();
+    let mut last_reconcile_round = Instant::now();
     let mut last_wall = std::time::SystemTime::now();
     loop {
         tokio::select! {
@@ -580,12 +647,20 @@ pub async fn run(
                         last_disk = Instant::now();
                     }
                     check_disk(&shared, &projects, monitor_due).await;
-                    if let Some(s) = crate::schedule::Schedule::from_hours(
-                        shared.settings.get().integrity_check_hours,
-                    ) && last_schedule.elapsed() >= s.round()
+                    let settings = shared.settings.get();
+                    if let Some(s) =
+                        crate::schedule::Schedule::checks(settings.integrity_check_hours)
+                        && last_check_round.elapsed() >= s.round()
                     {
-                        last_schedule = Instant::now();
+                        last_check_round = Instant::now();
                         schedule_checks(&shared, &projects, s).await;
+                    }
+                    if let Some(s) =
+                        crate::schedule::Schedule::reconciles(settings.reconcile_minutes)
+                        && last_reconcile_round.elapsed() >= s.round()
+                    {
+                        last_reconcile_round = Instant::now();
+                        schedule_reconciles(&shared, &projects, s).await;
                     }
                     crate::server::publish_state_changes(&shared).await;
                 }
@@ -765,7 +840,8 @@ async fn schedule_checks(
             owned: true,
             known_damaged: shared.watch.corrupt(&pid).is_some(),
             busy: watcher_busy || queued,
-            last_check: last_check.as_ref(),
+            last: last_check.as_ref(),
+            jitter_ms: 0,
         };
         if !crate::schedule::due(
             s,
@@ -781,7 +857,7 @@ async fn schedule_checks(
                 r.admit_job(
                     &p3,
                     JobKind::Check,
-                    &crate::schedule::params(),
+                    &crate::schedule::check_params(),
                     "schedule",
                     None,
                 )
@@ -794,6 +870,84 @@ async fn schedule_checks(
             }
             Err(e) => {
                 warn!("integrity_check_not_scheduled", {"projectId": pid, "error": e.message})
+            }
+        }
+        return;
+    }
+}
+
+/// Admit the periodic reconciliation that is due first, if any (see
+/// `schedule`): one per round, only for a project the watcher believes
+/// current.
+async fn schedule_reconciles(
+    shared: &Arc<Shared>,
+    projects: &[wrongindex_contracts::ProjectRecord],
+    s: crate::schedule::Schedule,
+) {
+    if shared.watch.is_paused() {
+        return;
+    }
+    let running: Vec<String> = shared
+        .progress
+        .lock()
+        .map(|p| p.keys().cloned().collect())
+        .unwrap_or_default();
+    for p in projects {
+        let pid = p.project_id.clone();
+        if !shared.watch.settled(&pid) || running.contains(&pid) || !shared.owners.holds(&pid) {
+            continue;
+        }
+        let p2 = pid.clone();
+        let Ok((verified, attempt, queued)) = shared
+            .registry(move |r| {
+                Ok((
+                    r.latest_verification(&p2)?,
+                    r.latest_job_of_kind(&p2, JobKind::Reconcile)?,
+                    r.latest_job(&p2)?
+                        .is_some_and(|j| matches!(j.state, JobState::Queued | JobState::Running)),
+                ))
+            })
+            .await
+        else {
+            continue;
+        };
+        let candidate = crate::schedule::Candidate {
+            owned: true,
+            known_damaged: false,
+            busy: queued,
+            // A failed attempt counts too: no retry before the next period.
+            last: crate::schedule::later(verified.as_ref(), attempt.as_ref()),
+            jitter_ms: s.jitter_ms(&pid),
+        };
+        if !crate::schedule::due(
+            s,
+            shared.started_at_ms,
+            wrongindex_registry::now_ms(),
+            &candidate,
+        ) {
+            continue;
+        }
+        let p3 = pid.clone();
+        let admitted = shared
+            .registry(move |r| {
+                let fence = r.fence(&p3)?;
+                r.admit_job(
+                    &p3,
+                    JobKind::Reconcile,
+                    &crate::schedule::reconcile_params(&fence),
+                    "periodic",
+                    None,
+                )
+            })
+            .await;
+        match admitted {
+            Ok(a) => {
+                shared.metrics.reconciliation("periodic");
+                info!("periodic_reconcile_scheduled", {"projectId": pid, "jobId": a.job.job_id});
+                shared.wake_worker.notify_one();
+            }
+            Err(e) => {
+                warn!("periodic_reconcile_not_scheduled", {"projectId": pid, "error": e.message})
             }
         }
         return;
@@ -1008,7 +1162,8 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
         })
         .unwrap_or_default();
     for (pid, batch) in ready {
-        let kind = if batch.reconcile.is_some() {
+        let kind = if let Some(reason) = &batch.reconcile {
+            shared.metrics.reconciliation(reason);
             JobKind::Full
         } else {
             JobKind::Incremental
