@@ -80,7 +80,7 @@ Manual items. The runner always records these as `NOT RUN` until a person does t
 | M01 | Screen reader pass over every desktop screen | WI-407 | Needs a person with NVDA or Narrator |
 | M02 | Native per-monitor DPI pass on a mixed-DPI setup | WI-407 | Needs mixed-DPI hardware |
 | M03 | Code signing of the installer and binaries | WI-703 | WAIVED by the owner (2026-11-03): releases ship unsigned; integrity is the SHA-256 check (install.ps1, `self-update`) and the build-provenance attestation |
-| M04 | Real sleep/resume cycle with watched projects | WI-207 | Needs a machine that is put to sleep. The resume path (a 30 s wall-clock gap triggers reconciliation) is unit-tested. |
+| M04 | Real sleep/resume cycle with watched projects | WI-207 | Needs a machine that is put to sleep (the resume path, a 30 s wall-clock gap triggering reconciliation, is unit-tested). **PASS** 2026-11-04, Windows 11, local, a debug build of `6cc0bea`: a detached probe with three pinned projects (TS, Rust, mixed) through a real sleep of about 7 hours (01:58 -> 08:57). The same service process answered afterwards; it logged `watch_reconcile_all` (`resumed`, 3 projects); edits made after the resume were searchable in 0.9, 4.1 and 1.9 s; all three projects were `current` at generation 2, `watchHealth: native`, no error ([status.md](status.md)). |
 | M05 | Install on a clean Windows machine without developer tools | WI-700 | Needs a clean machine or VM (G19 installs on the build machine). Run 2026-11-03 in Windows Sandbox: the published v0.1.0 **FAILS** (needs the Visual C++ runtime, fixed by linking it statically; G21 now refuses such a binary); the published v0.1.1 **PASSES** through the documented one-liner, and so does running the one-liner again over a v0.1.0 that does not start. Details in [status.md](status.md), row M05. |
 
 ## 4. Requirement matrix
@@ -108,7 +108,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-200..203 | Projects, leases, watcher, dirty sets | Done | G03/G04 |
 | WI-204 | Fair scheduler, bounded slots | Done | `tests/fair_queue.rs` (a stalled project holds one slot while another project's job finishes); `parallelJobs` 1-8; per-run memory cap; bounded queue (`QUEUE_SATURATED`); soak G11 |
 | WI-205, WI-206 | Discovery, attach scan | Done | G14, G03 |
-| WI-207 | Overflow, restart, sleep/resume, root restore | Partial | Restart, overflow and root loss/restore tested (`watch_root.rs`); suspend detection unit-tested; a real sleep/resume is M04 (not run) |
+| WI-207 | Overflow, restart, sleep/resume, root restore | Done | Restart, overflow and root loss/restore tested (`watch_root.rs`); suspend detection unit-tested; a real sleep/resume passed (M04, 2026-11-04) |
 | WI-208 | Cancel, deadlines, retry, circuit | Done | Cancel and deadlines; backoff 2-60 s; parking after `watchParkAfterFailures` failures, reported in status and the desktop, closed by an explicit success (`tests/watch_circuit.rs`) |
 | WI-209 | Metrics, logs, quotas | Done | G03 |
 | WI-300..302 | Compatibility worker, routing, read ops | Done | G08 (671/671 operations identical through the daemon), G09 |
@@ -149,7 +149,7 @@ Differences that are not product behavior: in the SAGE heal test, `relation_stru
 
 ## 6. Not covered by this certification
 
-- The manual items M01-M05.
+- The manual items M01 and M02 (not run). M03 is waived; M04 and M05 passed separately (§3).
 - Platforms other than Windows 11 x64 (L4).
 - WrongStack builds without the adapter, or newer than the baseline: the service refuses profiles it does not know; nothing else is claimed.
 
@@ -190,7 +190,7 @@ Tools: rustc 1.93.0, Bun 1.4.3 (on PATH; the oracle fixtures were generated with
 | G21 Release manifest | PASS | all binaries and the installer `NotSigned` (M03) |
 | M01-M05 | NOT RUN | manual (§3) |
 
-Automated: 21 PASS, 0 FAIL, 0 NOT RUN. Manual: 5 NOT RUN.
+Automated: 21 PASS, 0 FAIL, 0 NOT RUN. Manual: 5 NOT RUN at the time of this run; since then M03 is waived and M04 and M05 passed (§3).
 
 Earlier runs on the way to this one, and what they found:
 
