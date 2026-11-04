@@ -1115,6 +1115,13 @@ async fn dispatch_inner(
                     Err(QueryError::InvalidArgs(m)) => {
                         return Err(ErrorBody::new(ErrorCode::InvalidRequest, m));
                     }
+                    Err(QueryError::Sqlite(e)) if wrongindex_storage::integrity::is_corrupt(&e) => {
+                        let e = crate::damage::corrupt(&format!("the index is damaged ({e})"));
+                        if shared.watch.note_corrupt(&pid, &e) {
+                            warn!("index_corrupt", {"projectId": pid, "error": e.message});
+                        }
+                        return Err(e);
+                    }
                     Err(QueryError::Sqlite(e)) => {
                         return Err(ErrorBody::new(
                             ErrorCode::IndexDegraded,
@@ -1189,6 +1196,11 @@ async fn dispatch_inner(
             }
             if pending {
                 out["publicationPending"] = json!(true);
+            }
+            // An answer from an index SQLite reported damaged (a damaged
+            // full-text index can still answer, wrongly).
+            if let Some(why) = shared.watch.corrupt(&pid) {
+                out["indexCorrupt"] = json!(why);
             }
             Ok(out)
         }

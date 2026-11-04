@@ -532,8 +532,8 @@ fn treesitter_mix_matches_the_wrongstack_oracle() {
 
 /// The native writer replaces the whole file, so it must refuse any existing
 /// index it would not reproduce exactly: one carrying data WrongStack must
-/// preserve, another schema version, or an unreadable file. Each is left
-/// byte for byte; a plain baseline index is still replaced.
+/// preserve, another schema version, or a file that is not a database. Each
+/// is left byte for byte; a plain baseline index is still replaced.
 #[test]
 fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
     let tmp = tempfile::tempdir().unwrap();
@@ -582,10 +582,19 @@ fn rebuild_never_replaces_an_index_it_would_not_reproduce() {
     }
     refused(&older, 2, "has schema version 4");
 
-    // An unreadable file.
+    // A file that is not a database: damaged, never written, and never
+    // "unsupported" (which would hand it to the compatibility worker).
     let broken = fresh("broken");
     std::fs::write(broken.join("index.db"), b"definitely not sqlite").unwrap();
-    refused(&broken, 3, "cannot be read");
+    change(3);
+    match rebuild(&root, &broken) {
+        Err(e) if e.is_corrupt() => assert!(e.to_string().contains("not a database"), "{e}"),
+        other => panic!("expected a damaged-index refusal, got {other:?}"),
+    }
+    assert_eq!(
+        std::fs::read(broken.join("index.db")).unwrap(),
+        b"definitely not sqlite"
+    );
 
     // A baseline index is still written (updated in place).
     let plain = fresh("plain");
@@ -788,6 +797,105 @@ fn maintenance_rebuild_never_replaces_a_newer_schema() {
     let r = rebuild_replacing(&root, &older).unwrap();
     let backup = r.backup.expect("backup kept");
     assert_eq!(std::fs::read(&backup).unwrap(), before);
+}
+
+/// A damaged index (architecture §9 "Corruption"): no run writes it, and the
+/// error says so (it is not "unsupported", which would hand it to the
+/// compatibility worker); a maintenance rebuild keeps its bytes as the
+/// backup and checks the index it puts in place.
+#[test]
+fn a_damaged_index_is_never_written_and_a_rebuild_keeps_it() {
+    use wrongindex_engine::native::update_files;
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let root = base.join("p");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("package.json"),
+        r#"{"name":"p","version":"1.0.0"}"#,
+    )
+    .unwrap();
+    for i in 0..60 {
+        let body: String = (0..20)
+            .map(|j| {
+                format!("export function fn_{i}_{j}(a: number): number {{ return a + {j}; }}\n")
+            })
+            .collect();
+        std::fs::write(root.join(format!("src/m{i}.ts")), body).unwrap();
+    }
+    let index = base.join("idx");
+    std::fs::create_dir_all(&index).unwrap();
+    assert!(matches!(
+        rebuild(&root, &index).unwrap(),
+        Rebuild::Written(_)
+    ));
+    // As WrongStack keeps it: WAL mode, the log folded in at close.
+    let db = index.join("index.db");
+    assert!(!index.join("index.db-wal").exists());
+    let mut bytes = std::fs::read(&db).unwrap();
+    assert_eq!(bytes[18], 2, "WAL mode");
+    let page = 4096;
+    let pages = bytes.len() / page;
+    assert!(pages > 50, "{pages} pages");
+    for (n, b) in bytes[page * (pages * 2 / 5)..page * (pages * 3 / 5)]
+        .iter_mut()
+        .enumerate()
+    {
+        *b = (n as u8).wrapping_mul(31).wrapping_add(7);
+    }
+    std::fs::write(&db, &bytes).unwrap();
+    std::fs::write(root.join("src/m1.ts"), "export const changed = 1;\n").unwrap();
+
+    for (what, r) in [
+        ("full", rebuild(&root, &index).map(|_| ())),
+        (
+            "targeted",
+            update_files(
+                &root,
+                &index,
+                &[root.join("src/m1.ts").display().to_string()],
+            )
+            .map(|_| ()),
+        ),
+    ] {
+        match r {
+            Err(e) if e.is_corrupt() => {
+                assert!(e.to_string().contains("damaged"), "{what}: {e}")
+            }
+            other => panic!("{what}: expected a damaged-index error, got {other:?}"),
+        }
+        let now = std::fs::read(&db).unwrap();
+        let first_diff = now.iter().zip(&bytes).position(|(a, b)| a != b);
+        assert!(
+            now == bytes,
+            "{what} wrote the damaged index: {} -> {} bytes, first difference at {first_diff:?}",
+            bytes.len(),
+            now.len()
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(&index).unwrap().count(),
+        1,
+        "nothing else written"
+    );
+
+    // The service's check (read-only) names the damage, and the rebuild
+    // after it still goes through.
+    let checked = wrongindex_storage::inspect_index_checked(&db);
+    assert_eq!(
+        checked.verdict,
+        wrongindex_storage::Verdict::Corrupt,
+        "{checked:?}"
+    );
+    assert_eq!(std::fs::read(&db).unwrap(), bytes, "the check wrote");
+    let r = rebuild_replacing(&root, &index).unwrap();
+    assert!(r.integrity.ok, "{:?}", r.integrity);
+    let backup = PathBuf::from(r.backup.expect("damaged file kept"));
+    assert_eq!(std::fs::read(&backup).unwrap(), bytes, "kept byte for byte");
+    let check = wrongindex_storage::integrity::quick_check(&db).unwrap();
+    assert!(check.ok, "{check:?}");
+    let files = index_files(&index);
+    assert_eq!(files.len(), 61, "{files:?}");
 }
 
 #[cfg(windows)]

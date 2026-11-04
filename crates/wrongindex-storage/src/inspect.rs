@@ -37,6 +37,10 @@ pub enum Verdict {
     NewerOrUnknownSchema,
     /// Readable SQLite, but not a WrongStack index.
     NotAnIndex,
+    /// SQLite reports the file damaged: a read failed with
+    /// `SQLITE_CORRUPT`, or its own check (`PRAGMA quick_check`, see
+    /// [`crate::integrity`]) found damaged pages or a damaged full-text index.
+    Corrupt,
     /// File exists but cannot be opened/read as SQLite.
     Unreadable,
     /// No `index.db` at the given location.
@@ -100,6 +104,9 @@ pub struct Inspection {
     pub metadata: BTreeMap<String, String>,
     pub unknown_metadata_keys: Vec<String>,
     pub findings: Vec<Finding>,
+    /// SQLite's own check, when one ran ([`inspect_index_checked`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub integrity: Option<crate::integrity::Integrity>,
 }
 
 struct Report {
@@ -121,7 +128,21 @@ pub fn inspect_index(path: &Path) -> Inspection {
     inspect_with_profile(path, baseline_profile())
 }
 
+/// [`inspect_index`] plus SQLite's own consistency check of every page and
+/// of the full-text index ([`crate::integrity`]); reads the whole file, so
+/// it takes time on a large index. A damaged file is [`Verdict::Corrupt`],
+/// except one a newer WrongStack wrote, which stays
+/// [`Verdict::NewerOrUnknownSchema`] (nothing here may replace it), and one
+/// that is not SQLite at all ([`Verdict::Unreadable`]).
+pub fn inspect_index_checked(path: &Path) -> Inspection {
+    inspect_with(path, baseline_profile(), true)
+}
+
 pub fn inspect_with_profile(path: &Path, profile: &Profile) -> Inspection {
+    inspect_with(path, profile, false)
+}
+
+fn inspect_with(path: &Path, profile: &Profile, check: bool) -> Inspection {
     let mut out = Inspection {
         index_path: path.display().to_string(),
         profile_id: profile.id.clone(),
@@ -136,6 +157,7 @@ pub fn inspect_with_profile(path: &Path, profile: &Profile) -> Inspection {
         metadata: BTreeMap::new(),
         unknown_metadata_keys: Vec::new(),
         findings: Vec::new(),
+        integrity: None,
     };
 
     let meta = match std::fs::metadata(path) {
@@ -166,13 +188,37 @@ pub fn inspect_with_profile(path: &Path, profile: &Profile) -> Inspection {
     let mut report = Report {
         findings: Vec::new(),
     };
-    let verdict = match analyze(&conn, profile, &mut out, &mut report) {
+    let mut verdict = match analyze(&conn, profile, &mut out, &mut report) {
         Ok(v) => v,
+        // Damaged pages; a file that is not SQLite at all stays unreadable.
+        Err(e) if e.sqlite_error_code() == Some(rusqlite::ErrorCode::DatabaseCorrupt) => {
+            report.add(Severity::Incompatible, "read_failed", e.to_string());
+            Verdict::Corrupt
+        }
         Err(e) => {
             report.add(Severity::Incompatible, "read_failed", e.to_string());
             Verdict::Unreadable
         }
     };
+    if check {
+        match crate::integrity::check_connection(&conn) {
+            Ok(i) => {
+                if !i.ok {
+                    report.add(
+                        Severity::Incompatible,
+                        "integrity_check_failed",
+                        i.problems.join("; "),
+                    );
+                    if !matches!(verdict, Verdict::NewerOrUnknownSchema | Verdict::Unreadable) {
+                        verdict = Verdict::Corrupt;
+                    }
+                }
+                out.integrity = Some(i);
+            }
+            // Locked or an I/O error: nothing learned about the file.
+            Err(e) => report.add(Severity::Info, "integrity_check_not_run", e.to_string()),
+        }
+    }
     out.findings = report.findings;
     out.verdict = verdict;
     out.write_admissible = verdict.write_admissible();

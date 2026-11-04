@@ -121,7 +121,7 @@ States: **Done** (evidence below), **Partial** (what is missing is named), **Not
 | WI-513 | Large-run publication | Done | G10 |
 | WI-514 | Full native profile certification | Done for the profile in §1 | G06/G07 with the known differences in §5 |
 | WI-515 | Native incremental and targeted writes | Done | G06, G07 |
-| WI-600..605 | Backend switch, faults, soak, maintenance, security review, rollout | Done | G03, G09, G11, G13 |
+| WI-600..605 | Backend switch, faults, soak, maintenance (disk pressure, WAL retention, damaged index with verified rebuild), security review, rollout | Done | G03, G04, G09, G11, G13, G22 |
 | WI-606 | Native process tree | Done with the helper profile | No Bun indexing engine, no per-project daemon (`tests/process_tree.rs`). Python, Go and the tree-sitter languages run WrongStack's parse-only programs as confined children (§1). |
 | WI-700 | Installer | Done | G05, G19; install from GitHub with `install.ps1` / `install.sh` (SHA-256 and attestation checked). M05 (clean machine): PASS for a build from this tree, FAIL for the published v0.1.0 (see §3). |
 | WI-701 | Autostart, upgrade, uninstall | Done | G19; `wrongindex self-update` and Settings > Updates in the desktop (tests in G03; local end-to-end upgrades 0.1.0 -> 0.1.1 from the CLI and from the installed desktop; live from GitHub v0.1.0 -> v0.1.1 with `self-update` and `install.sh`, and the desktop's check; in status.md); PATH entry added and removed, the value restored byte for byte |

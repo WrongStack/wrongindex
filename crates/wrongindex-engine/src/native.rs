@@ -148,9 +148,22 @@ pub enum NativeError {
     Io(#[from] std::io::Error),
     #[error("sqlite: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    /// SQLite reports the index damaged: nothing was written to it.
+    #[error("{0}")]
+    Corrupt(String),
 }
 
 impl NativeError {
+    /// The index is damaged (`SQLITE_CORRUPT`, `SQLITE_NOTADB`): no run can
+    /// go on with it; only a maintenance rebuild or a restore can.
+    pub fn is_corrupt(&self) -> bool {
+        match self {
+            NativeError::Corrupt(_) => true,
+            NativeError::Sqlite(e) => wrongindex_storage::integrity::is_corrupt(e),
+            _ => false,
+        }
+    }
+
     /// The write ran out of disk space: SQLite's `SQLITE_FULL` ("database or
     /// disk is full"; SQLite reports Windows' `ERROR_DISK_FULL` and
     /// `ERROR_HANDLE_DISK_FULL` this way) or a file write that failed with
@@ -820,6 +833,22 @@ pub enum Rebuild {
 /// replacement is refused while the old file has WAL/shared-memory files
 /// (another connection may have it open).
 pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
+    rebuild_unmapped(project_root, index_dir).map_err(damaged)
+}
+
+/// A read of the live index that SQLite reports damaged, wherever in a run
+/// it happens, says so in one way. Nothing was written: an in-place run is
+/// one transaction (rolled back), and a fresh one publishes only at its end.
+fn damaged(e: NativeError) -> NativeError {
+    match e {
+        NativeError::Sqlite(e) if wrongindex_storage::integrity::is_corrupt(&e) => {
+            NativeError::Corrupt(format!("the index is damaged ({e}); nothing was written"))
+        }
+        e => e,
+    }
+}
+
+fn rebuild_unmapped(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeError> {
     stall_point(project_root);
     let db = index_dir.join("index.db");
     // A run that died (crash, kill, power loss) leaves its staging directory
@@ -839,9 +868,13 @@ pub fn rebuild(project_root: &Path, index_dir: &Path) -> Result<Rebuild, NativeE
     // maintenance rebuild.
     if db.exists() {
         let existing = stored_state(&db).map_err(|e| {
-            NativeError::Unsupported(format!(
-                "the existing index cannot be read ({e}); it is left untouched"
-            ))
+            if wrongindex_storage::integrity::is_corrupt(&e) {
+                NativeError::Corrupt(format!("the index is damaged ({e}); nothing was written"))
+            } else {
+                NativeError::Unsupported(format!(
+                    "the existing index cannot be read ({e}); it is left untouched"
+                ))
+            }
         })?;
         match existing {
             // Same files and bytes, and no clean file whose Git stamp a run
@@ -937,7 +970,7 @@ pub fn update_files(
     }
     stall_point(project_root);
     sweep_staging(index_dir);
-    let out = incremental::update_files(project_root, &db, targets)?;
+    let out = incremental::update_files(project_root, &db, targets).map_err(damaged)?;
     Ok(Rebuild::Updated {
         report: out.report,
         changed_files: out.changed_files,
@@ -952,15 +985,23 @@ pub struct Replaced {
     pub report: Report,
     /// Where the previous `index.db` was kept (`None` when there was none).
     pub backup: Option<String>,
+    /// SQLite's check of the new index once it is in place.
+    pub integrity: wrongindex_storage::Integrity,
 }
 
-/// Whether SQLite may have `db` open (its `-wal` or `-shm` exists).
+/// Whether a connection may have `db` open or its `-wal` holds changes (see
+/// `wrongindex_storage::wal::in_use`; what closed read-only connections
+/// leave behind does not count).
 fn in_use(db: &Path) -> Option<PathBuf> {
-    ["-wal", "-shm"].iter().find_map(|suffix| {
-        let mut p = db.as_os_str().to_owned();
-        p.push(suffix);
-        Path::new(&p).exists().then(|| PathBuf::from(p))
-    })
+    wrongindex_storage::wal::in_use(db)
+}
+
+/// Before `db` is renamed over or aside: the empty `-wal` and the `-shm`
+/// closed connections left (a `-wal` that outlived the rename would be handed
+/// to the new file).
+fn clear_leftovers(db: &Path) -> Result<(), NativeError> {
+    wrongindex_storage::wal::remove_leftovers(db)
+        .map_err(|e| NativeError::Busy(format!("{} is in use ({e})", db.display())))
 }
 
 /// Publish the complete database `staged` as `db` (WI-513).
@@ -1028,6 +1069,7 @@ fn publish_staged(staged: &Path, db: &Path) -> Result<(), NativeError> {
                 p.display()
             ))),
             None => {
+                clear_leftovers(db)?;
                 std::fs::rename(staged, db)?;
                 Ok(())
             }
@@ -1055,7 +1097,7 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
         uuid::Uuid::new_v4().simple()
     ));
     first.read_all()?;
-    let result = (|| {
+    let result = (|| -> Result<(Report, Option<String>), NativeError> {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         // Re-checked at the swap: a newer WrongStack may have written it
         // meanwhile (ownership is held, but never rely on that alone).
@@ -1064,10 +1106,7 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
         if !db.exists() {
             fault_point("between-backup-and-publish");
             std::fs::rename(&staged, &db)?;
-            return Ok(Replaced {
-                report,
-                backup: None,
-            });
+            return Ok((report, None));
         }
         let to = index_dir.join(format!("index.db.wrongindex-backup-{}", now_ms()));
         // A readable index is saved and the new one copied in (readers may
@@ -1084,9 +1123,10 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
             })?;
             Ok(c)
         });
+        // Looked at with that connection closed: our own does not count.
         let saved = readable.and_then(|c| {
+            drop(c);
             if in_use(&db).is_none() {
-                drop(c);
                 std::fs::copy(&db, &to).map(|_| ()).map_err(|e| {
                     rusqlite::Error::SqliteFailure(
                         rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
@@ -1094,6 +1134,12 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
                     )
                 })
             } else {
+                let c = Connection::open_with_flags(
+                    &db,
+                    rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+                        | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                )?;
+                c.pragma_update(None, "busy_timeout", 15000)?;
                 c.execute("VACUUM INTO ?1", [to.to_string_lossy()])
                     .map(|_| ())
             }
@@ -1106,17 +1152,28 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
             if let Some(p) = in_use(&db) {
                 return Err(NativeError::Busy(format!("{} exists", p.display())));
             }
+            clear_leftovers(&db)?;
             std::fs::rename(&db, &to)?;
             fault_point("between-backup-and-publish");
             std::fs::rename(&staged, &db)?;
         }
-        Ok(Replaced {
-            report,
-            backup: Some(to.display().to_string()),
-        })
+        Ok((report, Some(to.display().to_string())))
     })();
     let _ = std::fs::remove_dir_all(&staging);
-    result
+    let (report, backup) = result?;
+    // A verified rebuild: the index now in place passes SQLite's own check.
+    let integrity = wrongindex_storage::integrity::quick_check(&db)?;
+    if !integrity.ok {
+        return Err(NativeError::Corrupt(format!(
+            "the rebuilt index failed SQLite's check ({})",
+            integrity.summary()
+        )));
+    }
+    Ok(Replaced {
+        report,
+        backup,
+        integrity,
+    })
 }
 
 /// Maintenance never replaces an index a newer WrongStack wrote (schema
@@ -1755,6 +1812,28 @@ mod tests {
         assert!(!NativeError::from(locked).is_disk_full());
         assert!(!NativeError::Io(std::io::Error::from_raw_os_error(5)).is_disk_full());
         assert!(!NativeError::Busy("x".into()).is_disk_full());
+    }
+
+    #[test]
+    fn a_damaged_index_is_told_apart() {
+        let sqlite = |code| {
+            NativeError::Sqlite(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(code),
+                None,
+            ))
+        };
+        assert!(sqlite(rusqlite::ffi::SQLITE_CORRUPT).is_corrupt());
+        assert!(sqlite(rusqlite::ffi::SQLITE_NOTADB).is_corrupt());
+        assert!(!sqlite(rusqlite::ffi::SQLITE_BUSY).is_corrupt());
+        assert!(!sqlite(rusqlite::ffi::SQLITE_FULL).is_corrupt());
+        assert!(NativeError::Corrupt("x".into()).is_corrupt());
+        assert!(!NativeError::Unsupported("x".into()).is_corrupt());
+        // Mapped at the boundary, with what SQLite said.
+        let e = damaged(sqlite(rusqlite::ffi::SQLITE_CORRUPT));
+        assert!(
+            matches!(&e, NativeError::Corrupt(m) if m.contains("damaged")),
+            "{e}"
+        );
     }
 
     #[test]

@@ -262,6 +262,7 @@ function overviewView() {
   const attention = ps.filter((p) => p.lastError);
   return el('section', {},
     el('h1', {}, 'Overview'),
+    ...damageBanners(),
     ...diskBanners(),
     cards,
     attention.length ? el('h2', {}, 'Needs attention') : null,
@@ -288,6 +289,15 @@ function usageLine(u) {
   if (!parts.length) return null;
   const hint = u.backupBytes > u.indexBytes ? ' Backups are in each index directory\'s .wrongindex-backups folder; "Index backups kept per project" (Settings) limits how many are kept.' : '';
   return el('p', { class: 'note' }, `WrongIndex keeps there: ${parts.join(', ')}.${hint}`);
+}
+
+/** Projects whose index SQLite reports damaged (`watchHealth: index_corrupt`). */
+function damageBanners() {
+  return projects().filter((p) => p.watchHealth === 'index_corrupt').map((p) =>
+    el('div', { class: 'banner bad', role: 'alert' },
+      el('p', {}, `The index of ${p.project.displayName} is damaged.`),
+      el('p', { class: 'note' }, 'WrongIndex stopped writing it and keeps the file as it is. Rebuild the index (the damaged file is kept next to it) or restore a backup; pending changes are indexed after that.'),
+      el('button', { class: 'btn subtle', onclick: () => openProject(p.project.projectId) }, `Open ${p.project.displayName}`)));
 }
 
 /** Volumes short of space and large write-ahead logs (`resource.warning`, kept in the snapshot). */
@@ -428,7 +438,7 @@ function detailView() {
       el('div', { class: 'k' }, 'Ownership'), el('div', {}, badge(s.ownership, OWNERSHIP)),
       el('div', { class: 'k' }, 'Activity'), el('div', {}, s.activity),
       el('div', { class: 'k' }, 'Watch'), el('div', {}, `${s.watchHealth} · ${POLICY[p.watchPolicy] ?? p.watchPolicy} · ${s.sessions} session(s)`,
-        retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
+        retryNote(s) ? el('div', { class: s.parked || s.watchHealth === 'disk_full' || s.watchHealth === 'index_corrupt' ? 'error' : 'note', role: 'status' }, retryNote(s)) : null),
       el('div', { class: 'k' }, 'Generation'), el('div', {}, String(s.generation)),
       el('div', { class: 'k' }, 'Pending paths'), el('div', {}, String(s.pendingPaths)),
       el('div', { class: 'k' }, 'Last indexed'), el('div', {}, when(s.lastIndexedMs)),
@@ -451,7 +461,7 @@ function detailView() {
       el('button', { class: 'btn subtle', onclick: async () => {
         const ok = await confirmDialog(
           'Rebuild index?',
-          `A fresh index of ${p.displayName} is written from the source files and replaces the current one, even if it is unreadable, from another WrongStack version, or carries extra data. The current file is kept next to it as index.db.wrongindex-backup-<time> in ${p.indexDir}; nothing is deleted. Use this when regular indexing refuses the existing index.`,
+          `A fresh index of ${p.displayName} is written from the source files and replaces the current one, even if it is damaged, unreadable, from another WrongStack version, or carries extra data. The current file is kept next to it as index.db.wrongindex-backup-<time> in ${p.indexDir}; nothing is deleted. Use this when regular indexing refuses the existing index.`,
           'Rebuild');
         if (!ok) return;
         await call('project_action', { projectId: id, action: 'rebuild' });
@@ -513,6 +523,7 @@ function progressText(pr) {
 // Watcher retry state (WI-208): failures back automatic runs off; after the
 // configured number in a row the project is parked.
 function retryNote(s) {
+  if (s.watchHealth === 'index_corrupt') return 'The index is damaged: nothing writes it until it is rebuilt or a backup is restored. Pending changes are indexed after that.';
   if (s.watchHealth === 'disk_full') return 'Waiting for disk space: pending changes are indexed by themselves once the volume has room.';
   const n = s.consecutiveFailures ?? 0;
   if (!n) return '';
@@ -528,6 +539,7 @@ function nextAction(message) {
   if (/owned by|OWNER_CONFLICT|ownership/.test(m)) return 'Another process owns this index. Release it there, or claim it here.';
   if (/newer WrongStack|schema version|PROFILE_UNSUPPORTED/.test(m)) return 'Update WrongIndex, or use Rebuild index (the current file is kept).';
   if (/enrichment data|extra schema|outside the baseline/.test(m)) return 'This index carries data only WrongStack maintains; the compatibility worker handles it.';
+  if (/DATABASE_CORRUPT|is damaged|malformed|not a database/.test(m)) return 'Use Rebuild index (the damaged file is kept next to it), or restore a backup below.';
   if (/disk|space|DISK_FULL/i.test(m)) return 'Free disk space on that drive. Watched projects resume by themselves; otherwise retry.';
   if (/access|denied|permission/i.test(m)) return 'Fix access to the folder, then retry.';
   return 'Retry the job; if it keeps failing, export diagnostics.';
@@ -670,7 +682,10 @@ function jobsTable(jobs) {
 function jobSummary(j) {
   const r = j.result;
   if (!r) return '';
-  if (r.verdict) return `verdict ${r.verdict}`;
+  if (r.verdict) {
+    const i = r.integrity;
+    return `verdict ${r.verdict}${i ? (i.ok ? ` · SQLite check passed (${i.durationMs < 1000 ? `${i.durationMs} ms` : duration(i.durationMs)})` : ' · SQLite check failed') : ''}`;
+  }
   if (r.restoredFrom) return `restored · generation ${r.generation}`;
   if (r.native) {
     const n = r.native;

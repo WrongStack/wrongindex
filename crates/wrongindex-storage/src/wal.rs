@@ -13,7 +13,7 @@
 //! [`Checkpoint::Blocked`], leaving that reader undisturbed; the caller tries
 //! again later. Only the index's owner may call it, outside its own writes.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Checkpoint {
@@ -58,10 +58,119 @@ pub fn truncate(index_dir: &Path) -> Result<Checkpoint, rusqlite::Error> {
     })
 }
 
+fn side(db: &Path, suffix: &str) -> PathBuf {
+    let mut p = db.as_os_str().to_owned();
+    p.push(suffix);
+    PathBuf::from(p)
+}
+
+/// What stops `db` from being replaced by another file: a `-wal` holding
+/// changes not yet in `db` (they belong to it), or a connection that has it
+/// open. `None` when replacing it is safe.
+///
+/// An empty `-wal` and a `-shm` are there while any connection has a WAL
+/// database open - and also after a read-only connection closed, which may
+/// not remove them (the service's own checks, `wrongindex inspect`). On
+/// Windows every connection keeps the `-shm` open, so opening it without
+/// sharing tells the two apart: that fails while anyone has it open. (A
+/// SQLite connection opening it in that instant retries.) Elsewhere the
+/// files' presence alone counts.
+pub fn in_use(db: &Path) -> Option<PathBuf> {
+    let (wal, shm) = (side(db, "-wal"), side(db, "-shm"));
+    if std::fs::metadata(&wal).is_ok_and(|m| m.len() > 0) {
+        return Some(wal);
+    }
+    let held = shm.exists() && shm_held(&shm);
+    if held || (!cfg!(windows) && wal.exists()) {
+        return Some(if held { shm } else { wal });
+    }
+    None
+}
+
+#[cfg(windows)]
+fn shm_held(shm: &Path) -> bool {
+    use std::os::windows::fs::OpenOptionsExt;
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(shm)
+    {
+        Ok(_) => false,
+        Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+#[cfg(not(windows))]
+fn shm_held(_: &Path) -> bool {
+    true
+}
+
+/// Remove the empty `-wal` and the `-shm` that closed connections left next
+/// to `db`, once [`in_use`] says nobody has it open (the next connection
+/// makes new ones). An error means someone opened it meanwhile.
+pub fn remove_leftovers(db: &Path) -> std::io::Result<()> {
+    let wal = side(db, "-wal");
+    if std::fs::metadata(&wal).is_ok_and(|m| m.len() == 0) {
+        remove_if_present(&wal)?;
+    }
+    remove_if_present(&side(db, "-shm"))
+}
+
+fn remove_if_present(p: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(p) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rusqlite::Connection;
+
+    /// A read-only connection leaves an empty `-wal` and a `-shm` behind; they
+    /// stop nothing once it is closed, while an open connection does.
+    #[cfg(windows)]
+    #[test]
+    fn leftovers_of_closed_readers_do_not_count_as_in_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("index.db");
+        {
+            let c = Connection::open(&db).unwrap();
+            c.execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t (x);")
+                .unwrap();
+        }
+        assert_eq!(in_use(&db), None);
+        {
+            let ro = Connection::open_with_flags(
+                &db,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )
+            .unwrap();
+            ro.query_row("SELECT count(*) FROM t", [], |r| r.get::<_, i64>(0))
+                .unwrap();
+            assert!(in_use(&db).is_some(), "open: in use");
+        }
+        assert!(
+            side(&db, "-shm").exists(),
+            "the read-only connection left it"
+        );
+        assert_eq!(in_use(&db), None, "closed: not in use");
+        remove_leftovers(&db).unwrap();
+        assert!(!side(&db, "-shm").exists() && !side(&db, "-wal").exists());
+
+        // A log with changes in it belongs to the database.
+        let w = Connection::open(&db).unwrap();
+        w.execute_batch("PRAGMA wal_autocheckpoint = 0; INSERT INTO t VALUES (1);")
+            .unwrap();
+        assert_eq!(in_use(&db), Some(side(&db, "-wal")));
+        // Held open: the -shm cannot be removed either.
+        assert!(remove_leftovers(&db).is_err());
+        assert!(side(&db, "-shm").exists());
+        drop(w);
+        assert_eq!(in_use(&db), None);
+    }
 
     fn grow(writer: &Connection, from: i64) {
         for i in from..from + 200 {

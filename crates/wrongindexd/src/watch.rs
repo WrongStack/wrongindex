@@ -74,6 +74,9 @@ struct ProjectWatch {
     /// needs before the pending work runs again (no backoff, not counted
     /// toward parking).
     disk_wait: Option<u64>,
+    /// SQLite reported the index damaged (see `damage`): what it said. No
+    /// work is sent until a rebuild, a restore or a passing check.
+    corrupt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -245,9 +248,12 @@ impl Supervisor {
         let w = p.as_ref().ok().and_then(|p| p.get(project_id));
         let parked = w.is_some_and(|w| w.watcher.is_some() && w.dirty.parked(&cfg));
         let disk_wait = w.is_some_and(|w| w.watcher.is_some() && w.disk_wait.is_some());
+        let corrupt = w.is_some_and(|w| w.watcher.is_some() && w.corrupt.is_some());
         WatchStatus {
             watching: w.is_some_and(|w| w.watcher.is_some()),
-            watch_health: if disk_wait {
+            watch_health: if corrupt {
+                INDEX_CORRUPT.to_string()
+            } else if disk_wait {
                 DISK_FULL.to_string()
             } else if parked {
                 PARKED.to_string()
@@ -296,6 +302,42 @@ impl Supervisor {
             w.last_error = None;
             info!("watch_disk_wait_ended", {"projectId": project_id, "jobId": job_id});
         }
+        // A rebuild or restore put a sound index in place.
+        if w.corrupt.take().is_some() {
+            w.last_error = None;
+            info!("index_corrupt_cleared", {"projectId": project_id, "jobId": job_id});
+        }
+    }
+
+    /// SQLite reported the project's index damaged: stop sending it work.
+    /// `true` when the project was not marked yet.
+    pub fn note_corrupt(&self, project_id: &str, e: &wrongindex_contracts::ErrorBody) -> bool {
+        let Ok(mut g) = self.projects.lock() else {
+            return false;
+        };
+        let w = g.entry(project_id.to_string()).or_default();
+        w.last_error = Some(e.to_string());
+        w.corrupt.replace(e.message.clone()).is_none()
+    }
+
+    /// What SQLite said, while the project's index is marked damaged.
+    pub fn corrupt(&self, project_id: &str) -> Option<String> {
+        self.projects
+            .lock()
+            .ok()
+            .and_then(|g| g.get(project_id).and_then(|w| w.corrupt.clone()))
+    }
+
+    /// The index was found sound (a check that passed, or a write job that
+    /// looked again): pending work runs again.
+    pub fn clear_corrupt(&self, project_id: &str, why: &str) {
+        if let Ok(mut g) = self.projects.lock()
+            && let Some(w) = g.get_mut(project_id)
+            && w.corrupt.take().is_some()
+        {
+            w.last_error = None;
+            info!("index_corrupt_cleared", {"projectId": project_id, "by": why});
+        }
     }
 
     /// Freshness is separate from activity (WI-ADR-012): an idle project with
@@ -307,9 +349,10 @@ impl Supervisor {
         if !status.watching {
             return Freshness::Unknown;
         }
-        // Parked work, or work waiting for disk space, does not progress
-        // until something changes: not merely pending.
-        if status.parked || status.watch_health == DISK_FULL {
+        // Parked work, work waiting for disk space, or a damaged index does
+        // not progress until something changes: not merely pending.
+        if status.parked || status.watch_health == DISK_FULL || status.watch_health == INDEX_CORRUPT
+        {
             return Freshness::Degraded;
         }
         if !status.initial_scan_done
@@ -595,9 +638,10 @@ async fn check_disk(
         .map(|p| p.keys().cloned().collect())
         .unwrap_or_default();
     type Owned = Vec<(String, PathBuf)>;
+    // A damaged index is left as it is, its log included.
     let (owned_idle, owned_busy): (Owned, Owned) = indexes
         .iter()
-        .filter(|(pid, _)| shared.owners.holds(pid))
+        .filter(|(pid, _)| shared.owners.holds(pid) && shared.watch.corrupt(pid).is_none())
         .cloned()
         .partition(|(pid, _)| !running.contains(pid));
     let s2 = shared.clone();
@@ -741,6 +785,8 @@ pub const ROOT_UNAVAILABLE: &str = "root_unavailable";
 pub const PARKED: &str = "parked";
 /// Watch health of a project whose pending work waits for disk space.
 pub const DISK_FULL: &str = "disk_full";
+/// Watch health of a project whose index SQLite reports damaged.
+pub const INDEX_CORRUPT: &str = "index_corrupt";
 
 fn root_unavailable(shared: &Arc<Shared>, project_id: &str) {
     if let Ok(mut g) = shared.watch.projects.lock() {
@@ -789,11 +835,25 @@ async fn settle_finished(shared: &Arc<Shared>) {
             .error
             .as_ref()
             .is_some_and(|e| e.code == wrongindex_contracts::ErrorCode::DiskFull);
+        let corrupt = job
+            .error
+            .as_ref()
+            .filter(|e| e.code == wrongindex_contracts::ErrorCode::DatabaseCorrupt);
         let cfg = shared.watch.debounce();
         if let Ok(mut g) = shared.watch.projects.lock()
             && let Some(w) = g.get_mut(&pid)
             && let Some((_, batch)) = w.inflight.take()
         {
+            if let Some(e) = corrupt {
+                // Retrying cannot help and nothing may write the file: the
+                // paths stay dirty for after a rebuild or restore (the worker
+                // marked the project already; a watcher job only adds it).
+                if w.corrupt.replace(e.message.clone()).is_none() {
+                    warn!("index_corrupt", {"projectId": pid, "jobId": job_id, "error": e.message});
+                }
+                w.last_error = Some(e.to_string());
+                continue;
+            }
             if disk_full {
                 // Not the project's fault and no use retrying on a timer:
                 // everything stays dirty until the volume has room again.
@@ -855,6 +915,7 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
                     w.watcher.is_some()
                         && w.inflight.is_none()
                         && w.disk_wait.is_none()
+                        && w.corrupt.is_none()
                         && w.dirty.ready(now, &cfg)
                 })
                 .filter_map(|(pid, w)| w.dirty.take().map(|b| (pid.clone(), b)))

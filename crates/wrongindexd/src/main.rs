@@ -5,6 +5,7 @@
 //! and discovery publication -> accept authenticated clients.
 
 mod confine;
+mod damage;
 mod dirty;
 mod disk;
 mod engine;
@@ -95,12 +96,13 @@ fn native_replace_child(root: &str, index_dir: &str) -> ExitCode {
 }
 
 /// A native child's failure reply: `kind` is `unsupported`, `busy`,
-/// `diskFull` or `error`.
+/// `corrupt`, `diskFull` or `error`.
 fn native_error_reply(e: &wrongindex_engine::native::NativeError) -> serde_json::Value {
     use wrongindex_engine::native::NativeError;
     let kind = match e {
         NativeError::Unsupported(_) => "unsupported",
         NativeError::Busy(_) => "busy",
+        e if e.is_corrupt() => "corrupt",
         e if e.is_disk_full() => "diskFull",
         _ => "error",
     };

@@ -162,6 +162,14 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
         p.remove(&job.project_id);
     }
     let ok = outcome.is_ok();
+    // SQLite said the index is damaged: nothing writes it from now on (see
+    // `damage`), whichever job found out.
+    if let Err(e) = &outcome
+        && e.code == ErrorCode::DatabaseCorrupt
+        && shared.watch.note_corrupt(&job.project_id, e)
+    {
+        warn!("index_corrupt", {"projectId": job.project_id, "jobId": job_id, "error": e.message});
+    }
     let id = job_id.clone();
     match shared.registry(move |r| r.complete_job(&id, outcome)).await {
         Ok(done) => {
@@ -222,13 +230,30 @@ async fn execute(
     let project = shared.registry(move |r| r.get_project(&pid)).await?;
     match kind {
         JobKind::Check => {
+            // The profile, and SQLite's own check of every page and of the
+            // full-text index (read-only).
             let db = Path::new(&project.index_dir).join("index.db");
             let inspection =
-                tokio::task::spawn_blocking(move || wrongindex_storage::inspect_index(&db))
+                tokio::task::spawn_blocking(move || wrongindex_storage::inspect_index_checked(&db))
                     .await
                     .map_err(|e| {
                         ErrorBody::new(ErrorCode::Internal, format!("inspection task failed: {e}"))
                     })?;
+            if inspection.verdict == wrongindex_storage::Verdict::Corrupt {
+                let what = inspection
+                    .integrity
+                    .as_ref()
+                    .map(|i| i.summary())
+                    .filter(|p| !p.is_empty())
+                    .unwrap_or_else(|| "a read failed".into());
+                let e =
+                    crate::damage::corrupt(&format!("the index failed SQLite's check ({what})"));
+                if shared.watch.note_corrupt(project_id, &e) {
+                    warn!("index_corrupt", {"projectId": project_id, "error": e.message});
+                }
+            } else if inspection.integrity.as_ref().is_some_and(|i| i.ok) {
+                shared.watch.clear_corrupt(project_id, "check");
+            }
             serde_json::to_value(inspection)
                 .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))
         }
@@ -328,6 +353,36 @@ async fn execute(
                     "ownership guard not held by this instance",
                 )
             })?;
+            // A damaged index is written by nothing but a maintenance
+            // rebuild (see `damage`). Looked at again first: the file may
+            // have been replaced since.
+            if kind != JobKind::Rebuild
+                && let Some(said) = shared.watch.corrupt(project_id)
+            {
+                let dir = std::path::PathBuf::from(&project.index_dir);
+                let again = tokio::task::spawn_blocking(move || crate::damage::still_damaged(&dir))
+                    .await
+                    .ok()
+                    .flatten();
+                match again {
+                    Some((false, _)) => {
+                        shared
+                            .watch
+                            .clear_corrupt(project_id, "a write job found the index sound");
+                    }
+                    other => {
+                        let why = other
+                            .map(|(_, why)| why)
+                            .filter(|w| !w.is_empty())
+                            .unwrap_or(said);
+                        let e = crate::damage::corrupt(&format!(
+                            "the index is damaged ({why}); nothing was written"
+                        ));
+                        record_failure(shared, project_id, &e.message).await;
+                        return Err(e);
+                    }
+                }
+            }
             // Not enough room for this run: refuse before anything is
             // written (a watched project waits for space, see `disk`).
             if let Err(e) = ensure_room(&project.index_dir, kind).await {
@@ -453,8 +508,9 @@ async fn execute(
                     Ok(out)
                 }
                 Err(e) => {
-                    // The compatibility worker reports a full disk in text.
-                    let e = crate::disk::classify(e);
+                    // The compatibility worker reports a full disk and a
+                    // damaged index in text.
+                    let e = crate::damage::classify(crate::disk::classify(e));
                     record_failure(shared, project_id, &e.to_string()).await;
                     Err(e)
                 }
@@ -695,6 +751,11 @@ async fn rebuild_in_child(
                     ErrorCode::DiskFull,
                     format!("native engine: {msg}; the write was rolled back"),
                 )),
+                // Never "unsupported": that would hand the damaged file to
+                // the compatibility worker.
+                Some("corrupt") => {
+                    NativeOutcome::Failed(crate::damage::corrupt(&format!("native engine: {msg}")))
+                }
                 _ => NativeOutcome::Failed(crate::disk::classify(ErrorBody::new(
                     ErrorCode::Internal,
                     format!("native engine: {msg}"),

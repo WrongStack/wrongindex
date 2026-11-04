@@ -13,8 +13,12 @@ and how, is in [docs/status.md](docs/status.md).
 
 - Write-ahead logs. A program that kept an owned index open (a WrongStack session, the compatibility worker) left its write-ahead log behind at full size, and one that kept a read transaction open made it grow with every run, with nothing to cut it later. The service now folds the log into the index and cuts it to zero within seconds of a run, never waiting on or closing another program's connection; a log held by a reader is tried again every 15 seconds and reported once large (`resource.warning`, `resource: "wal"`; the desktop's Overview).
 
+- A damaged index. When SQLite reports an index damaged in a run, a read or a check, the service stops writing it: write jobs fail with `DATABASE_CORRUPT` and say that nothing was written. Before, they failed as `NOT_IMPLEMENTED`, and in `auto` they went to the compatibility worker. A watched project shows `watchHealth: index_corrupt` and keeps its edits pending without retrying or parking. The file is kept as it is. A maintenance rebuild keeps it byte for byte next to the new index, which must pass SQLite's own check before the rebuild succeeds; pending edits then run by themselves. The desktop's Overview and `wrongindex doctor` name damaged indexes.
+
 ### Fixed
 
+- `index --check`, the desktop's Check index and `wrongindex inspect` called a damaged index `compatible` and writable. They now run SQLite's own check of every page and of the full-text index, and report `verdict: corrupt` with what SQLite found. This includes a full-text index that no longer matches its content and still answers queries, wrongly. Reads of a damaged index answer `DATABASE_CORRUPT` (it was `INDEX_DEGRADED`).
+- A restore was refused with `DATABASE_BUSY` ("index.db-wal exists") after a check or `wrongindex inspect` of the index, even though nothing had it open. Read-only connections leave an empty `index.db-wal` and `index.db-shm` behind when they close. Restores and rebuilds now ask whether anyone still holds those files, instead of whether they exist; a log that still holds changes always counts. A maintenance rebuild also keeps a byte-for-byte copy of an index nothing has open; it used to take a `VACUUM INTO` copy.
 - The service log was rotated only when the service started, so a service running for weeks let it grow without bound. It is now rotated at 5 MiB while running too.
 
 ## 0.1.1

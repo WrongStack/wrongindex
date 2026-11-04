@@ -66,6 +66,17 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
 
 **Write-ahead logs.** An index's changes go to `index.db-wal` first. When nothing else has the index open, the log is folded in and removed as a run ends. A program that keeps the index open (a WrongStack session reading it, the compatibility worker) leaves the log behind, and one that keeps a read transaction open makes it grow with every run. For the indexes it owns, the service folds the log into the index and cuts it to zero bytes within about 5 seconds of a run, never beside a run of that project. It never waits on or closes another program's connection: while a reader's transaction needs the log, it tries again every 15 seconds. A log of at least 16 MiB and more than twice its index is reported as large (`resource.warning` with `resource: "wal"`, saying whether a reader holds it and since when; the desktop's Overview).
 
+**A damaged index.** When SQLite reports an index damaged (`SQLITE_CORRUPT`, "database disk image is malformed", or "file is not a database") during a run, a read or a check:
+- The service stops writing it. Write jobs fail with `DATABASE_CORRUPT` and say that nothing was written; that includes the compatibility worker, which never gets the file. A watched project shows `watchHealth: index_corrupt` and freshness `degraded`. Its edits stay pending, with no retries on a timer and nothing counted toward parking.
+- Reads answer `DATABASE_CORRUPT` where SQLite fails. A damaged full-text index can still answer, wrongly; once the damage is known (a check found it, say), every answer from that index carries `indexCorrupt` with what SQLite said.
+- The file is kept as it is, for diagnosis.
+- To recover:
+  - Rebuild the index (`wrongindex index <id> --rebuild --wait`; desktop: Rebuild index…). This writes a fresh index from the source files and keeps the damaged file byte for byte as `index.db.wrongindex-backup-<time>`. It is a verified rebuild: the new index must pass SQLite's own check (`PRAGMA quick_check`) before the job succeeds (`result.native.integrity`).
+  - Or restore a backup (section 5).
+  - Pending edits run after either.
+- A write job that finds the file sound again (say it was replaced by hand), or a check that passes, also ends the stop.
+- `wrongindex index <id> --check` (desktop: Check index) and `wrongindex inspect <dir>` run SQLite's check of every page and of the full-text index. They report `verdict: corrupt` with `integrity.problems`, without writing anything. The check reads the whole file: about 2 seconds for a 340 MB index.
+
 ## 4. Settings
 
 `wrongindex settings get` / `wrongindex settings set key=value ...` (desktop: Settings > Index service; tray: Pause/Resume Background Indexing).
@@ -136,11 +147,12 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
   - `index.published` (a new generation);
   - `ownership.changed`;
   - `project.registered`, `project.configured` and `project.detached`;
+  - `project.state` also reports `watchHealth: index_corrupt` for a damaged index (see §3);
   - `resource.warning` when a drive in use changes level (`resource: "disk"`: `ok`, `low`, `full`; with its free bytes and the projects whose indexes are on it), or an owned index's write-ahead log becomes large or is cut (`resource: "wal"`); the warnings in force are also in the snapshot (`resources`);
   - `settings.changed` and `daemon.draining`.
 
   Every event carries the service instance and a sequence number. A client that missed events resumes from its last sequence number or takes a snapshot.
-- `wrongindex doctor` checks the endpoint, discovery metadata, the running service, the free space the service reports for the drives it uses, and the toolchains (Python, Go, Bun or Node.js) the native writer needs for some languages.
+- `wrongindex doctor` checks the endpoint, discovery metadata, the running service, the free space the service reports for the drives it uses, indexes reported damaged (`index_integrity`), and the toolchains (Python, Go, Bun or Node.js) the native writer needs for some languages.
 
 ## 8. Troubleshooting
 
@@ -152,6 +164,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open | Close WrongStack clients of that project, then retry |
 | A large `index.db-wal` (`resource.warning`, `resource: "wal"`, `blockedByReader: true`) | A program keeps a read transaction open on the index, so the log cannot be folded in | End that program's session or query (often a long-running WrongStack session); the service cuts the log within 15 seconds after |
+| `DATABASE_CORRUPT`, `watchHealth: index_corrupt`, `verdict: corrupt` | SQLite reports the index damaged (a disk or file system fault, a copy made while it was written, an edit by another tool); nothing writes it any more and the file is kept as it is | `wrongindex index <id> --rebuild --wait` (desktop: Rebuild index…): a fresh index, checked by SQLite, the damaged file kept next to it; or restore a backup. Pending edits run after |
 | `DISK_FULL`, `watchHealth: disk_full` | The drive holding the index has too little free space; nothing was written | Free space on that drive (the message says how much is needed). Watched projects resume by themselves; retry other jobs |
 | Edits are not picked up, `freshness: pending` | Background indexing is paused, or a failed batch is backing off (2 s doubling to 60 s) | `wrongindex settings set paused=false`; check `lastError` in `project status` |
 | Files missing from search | Files over 5 MiB are not indexed (as in WrongStack) | Listed under Files and errors / `oversizedFiles` in the job result |

@@ -20,7 +20,7 @@ use wrongindex_contracts::{
     RegisterProjectParams, RegisterProjectResult, WatchPolicy, exit_code, method,
 };
 use wrongindex_ipc::{CallError, Client, DataRoot, Discovery};
-use wrongindex_storage::{Verdict, inspect_index, sqlite_runtime};
+use wrongindex_storage::{Verdict, inspect_index_checked, sqlite_runtime};
 
 const CLIENT_NAME: &str = "wrongindex-cli";
 
@@ -95,7 +95,8 @@ enum Command {
     },
     /// Read-only installation and service diagnosis.
     Doctor,
-    /// Read-only offline inspection of an index.db (no service required).
+    /// Read-only offline inspection of an index.db, with SQLite's own
+    /// consistency check of every page (no service required).
     Inspect {
         /// Path to index.db or the directory containing it.
         path: PathBuf,
@@ -1155,6 +1156,17 @@ fn print_inspection_summary(r: &Value) {
             r["counts"]["symbols"],
             r["counts"]["refs"]
         );
+        let i = &r["integrity"];
+        if i.is_object() {
+            if i["ok"] == true {
+                println!("  integrity: ok ({} ms)", i["durationMs"]);
+            } else {
+                println!(
+                    "  integrity: DAMAGED - {}",
+                    i["problems"][0].as_str().unwrap_or("?")
+                );
+            }
+        }
         if let Some(findings) = r["findings"].as_array() {
             for f in findings {
                 println!(
@@ -1482,6 +1494,34 @@ async fn doctor_checks(root: &DataRoot) -> Vec<Value> {
                 } else {
                     add("disk_space", "warn", short.join("; "));
                 }
+                // Indexes SQLite reported damaged: writes to them stopped.
+                let damaged: Vec<String> = snap["projects"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|p| {
+                        p["watchHealth"] == "index_corrupt"
+                            || p["lastError"]
+                                .as_str()
+                                .is_some_and(|e| e.starts_with("DATABASE_CORRUPT"))
+                    })
+                    .map(|p| {
+                        let id = p["project"]["projectId"].as_str().unwrap_or("?");
+                        format!(
+                            "{} ({id}): damaged; `wrongindex index {id} --rebuild` (the damaged file is kept) or restore a backup (`--backups`, `--restore <name>`)",
+                            p["project"]["displayName"].as_str().unwrap_or("?")
+                        )
+                    })
+                    .collect();
+                if damaged.is_empty() {
+                    add(
+                        "index_integrity",
+                        "pass",
+                        "no index is reported damaged".into(),
+                    );
+                } else {
+                    add("index_integrity", "fail", damaged.join("; "));
+                }
             }
         }
         Err(CallError::Unavailable(m)) => add(
@@ -1591,7 +1631,7 @@ fn inspect(path: &Path, json: bool) -> Outcome {
     } else {
         path.to_path_buf()
     };
-    let report = inspect_index(&db);
+    let report = inspect_index_checked(&db);
     let v = serde_json::to_value(&report).map_err(|e| fail(exit_code::INTERNAL, e.to_string()))?;
     if json {
         print_json(&v);

@@ -134,13 +134,16 @@ async fn a_refused_index_is_replaced_only_by_an_explicit_rebuild_and_kept_as_bac
     )
     .await
     .unwrap();
+    // SQLite calls the file "not a database": nothing writes it (see
+    // `damage`), and the compatibility worker never gets it.
     let job = try_job(&mut c, &pid, json!({"kind": "full"})).await;
     assert_eq!(job["state"], "failed", "{job}");
+    assert_eq!(job["error"]["code"], "DATABASE_CORRUPT", "{job}");
     assert!(
         job["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("left untouched"),
+            .contains("nothing was written"),
         "{job}"
     );
     assert_eq!(std::fs::read(index.join("index.db")).unwrap(), garbage);

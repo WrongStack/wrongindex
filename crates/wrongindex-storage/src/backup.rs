@@ -8,8 +8,9 @@
 //!
 //! Restoration replaces `index.db` with a backup's bytes. It is only safe when
 //! no connection has the database open, which the caller (the owner) checks;
-//! here it is refused while `-wal`/`-shm` files exist, and the replaced file
-//! is itself kept as a backup first.
+//! here it is refused while a connection has it open or its `-wal` holds
+//! changes (`wal::in_use`), and the replaced file is itself kept as a backup
+//! first.
 
 use std::path::{Path, PathBuf};
 
@@ -136,17 +137,20 @@ pub fn restore(
         }
     }
     let db = index_dir.join("index.db");
-    for suffix in ["-wal", "-shm"] {
-        let mut p = db.as_os_str().to_owned();
-        p.push(suffix);
-        if Path::new(&p).exists() {
-            return Err(BackupError::Busy(PathBuf::from(p).display().to_string()));
-        }
+    // Nobody may have it open, and its log may hold nothing (it would be
+    // handed to the restored file). What closed read-only connections leave
+    // behind does not count (see `wal::in_use`).
+    if let Some(p) = crate::wal::in_use(&db) {
+        return Err(BackupError::Busy(p.display().to_string()));
     }
     // The replaced file is kept even beyond the usual retention.
     let previous = snapshot(index_dir, epoch, usize::MAX)?;
     let staged = index_dir.join(format!(".wrongindex-restore-{}.db", now_ms()));
     std::fs::copy(&source, &staged)?;
+    if let Err(e) = crate::wal::remove_leftovers(&db) {
+        let _ = std::fs::remove_file(&staged);
+        return Err(BackupError::Busy(format!("{} ({e})", db.display())));
+    }
     if let Err(e) = std::fs::rename(&staged, &db) {
         let _ = std::fs::remove_file(&staged);
         return Err(e.into());
