@@ -308,6 +308,13 @@ function damageBanners() {
       el('button', { class: 'btn subtle', onclick: () => openProject(p.project.projectId) }, `Open ${p.project.displayName}`)));
 }
 
+/** Queue a checkpoint: it fails, naming the programs, while one holds a read transaction. */
+async function foldLog(projectId) {
+  await call('project_action', { projectId, action: 'checkpoint' });
+  toast('Checkpoint queued: the write-ahead log is folded into the index unless a program holds a read transaction open. The outcome is listed under Jobs.');
+  await refresh();
+}
+
 /** Volumes short of space and large write-ahead logs (`resource.warning`, kept in the snapshot). */
 function diskBanners() {
   const all = state.overview?.snapshot?.resources ?? [];
@@ -319,7 +326,10 @@ function diskBanners() {
       el('p', {}, `The write-ahead log of ${name} is ${megabytes(r.walBytes)}${times}.`),
       el('p', { class: 'note' }, r.blockedByReader
         ? `A program has kept a read transaction open on this index since ${when(r.blockedSinceMs)} (a WrongStack session or another reader), so each run adds to the log.${(r.openBy ?? []).length ? ` Programs with the index open: ${r.openBy.map((h) => `${h.name} (pid ${h.pid})`).join(', ')}.` : ''} WrongIndex folds it into the index as soon as that transaction ends; it never closes other programs' connections.`
-        : 'WrongIndex folds it into the index once no reader needs it.'));
+        : 'WrongIndex folds it into the index once no reader needs it.'),
+      p && p.ownership === 'owned' ? el('div', { class: 'row' },
+        el('button', { class: 'btn subtle', onclick: () => foldLog(p.project.projectId) }, `Fold in the log of ${name} now`),
+        el('button', { class: 'btn subtle', onclick: () => openProject(p.project.projectId) }, `Open ${name}`)) : null);
   });
   return wals.concat(all.filter((r) => r.resource === 'disk' && r.level !== 'ok').map((r) => {
     const n = (r.projects ?? []).length;
@@ -472,6 +482,7 @@ function detailView() {
         : el('button', { class: 'btn', onclick: act('claim', null, 'Ownership claimed.') }, 'Claim ownership'),
       el('button', { class: 'btn subtle', onclick: act('check', null, 'Health check queued.') }, 'Check index'),
       el('button', { class: 'btn subtle', disabled: !owned, title: owned ? null : 'Claim ownership first', onclick: act('reconcile', null, 'Reconciliation queued.') }, 'Reconcile'),
+      el('button', { class: 'btn subtle', disabled: !owned, title: owned ? "Fold the index's write-ahead log into it now and cut the log to zero" : 'Claim ownership first', onclick: () => foldLog(id) }, 'Fold in write-ahead log'),
       el('button', { class: 'btn subtle', onclick: () => call('open_folder', { projectId: id }) }, 'Open folder'),
       el('button', { class: 'btn subtle', onclick: async () => {
         const ok = await confirmDialog(
