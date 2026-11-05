@@ -12,9 +12,11 @@
 //! other than this one and the processes that started it, and waits until
 //! each has exited (so its files are no longer locked). The starters matter:
 //! `wrongindex self-update` waits in the install directory (moved aside as
-//! `wrongindex.exe.old`) for the installer that runs this. A service ended this way recovers as after a crash: its
-//! native child dies with it (job object), and at the next start interrupted
-//! jobs are requeued (checks) or failed.
+//! `wrongindex.exe.old`) for the installer that runs this. `self-update`
+//! also runs it itself before the installer, so it can name what it ended.
+//! A service ended this way recovers as after a crash: its native child dies
+//! with it (job object), and at the next start interrupted jobs are requeued
+//! (checks) or failed.
 
 use std::path::Path;
 
@@ -111,6 +113,53 @@ pub fn stop_installed(dir: &Path) -> Result<Vec<Stopped>, String> {
     Ok(stopped)
 }
 
+/// " Ended beforehand, as they ran from the install directory: name (pid
+/// n), ..." for a message, or nothing.
+pub fn ended_note(stopped: &[Stopped]) -> String {
+    if stopped.is_empty() {
+        return String::new();
+    }
+    let names: Vec<String> = stopped
+        .iter()
+        .map(|s| format!("{} (pid {})", file_name(&s.program), s.pid))
+        .collect();
+    format!(
+        " Ended beforehand, as they ran from the install directory: {}.",
+        names.join(", ")
+    )
+}
+
+/// The file name of a program path (either separator).
+pub fn file_name(program: &str) -> &str {
+    program.rsplit(['\\', '/']).next().unwrap_or(program)
+}
+
+/// Wait up to `budget` for process `pid` to exit; `true` once it has (or
+/// cannot be found).
+#[cfg(windows)]
+pub fn wait_exit(pid: u32, budget: std::time::Duration) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    };
+    // SAFETY: a process handle this function opens and closes.
+    unsafe {
+        let h = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+        if h.is_null() {
+            return true;
+        }
+        let ms = u32::try_from(budget.as_millis()).unwrap_or(u32::MAX);
+        let gone = WaitForSingleObject(h, ms) == WAIT_OBJECT_0;
+        CloseHandle(h);
+        gone
+    }
+}
+
+#[cfg(not(windows))]
+pub fn wait_exit(_pid: u32, _budget: std::time::Duration) -> bool {
+    true
+}
+
 /// Whether `program` lies in one of `dirs` ([`key`] spellings), as reported
 /// or as it really is (its long spelling).
 #[cfg(windows)]
@@ -187,6 +236,25 @@ mod tests {
             starters(50, &parents),
             std::collections::HashSet::from([50, 51])
         );
+    }
+
+    #[test]
+    fn what_was_ended_is_named() {
+        let s = [
+            Stopped {
+                pid: 812,
+                program: r"C:\Users\me\AppData\Local\WrongIndex\wrongindexd.exe".into(),
+            },
+            Stopped {
+                pid: 9,
+                program: "C:/x/wrongindex.exe".into(),
+            },
+        ];
+        assert_eq!(
+            ended_note(&s),
+            " Ended beforehand, as they ran from the install directory: wrongindexd.exe (pid 812), wrongindex.exe (pid 9)."
+        );
+        assert_eq!(ended_note(&[]), "");
     }
 
     /// A program run from a directory is ended; the same program run from

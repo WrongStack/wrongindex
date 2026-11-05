@@ -221,6 +221,10 @@ pub fn remove_leftovers() {
 pub struct Applied {
     pub installed: String,
     pub restarted_service: bool,
+    /// Other programs that ran from the install directory and were ended
+    /// before the installer ran (a service started with another data root,
+    /// a `wrongindex events` follower); they are not started again.
+    pub stopped: Vec<crate::installed::Stopped>,
     /// The desktop window was open; the installer closed it and it was
     /// started again.
     pub reopened_desktop: bool,
@@ -269,15 +273,28 @@ pub fn apply(
     wrongindex_ipc::launch::no_inherit_std_handles();
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let daemon = dir.join("wrongindexd.exe");
-    if !wait_unlocked(&daemon, Duration::from_secs(30)) {
-        return Err(format!(
-            "{} is still in use; stop the service and retry",
-            daemon.display()
-        ));
-    }
     // The installer closes an open desktop window; reopen it afterwards.
     let desktop = dir.join("wrongindex-desktop.exe");
     let desktop_was_open = desktop.exists() && !wait_unlocked(&desktop, Duration::ZERO);
+    // Whatever else still runs from the install directory (a service
+    // started with another data root, a `wrongindex events` follower) would
+    // keep its program locked. The installer's hooks end such processes
+    // too, but through the CLI that is moved aside below; end them here,
+    // where they can be named. This process and its starters are spared.
+    let stopped: Vec<_> = crate::installed::stop_installed(dir)
+        .map_err(|e| format!("ending what runs from {}: {e}", dir.display()))?
+        .into_iter()
+        .filter(|s| {
+            !crate::installed::file_name(&s.program).eq_ignore_ascii_case("wrongindex-desktop.exe")
+        })
+        .collect();
+    let note = crate::installed::ended_note(&stopped);
+    if !wait_unlocked(&daemon, Duration::from_secs(30)) {
+        return Err(format!(
+            "{} is still in use; stop the service and retry.{note}",
+            daemon.display()
+        ));
+    }
     let old = exe.with_extension("exe.old");
     let _ = std::fs::remove_file(&old);
     std::fs::rename(&exe, &old).map_err(|e| format!("moving {} aside: {e}", exe.display()))?;
@@ -291,7 +308,7 @@ pub fn apply(
         if desktop_was_open && wait_unlocked(&desktop, Duration::ZERO) {
             open_desktop(&desktop);
         }
-        why
+        format!("{why}{note}")
     };
     // NSIS: `/D=` must be the last argument and is taken verbatim (no quotes).
     let status = Command::new(installer)
@@ -328,6 +345,7 @@ pub fn apply(
     Ok(Applied {
         installed,
         restarted_service,
+        stopped,
         reopened_desktop,
     })
 }

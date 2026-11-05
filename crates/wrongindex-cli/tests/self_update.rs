@@ -2,17 +2,19 @@
 //! releases API shape, served over plain HTTP on 127.0.0.1 through
 //! `WRONGINDEX_UPDATE_URL`): it finds the newest release, downloads and
 //! verifies the installer, refuses a checksum mismatch and a missing release
-//! without writing anything, and does not try to update a copy that was not
-//! installed.
+//! without writing anything, does not try to update a copy that was not
+//! installed, and ends (and names) what else runs from the install
+//! directory before an installer runs.
 
 #![cfg(windows)]
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::path::Path;
-use std::process::{Command, Output};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -194,4 +196,77 @@ fn an_older_or_equal_latest_release_is_reported_up_to_date() {
     assert!(o.status.success(), "{o:?}");
     assert_eq!(stdout_json(&o)["updateAvailable"], false);
     assert!(!home.join("updates").exists());
+}
+
+fn system32(name: &str) -> PathBuf {
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    Path::new(&root).join("System32").join(name)
+}
+
+/// A child ended when the test ends, whatever happened.
+struct Running(std::process::Child);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// A service started with another data root keeps `wrongindexd.exe` locked;
+/// the update used to wait 30 s for it and give up ("still in use"). It is
+/// now ended before the installer runs, and named. The "installer" here
+/// fails (it is the CLI, which refuses `/S`), so the update is rolled back:
+/// the installed CLI is back in place, and the message names what was
+/// ended.
+#[test]
+fn what_else_runs_from_the_install_directory_is_ended_and_named() {
+    let (base, routes) = serve();
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    // A name long enough for an 8.3 short name where the volume makes them.
+    let app = tmp.path().join("installed application");
+    std::fs::create_dir_all(&app).unwrap();
+    let cli = app.join("wrongindex.exe");
+    std::fs::copy(env!("CARGO_BIN_EXE_wrongindex"), &cli).unwrap();
+    std::fs::write(app.join("uninstall.exe"), b"MZ").unwrap();
+    // Running from the install directory as the service's program.
+    let service = app.join("wrongindexd.exe");
+    std::fs::copy(system32("PING.EXE"), &service).unwrap();
+    let mut running = Running(
+        Command::new(&service)
+            .args(["-n", "120", "127.0.0.1"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    std::thread::sleep(Duration::from_millis(300));
+    let version = env!("CARGO_PKG_VERSION");
+    let tag = format!("v{version}");
+    let installer = std::fs::read(env!("CARGO_BIN_EXE_wrongindex")).unwrap();
+    publish(&base, &routes, &tag, &installer, None);
+
+    let started = Instant::now();
+    let o = Command::new(&cli)
+        .arg("--data-root")
+        .arg(&home)
+        .args(["self-update", "--version", &tag])
+        .env("WRONGINDEX_UPDATE_URL", format!("{base}/releases"))
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(5), "{o:?}");
+    assert!(!err.contains("still in use"), "{err}");
+    assert!(err.contains("the installer exited"), "{err}");
+    assert!(
+        err.contains(&format!("wrongindexd.exe (pid {})", running.0.id())),
+        "{err}"
+    );
+    // Ended and waited for, without the 30 s wait.
+    assert!(running.0.try_wait().unwrap().is_some());
+    assert!(started.elapsed() < Duration::from_secs(25));
+    // Rolled back: the installed CLI is where it was.
+    assert!(cli.is_file());
+    assert!(!app.join("wrongindex.exe.old").exists());
 }

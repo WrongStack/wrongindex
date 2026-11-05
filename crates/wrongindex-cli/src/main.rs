@@ -1407,8 +1407,9 @@ async fn job(root: &DataRoot, action: JobAction, json: bool) -> Outcome {
 
 // ─── self-update ────────────────────────────────────────────────────────────
 
-/// Stop the service, if one runs, and wait until it has gone. `true` when it
-/// was running.
+/// Stop the service, if one runs, and wait until its process has exited
+/// (so that only other programs are left running from the install
+/// directory). `true` when it was running.
 async fn stop_service_for_update(root: &DataRoot) -> Result<bool, Failure> {
     let mut c = match Client::connect(root, CLIENT_NAME).await {
         Ok(c) => c,
@@ -1416,6 +1417,10 @@ async fn stop_service_for_update(root: &DataRoot) -> Result<bool, Failure> {
         Err(e) => return Err(e.into()),
     };
     let instance = c.hello().daemon_instance_id.clone();
+    let pid = Discovery::load(root)
+        .ok()
+        .filter(|d| d.info.daemon_instance_id == instance)
+        .map(|d| d.info.pid);
     c.call_raw(method::DAEMON_SHUTDOWN, None, json!({}), None)
         .await?;
     drop(c);
@@ -1428,6 +1433,18 @@ async fn stop_service_for_update(root: &DataRoot) -> Result<bool, Failure> {
             ));
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    if let Some(pid) = pid {
+        let budget = deadline.saturating_duration_since(Instant::now());
+        let exited = tokio::task::spawn_blocking(move || installed::wait_exit(pid, budget))
+            .await
+            .unwrap_or(false);
+        if !exited {
+            return Err(fail(
+                exit_code::TIMEOUT,
+                "the service did not exit; nothing was installed",
+            ));
+        }
     }
     Ok(true)
 }
@@ -1516,9 +1533,26 @@ async fn self_update(
             "serviceWasRunning": was_running,
             "serviceRestarted": applied.restarted_service,
             "desktopReopened": applied.reopened_desktop,
+            "stopped": applied.stopped,
         }));
     } else {
         println!("updated {} -> {}", current.text, applied.installed);
+        for s in &applied.stopped {
+            println!(
+                "ended {} (pid {}), which ran from the install directory; it was not started again",
+                installed::file_name(&s.program),
+                s.pid
+            );
+        }
+        if applied
+            .stopped
+            .iter()
+            .any(|s| installed::file_name(&s.program).eq_ignore_ascii_case("wrongindexd.exe"))
+        {
+            println!(
+                "a service started with another data root: start it again with `wrongindex --data-root <its directory> daemon start`"
+            );
+        }
         if applied.reopened_desktop {
             println!("desktop reopened");
         }
