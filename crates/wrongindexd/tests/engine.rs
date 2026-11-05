@@ -227,6 +227,22 @@ async fn preview_engine_indexes_queries_and_fences() {
     let inventory = health["backendInventory"].to_string();
     assert!(inventory.contains("legacy-bun-worker"), "{inventory}");
     assert!(inventory.contains("\\\"native\\\":false"), "{inventory}");
+    // The worker runs in its own capped job (automatic cap: at least
+    // 2 GiB), whose peak it reports.
+    let worker: Value = health["backendInventory"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|b| serde_json::from_str::<Value>(b.as_str()?).ok())
+        .find(|b| b["backend"] == "legacy-bun-worker")
+        .unwrap();
+    assert!(
+        worker["memoryCapBytes"].as_u64().unwrap() >= 2 << 30,
+        "{worker}"
+    );
+    assert!(worker["peakMemoryBytes"].as_u64().unwrap() > 0, "{worker}");
+    assert_eq!(worker["memoryCapHits"], 0, "{worker}");
+    eprintln!("worker after indexing: {worker}");
 
     // Releasing ownership stops further writes.
     c.call_raw(method::OWNERSHIP_RELEASE, Some(&pid), json!({}), None)

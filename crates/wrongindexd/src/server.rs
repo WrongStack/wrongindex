@@ -122,10 +122,12 @@ impl Shared {
     }
 
     /// Push the current settings into the running parts (watcher timing,
-    /// session grace, pause); the worker and native runs read them per use.
+    /// session grace, pause, the compatibility worker's memory cap); the
+    /// worker and native runs read the rest per use.
     pub fn apply_settings(&self) {
         let s = self.settings.get();
         self.watch.configure(&s);
+        self.engine.set_memory_mb(s.worker_memory_mb);
         self.wake_worker.notify_one();
     }
 
@@ -1270,6 +1272,7 @@ async fn dispatch_inner(
                 "maxIndexFileBytes": wrongindex_engine::native::MAX_INDEX_FILE_BYTES,
                 "parallelJobs": settings.parallel_jobs,
                 "nativeMemoryMb": settings.native_memory_mb,
+                "workerMemoryMb": settings.worker_memory_mb,
                 "backupKeep": settings.backup_keep,
                 "watchParkAfterFailures": settings.watch_park_after_failures,
                 "integrityCheckHours": settings.integrity_check_hours,

@@ -234,7 +234,8 @@
       "sessionGraceSeconds": 120,
       "watchDebounceMs": 400,
       "watchMaxWaitMs": 2000,
-      "watchParkAfterFailures": 8
+      "watchParkAfterFailures": 8,
+      "workerMemoryMb": 0
     },
     "EndpointInfo": {
       "daemonInstanceId": "d_0123456789abcdef",

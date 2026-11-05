@@ -752,6 +752,10 @@ pub struct DaemonSettings {
     /// Memory cap for one native indexing run in MiB; 0 = automatic
     /// (a quarter of physical memory, at least 2 GiB).
     pub native_memory_mb: u64,
+    /// Memory cap of the compatibility worker (WrongStack's own engine
+    /// under Bun, and every process it starts) in MiB; 0 = automatic (a
+    /// quarter of physical memory, at least 2 GiB). Applied live.
+    pub worker_memory_mb: u64,
     /// Index backups kept per project (taken at each ownership transfer).
     pub backup_keep: usize,
     /// Consecutive failed watcher batches after which a project is parked
@@ -782,6 +786,7 @@ impl Default for DaemonSettings {
             session_grace_seconds: 120,
             parallel_jobs: 2,
             native_memory_mb: 0,
+            worker_memory_mb: 0,
             backup_keep: 3,
             watch_park_after_failures: 8,
             paused: false,
@@ -811,6 +816,9 @@ impl DaemonSettings {
         range("parallelJobs", self.parallel_jobs as u64, 1, 8)?;
         if self.native_memory_mb != 0 {
             range("nativeMemoryMb", self.native_memory_mb, 512, 1_048_576)?;
+        }
+        if self.worker_memory_mb != 0 {
+            range("workerMemoryMb", self.worker_memory_mb, 512, 1_048_576)?;
         }
         range("backupKeep", self.backup_keep as u64, 1, 20)?;
         range(

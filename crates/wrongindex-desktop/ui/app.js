@@ -45,6 +45,7 @@ function store(key, value) {
 const SERVICE_FIELDS = [
   { key: 'parallelJobs', label: 'Index jobs at once', unit: '', min: 1, max: 8, note: 'One per project; more uses more CPU and memory.' },
   { key: 'nativeMemoryMb', label: 'Memory per indexing run', unit: 'MiB', min: 0, max: 1048576, note: '0 = automatic (a quarter of physical memory, at least 2 GiB).' },
+  { key: 'workerMemoryMb', label: "Memory for WrongStack's own engine", unit: 'MiB', min: 0, max: 1048576, note: 'The compatibility worker and everything it starts. A run that needs more is stopped and fails, naming this setting. 0 = automatic (a quarter of physical memory, at least 2 GiB).' },
   { key: 'watchDebounceMs', label: 'Wait after the last edit', unit: 'ms', min: 100, max: 10000 },
   { key: 'watchMaxWaitMs', label: 'Longest wait under continuous edits', unit: 'ms', min: 500, max: 60000 },
   { key: 'sessionGraceSeconds', label: 'Keep watching after the last client', unit: 's', min: 0, max: 3600 },

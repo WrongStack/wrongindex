@@ -102,6 +102,7 @@ A failed watcher run keeps its paths pending and is retried after 2 s, doubling 
 |---|---|---|---|
 | `parallelJobs` | 2 | 1-8 | Index jobs at once (one per project) |
 | `nativeMemoryMb` | 0 | 0 or 512-1048576 | Memory cap of one native run; 0 = a quarter of physical memory, at least 2 GiB |
+| `workerMemoryMb` | 0 | 0 or 512-1048576 | Memory cap of the compatibility worker (WrongStack's own engine under Bun) and every process it starts; 0 = a quarter of physical memory, at least 2 GiB. Applies to the running worker at once (see §5, "Engine per project") |
 | `watchDebounceMs` | 400 | 100-10000 | Quiet period after the last edit |
 | `watchMaxWaitMs` | 2000 | 500-60000, ≥ debounce | Longest wait under continuous edits |
 | `sessionGraceSeconds` | 120 | 0-3600 | Watching continues this long after the last client |
@@ -139,6 +140,8 @@ While the service owns an index, it is the only writer.
 | `legacy` | The compatibility worker (WrongStack's own engine) only; needs `--engine` |
 
 A choice the service cannot honour is refused and nothing changes. Switching fences off work admitted for the old engine and, for an owned project, queues a reconciliation with the new engine.
+
+The compatibility worker is one Bun process, started when first needed and kept for later requests. It runs in a Windows Job Object of its own: it and every process it starts share the `workerMemoryMb` cap, and they all end together when the worker is stopped or restarted (a deadline, a crash, the service stopping). A request that needs more memory than the cap is stopped: the job fails with "the compatibility worker reached its memory cap of N MiB", and the worker starts afresh on the next request. `wrongindex daemon status --json` shows the cap, the running worker's peak (`peakMemoryBytes`) and how often the cap stopped a request (`memoryCapHits`) in the worker's `backendInventory` entry. Measured with WrongStack's engine: 1.1 GiB at the peak for a 295-file repository, 1.3 GiB for a 7,090-file one.
 
 ## 6. WrongStack integration
 
@@ -195,6 +198,7 @@ WrongStack's own index engine never depends on WrongIndex. Without the service, 
 | Edits on a network share are found only by the periodic reconciliation (`reconcile_found_changes`), `watchHealth: native` | The share accepts the request for change notifications but never sends any | `wrongindex project watch-mode <id> poll` (desktop: Find changes by > Polling) |
 | `watchHealth: polling` | The checkout's file system reports no changes (a WSL share, WebDAV, a network or user-mode file system); it is walked every `pollIntervalSeconds` | Nothing to do. For a large checkout on a slow share, raise `pollIntervalSeconds`; `polling.passMs` in `project status` shows what a pass costs |
 | `watchHealth: failed`, `lastError` "... polling is off (pollIntervalSeconds 0)" | The checkout's file system reports no changes and polling is turned off | `wrongindex settings set pollIntervalSeconds=5`; watching starts at the next attempt (within a minute) |
+| A job fails with "the compatibility worker reached its memory cap of N MiB" | WrongStack's own engine needed more memory for this project than `workerMemoryMb` allows; nothing was published | `wrongindex settings set workerMemoryMb=<more>` (desktop: Settings > Memory for WrongStack's own engine), then run it again |
 | Files missing from search | Files over 5 MiB are not indexed (as in WrongStack) | Listed under Files and errors / `oversizedFiles` in the job result |
 
 ## 9. Install, upgrade, uninstall
