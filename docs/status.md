@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-11-04. Release level: L2 (compatible preview) met; the L3 native 1.0 profile is met as defined in [certification.md](certification.md) (helper profile, known differences), but no 1.0 release is published - code signing, the WrongStack adapter merge and the manual items are open.
+Last updated: 2026-11-07. Release level: L2 (compatible preview) met; the L3 native 1.0 profile is met as defined in [certification.md](certification.md) (helper profile, known differences), but no 1.0 release is published - code signing, the WrongStack adapter merge and the manual items are open.
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
