@@ -5,7 +5,7 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
-## Unreleased
+## 0.1.5
 
 ### Fixed
 
