@@ -9,6 +9,7 @@ and how, is in [docs/status.md](docs/status.md).
 
 ### Fixed
 
+- Parser programs and copies of indexes are written to private temporary folders. WrongIndex writes its parser programs (Python, Go, tree-sitter and TypeScript) to the temporary folder and runs them from there. It also writes the list's copy of a small index there. Those folders inherited the temporary folder's permissions. On a machine where other accounts can write to it (one tested here: six other accounts could), another account could replace a program before it ran, and it would then run as you. The folders now have an unpredictable name and are created with permissions for you and SYSTEM only, in the same step. A folder that already exists is never used.
 - The list of this machine's indexes (Indexes view, `wrongindex indexes`) called some indexes "unreadable": WrongStack indexes whose rows were all still in a write-ahead log nobody had folded in (9 of 102 on one machine). It also counted the other indexes without the rows still only in their logs. For an index of up to 64 MB with a log, the list now reads a private temporary copy of the index and its log, removed right after, and counts everything. A larger index with a log is counted as it is and marked `*`. A 0-byte `index.db` (created, never written) is shown as an empty file. Nothing beside the indexes changes, as before.
 
 ## 0.1.4

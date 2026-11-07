@@ -13,6 +13,7 @@ pub mod inspect;
 pub mod integrity;
 pub mod machine;
 pub mod owner_lock;
+pub mod private_dir;
 pub mod profile;
 pub mod runtime;
 pub mod wal;

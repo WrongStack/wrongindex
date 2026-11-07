@@ -19,6 +19,7 @@ use serde_json::Value;
 
 use super::{Parsed, ParsedRef, ParsedSymbol, generic, with_relations};
 use crate::js::{self, utf16};
+pub(super) use wrongindex_storage::private_dir::PrivateDir;
 
 const PY_BATCH_SCRIPT: &str = include_str!("toolchain/py_batch.py");
 /// `MAX_BATCH_FILES` / `MAX_BATCH_BYTES` of `parser-batch.ts`.
@@ -168,16 +169,16 @@ pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
 }
 
 /// `privateScriptPath`: the program in a fresh private directory (removed
-/// when the returned guard drops).
+/// when the returned guard drops). The directory is private from the moment
+/// it exists (owner-only DACL on Windows, 0700 elsewhere) and its name is
+/// unpredictable, so no other account can read or replace a program between
+/// its writing and its start, even in a shared temporary folder.
 pub(super) fn private_script(
     prefix: &str,
     name: &str,
     body: &str,
-) -> Result<(tempfile::TempDir, PathBuf), String> {
-    let dir = tempfile::Builder::new()
-        .prefix(prefix)
-        .tempdir()
-        .map_err(|e| format!("parser directory: {e}"))?;
+) -> Result<(PrivateDir, PathBuf), String> {
+    let dir = PrivateDir::new(prefix).map_err(|e| format!("parser directory: {e}"))?;
     let script = dir.path().join(name);
     std::fs::OpenOptions::new()
         .write(true)

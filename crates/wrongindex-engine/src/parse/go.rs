@@ -11,7 +11,9 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+
 use std::sync::OnceLock;
+use wrongindex_storage::private_dir::PrivateDir;
 
 use super::py::{SourceFile, decode_batch, par_chunks, private_script, resolve_command, run_chunk};
 use super::{Parsed, ParsedSymbol, with_relations};
@@ -82,14 +84,14 @@ const EXE_SUFFIX: &str = if cfg!(windows) { ".exe" } else { "" };
 /// The built parser program: from the per-user cache when an intact build
 /// for this program and Go installation is there, else built now (and
 /// cached). Linking alone costs over a second per run on a warm Go cache.
-fn program(go: &std::path::Path) -> Result<(Option<tempfile::TempDir>, PathBuf), String> {
+fn program(go: &std::path::Path) -> Result<(Option<PrivateDir>, PathBuf), String> {
     program_in(go, cache_dir())
 }
 
 fn program_in(
     go: &std::path::Path,
     cache: Option<PathBuf>,
-) -> Result<(Option<tempfile::TempDir>, PathBuf), String> {
+) -> Result<(Option<PrivateDir>, PathBuf), String> {
     let cache = cache.map(|d| {
         let key = build_key(go);
         (

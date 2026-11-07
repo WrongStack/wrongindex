@@ -458,30 +458,26 @@ fn read_db(db: &Path, db_bytes: u64, wal_bytes: u64) -> (Result<DbFacts, String>
     (read_immutable(db), wal_bytes == 0)
 }
 
+/// Prefix of the private copies ([`crate::private_dir`]; removed when done).
+pub const COPY_DIR_PREFIX: &str = "wrongindex-scan-";
+
 fn read_copy(db: &Path) -> Result<DbFacts, String> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "wrongindex-scan-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let result = (|| {
-        let copy = dir.join("index.db");
-        std::fs::copy(db, &copy).map_err(|e| e.to_string())?;
-        let mut wal = db.as_os_str().to_owned();
-        wal.push("-wal");
-        std::fs::copy(&wal, dir.join("index.db-wal")).map_err(|e| e.to_string())?;
-        let conn = Connection::open_with_flags(
-            &copy,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )
-        .map_err(|e| e.to_string())?;
-        facts(&conn)
-    })();
-    let _ = std::fs::remove_dir_all(&dir);
+    // Unpredictable name, created exclusively and private from the start:
+    // nobody else can read the copy or put something in its place.
+    let dir = crate::private_dir::PrivateDir::new(COPY_DIR_PREFIX).map_err(|e| e.to_string())?;
+    let copy = dir.path().join("index.db");
+    std::fs::copy(db, &copy).map_err(|e| e.to_string())?;
+    let mut wal = db.as_os_str().to_owned();
+    wal.push("-wal");
+    std::fs::copy(&wal, dir.path().join("index.db-wal")).map_err(|e| e.to_string())?;
+    let conn = Connection::open_with_flags(
+        &copy,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|e| e.to_string())?;
+    let result = facts(&conn);
+    // Closed before the directory goes.
+    drop(conn);
     result
 }
 
@@ -758,6 +754,15 @@ mod tests {
         std::fs::copy(src.join("index.db-wal"), w.join("index.db-wal")).unwrap();
         drop(live);
 
+        let scan_copies = || -> std::collections::BTreeSet<std::ffi::OsString> {
+            std::fs::read_dir(std::env::temp_dir())
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name())
+                .filter(|n| n.to_string_lossy().starts_with(COPY_DIR_PREFIX))
+                .collect()
+        };
+        let copies_before = scan_copies();
         let before = tree(&home);
         let s = scan(&home);
         assert_eq!(tree(&home), before, "the scan changed WrongStack's folders");
@@ -817,16 +822,7 @@ mod tests {
         assert_eq!(iwal.schema_version.as_deref(), Some("5"));
         assert!(iwal.counts_include_log);
         // The private copy is gone.
-        assert!(
-            std::fs::read_dir(std::env::temp_dir())
-                .unwrap()
-                .flatten()
-                .all(|e| !e
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(&format!("wrongindex-scan-{}-", std::process::id()))),
-            "a scan copy was left behind"
-        );
+        assert_eq!(scan_copies(), copies_before, "a scan copy was left behind");
 
         // The index server's token is never read, so never shown.
         let out = serde_json::to_string(&s).unwrap();
