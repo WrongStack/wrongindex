@@ -693,13 +693,13 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
                     report_started(c.hello().daemon_instance_id.as_str(), false, json);
                     return Ok(exit_code::SUCCESS);
                 }
-                if let Ok(Some(status)) = child.try_wait() {
+                if let Ok(Some(code)) = child.try_wait() {
                     // Exit 3 = lost the singleton race to another starter; connect to the winner.
-                    if status.code() != Some(3) {
+                    if code != 3 {
                         return Err(fail(
                             exit_code::SERVICE_UNAVAILABLE,
                             format!(
-                                "wrongindexd exited with {status}; see {}",
+                                "wrongindexd exited with code {code}; see {}",
                                 root.logs_dir().join("wrongindexd.log").display()
                             ),
                         ));
@@ -766,7 +766,7 @@ fn report_started(instance: &str, already: bool, json: bool) {
     }
 }
 
-fn spawn_daemon(root: &DataRoot) -> Result<std::process::Child, Failure> {
+fn spawn_daemon(root: &DataRoot) -> Result<wrongindex_ipc::launch::Detached, Failure> {
     let exe = wrongindex_ipc::launch::sibling_daemon_exe()
         .map_err(|e| fail(exit_code::INTERNAL, e.to_string()))?;
     wrongindex_ipc::launch::spawn_detached(&exe, root).map_err(|e| {

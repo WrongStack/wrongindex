@@ -242,20 +242,10 @@ fn start_service(cli: &Path) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Start the desktop detached, as a user would.
+/// Start the desktop detached, as a user would. It inherits no handle of
+/// this process ([`wrongindex_ipc::launch::spawn_detached_program`]).
 fn open_desktop(exe: &Path) -> bool {
-    let mut cmd = Command::new(exe);
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-    }
-    cmd.spawn().is_ok()
+    wrongindex_ipc::launch::spawn_detached_program(exe, &[]).is_ok()
 }
 
 /// Run `installer` over the copy in `dir`; the service is already stopped

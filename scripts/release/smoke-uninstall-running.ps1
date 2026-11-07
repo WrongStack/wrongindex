@@ -162,8 +162,13 @@ try {
   $result.runningAfter = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { "$($_.Name) $($_.Id)" })
   $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   $result.leftOnUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
-  $result.uninstallEntryLeft = [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
-    ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
+  # The copy in %TEMP% removes the uninstall entry last, after the files:
+  # give it the time the files had.
+  $entry = { [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
+      ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' }) }
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  while ((& $entry) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 500 }
+  $result.uninstallEntryLeft = & $entry
   $result.dataRootKept = Test-Path (Join-Path $home_ 'registry.db')
   $result.indexKept = Test-Path (Join-Path $idx 'index.db')
 } finally {
