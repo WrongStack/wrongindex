@@ -1,6 +1,8 @@
 # WrongIndex installer for Windows: downloads a release from GitHub, verifies
 # it, installs it for the current user (no administrator rights), and puts the
-# `wrongindex` CLI on the user's PATH. Running it again updates or repairs.
+# `wrongindex` CLI on the user's PATH. Running it again updates or repairs:
+# the running service and an open desktop window are stopped first and started
+# again afterwards, on the new version.
 #
 #   irm https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.ps1 | iex
 #
@@ -44,6 +46,30 @@
   function Invoke-NativeOutput([string]$exe) {
     $ErrorActionPreference = 'Continue'
     ((& $exe @args 2> $null) | Out-String).Trim()
+  }
+  # Processes whose program lies in $dir.
+  function Get-RunningFrom([string]$dir) {
+    $prefix = [IO.Path]::GetFullPath($dir).TrimEnd('\') + '\'
+    @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) })
+  }
+  # The service this user's data root has, as `daemon status` reports it
+  # (version and pid), or $null when none answers.
+  function Get-WiService([string]$cli) {
+    $s = Invoke-NativeOutput $cli daemon status
+    if ($LASTEXITCODE -ne 0 -or $s -notmatch 'pid=(\d+)') { return $null }
+    $id = [int]$Matches[1]
+    $ver = if ($s -match 'version=(\S+)') { $Matches[1] } else { '?' }
+    [pscustomobject]@{ Pid = $id; Version = $ver }
+  }
+  # `daemon start` in a window of its own, waited for by itself: started with
+  # redirected output, an older CLI could hand that pipe to the service and
+  # this script would wait until the service exits.
+  function Start-WiService([string]$cli) {
+    $p = Start-Process -FilePath $cli -ArgumentList 'daemon', 'start', '--wait-seconds', '30' -WindowStyle Hidden -PassThru
+    $null = $p.Handle
+    $p.WaitForExit()
+    Get-WiService $cli
   }
 
   if ($env:OS -ne 'Windows_NT') {
@@ -115,16 +141,49 @@
         Say "updating the installation in $InstallDir"
       }
     }
+    # An update stops what runs from the installation first (its files are
+    # locked while it runs) and starts it again afterwards, on the new
+    # version: the service of this user's data root if it was running (as the
+    # installer itself and `self-update` do), the desktop if it was open.
+    $restartService = $false
+    $reopenDesktop = $false
+    $oldCli = if ($InstallDir) { Join-Path $InstallDir 'wrongindex.exe' } else { $null }
+    if ($oldCli -and (Test-Path $oldCli)) {
+      $svc = Get-WiService $oldCli
+      $restartService = [bool]$svc
+      $reopenDesktop = @(Get-RunningFrom $InstallDir | Where-Object { $_.Name -eq 'wrongindex-desktop.exe' }).Count -gt 0
+      if ($svc) {
+        Say "stopping the service ($($svc.Version), pid $($svc.Pid))"
+        $null = Invoke-Native $oldCli daemon stop --wait-seconds 30
+      }
+      $left = Get-RunningFrom $InstallDir
+      if ($left) {
+        Say "ending what still runs from ${InstallDir}: $(($left | ForEach-Object { "$($_.Name) (pid $($_.ProcessId))" }) -join ', ')"
+        # A CLI older than 0.1.2 lacks the command; the installer then ends them.
+        $null = Invoke-Native $oldCli setup stop-installed $InstallDir
+      }
+      $deadline = (Get-Date).AddSeconds(30)
+      while (($left = Get-RunningFrom $InstallDir) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+      if ($left) {
+        if ($restartService) { $null = Start-WiService $oldCli }
+        throw "still running from ${InstallDir}: $(($left | ForEach-Object { "$($_.Name) (pid $($_.ProcessId))" }) -join ', '). Close it and run the installer again. Nothing was installed."
+      }
+    }
     $installArgs = @('/S')
     # NSIS: /D= must come last and is taken verbatim (no quotes).
     if ($InstallDir) { $installArgs += "/D=$InstallDir" }
     Say 'installing (per user, silent)'
     # Wait for the installer only: `Start-Process -Wait` also waits for its
-    # descendants, and the installer restarts a service that was running.
+    # descendants.
     $p = Start-Process -FilePath $installer -ArgumentList $installArgs -PassThru
     $null = $p.Handle # keeps the handle, so ExitCode is there after the exit
     $p.WaitForExit()
-    if ($p.ExitCode -ne 0) { throw "the installer exited with $($p.ExitCode)" }
+    if ($p.ExitCode -ne 0) {
+      # The previous version is still in place: start what was stopped.
+      if ($restartService -and (Test-Path $oldCli)) { $null = Start-WiService $oldCli }
+      if ($reopenDesktop -and (Test-Path (Join-Path $InstallDir 'wrongindex-desktop.exe'))) { Start-Process (Join-Path $InstallDir 'wrongindex-desktop.exe') }
+      throw "the installer exited with $($p.ExitCode)"
+    }
   } finally {
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
   }
@@ -144,6 +203,25 @@
     throw "installed in $dir, but wrongindex.exe does not run ($why). Please report this at https://github.com/$Repo/issues"
   }
   Say "installed $v in $dir"
-  Say 'new terminals have `wrongindex` on PATH; start the service with `wrongindex daemon start` or open WrongIndex from the Start menu'
+  $serviceFailed = $false
+  if ($restartService) {
+    $svc = Start-WiService $cli
+    if ($svc) {
+      Say "service started again ($($svc.Version), pid $($svc.Pid))"
+    } else {
+      $serviceFailed = $true
+    }
+  }
+  if ($reopenDesktop) {
+    Start-Process (Join-Path $dir 'wrongindex-desktop.exe')
+    Say 'desktop reopened'
+  }
+  Say 'new terminals have `wrongindex` on PATH'
+  if (-not $restartService) {
+    Say 'start the service with `wrongindex daemon start` or open WrongIndex from the Start menu'
+  }
   Say 'update later with `wrongindex self-update`'
+  if ($serviceFailed) {
+    throw "the service ran before the update but did not start again; start it with ``wrongindex daemon start`` (``wrongindex doctor`` shows why it does not)"
+  }
 } @args

@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Changed
+
+- `install.ps1` (and `install.sh`, which runs it) over an existing installation stops the running service and an open WrongIndex window itself, installs, and starts both again on the new version, saying what it did at each step ("stopping the service (0.1.4, pid N)", "service started again (0.1.5, pid M)", "desktop reopened"). Before, the installer stopped and restarted the service on its own and the script did not report it; an open window was closed and stayed closed. A service that was not running is not started. The script takes effect from the repository's `main` branch, without a new release.
+
 ## 0.1.5
 
 ### Fixed
