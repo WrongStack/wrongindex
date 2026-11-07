@@ -97,6 +97,14 @@ pub struct MachineIndex {
     /// Why the database could not be read (it is listed anyway).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_error: Option<String>,
+    /// `index.db` is a 0-byte file with no write-ahead log: created, never
+    /// written (WrongStack leaves such files behind). Not read.
+    pub empty: bool,
+    /// The counts include rows still only in the write-ahead log (no log, or
+    /// a small index read from a private copy, [`COPY_READ_MAX_BYTES`]).
+    /// False for a large index with a log: read `immutable=1`, the log's
+    /// rows left out.
+    pub counts_include_log: bool,
     /// WrongStack's own index server for this index (`server.json`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wrongstack_server: Option<RecordedProcess>,
@@ -265,7 +273,26 @@ fn describe(
     let server: Option<ServerRecord> = std::fs::read(dir.join(SERVER_FILE))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok());
-    let read = read_db(&db);
+    let empty = db_meta.as_ref().is_some_and(|m| m.len() == 0)
+        && wal_meta.as_ref().is_none_or(|m| m.len() == 0);
+    let (read, counts_include_log) = if empty {
+        (
+            Ok(DbFacts {
+                files: Some(0),
+                symbols: Some(0),
+                schema_version: None,
+                last_indexed_ms: None,
+                common_folder: None,
+            }),
+            true,
+        )
+    } else {
+        read_db(
+            &db,
+            db_meta.as_ref().map_or(0, |m| m.len()),
+            wal_meta.as_ref().map_or(0, |m| m.len()),
+        )
+    };
     let (mut checkout_root, mut checkout_source) = (None, None);
     if let Some(r) = meta_root {
         checkout_root = Some(r);
@@ -370,6 +397,8 @@ fn describe(
         symbols,
         schema_version,
         read_error,
+        empty,
+        counts_include_log,
         wrongstack_server,
         wrongindex_owner,
         open_by,
@@ -409,8 +438,54 @@ fn file_uri(path: &Path) -> String {
     out
 }
 
-/// Read a few facts from `index.db` without creating or changing any file.
-fn read_db(db: &Path) -> Result<DbFacts, String> {
+/// A database and its log up to this size are read from a private copy when
+/// the log has content, so rows still only in the log are counted.
+pub const COPY_READ_MAX_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Read a few facts from `index.db` without creating or changing any file
+/// beside it. With a log that has content (`wal_bytes`) and a small enough
+/// index, `index.db` and its log are copied to a private temporary folder
+/// and the copy is opened normally, which replays the log; otherwise the
+/// file is opened `immutable=1`, which leaves the log out. The second value
+/// says whether the log was included.
+fn read_db(db: &Path, db_bytes: u64, wal_bytes: u64) -> (Result<DbFacts, String>, bool) {
+    if wal_bytes > 0 && db_bytes + wal_bytes <= COPY_READ_MAX_BYTES {
+        match read_copy(db) {
+            Ok(f) => return (Ok(f), true),
+            Err(_) => { /* the file changed while copied, or similar: as is */ }
+        }
+    }
+    (read_immutable(db), wal_bytes == 0)
+}
+
+fn read_copy(db: &Path) -> Result<DbFacts, String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "wrongindex-scan-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let result = (|| {
+        let copy = dir.join("index.db");
+        std::fs::copy(db, &copy).map_err(|e| e.to_string())?;
+        let mut wal = db.as_os_str().to_owned();
+        wal.push("-wal");
+        std::fs::copy(&wal, dir.join("index.db-wal")).map_err(|e| e.to_string())?;
+        let conn = Connection::open_with_flags(
+            &copy,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|e| e.to_string())?;
+        facts(&conn)
+    })();
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+fn read_immutable(db: &Path) -> Result<DbFacts, String> {
     let conn = Connection::open_with_flags(
         file_uri(db),
         OpenFlags::SQLITE_OPEN_READ_ONLY
@@ -420,6 +495,10 @@ fn read_db(db: &Path) -> Result<DbFacts, String> {
     .map_err(|e| e.to_string())?;
     conn.pragma_update(None, "query_only", true)
         .map_err(|e| e.to_string())?;
+    facts(&conn)
+}
+
+fn facts(conn: &Connection) -> Result<DbFacts, String> {
     let meta = |key: &str| -> Option<String> {
         conn.query_row("SELECT value FROM metadata WHERE key = ?1", [key], |r| {
             r.get::<_, String>(0)
@@ -655,13 +734,36 @@ mod tests {
         std::fs::write(c.join(INDEX_DIR).join("index.db"), b"not sqlite at all").unwrap();
         // 4. A project folder without an index is looked at, not listed.
         std::fs::create_dir_all(projects.join("no-index-111111")).unwrap();
+        // 5. A 0-byte index.db (created, never written): empty, not unreadable.
+        let e = projects.join("empty-222222");
+        std::fs::create_dir_all(e.join(INDEX_DIR)).unwrap();
+        std::fs::write(e.join(INDEX_DIR).join("index.db"), b"").unwrap();
+        // 6. Every row still only in the write-ahead log (a writer that never
+        //    checkpointed, as WrongStack leaves some): `index.db` alone has
+        //    no tables. Copied from a live connection with checkpoints off.
+        let src = tmp.path().join("wal-source");
+        std::fs::create_dir_all(&src).unwrap();
+        let live = Connection::open(src.join("index.db")).unwrap();
+        live.execute_batch(
+            "PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0;
+             CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE files (file TEXT PRIMARY KEY, symbol_count INTEGER);
+             INSERT INTO metadata VALUES ('version', '5');
+             INSERT INTO files VALUES ('C:\\w\\a.ts', 5), ('C:\\w\\b.ts', 6), ('C:\\w\\c.ts', 7);",
+        )
+        .unwrap();
+        let w = projects.join("walonly-333333").join(INDEX_DIR);
+        std::fs::create_dir_all(&w).unwrap();
+        std::fs::copy(src.join("index.db"), w.join("index.db")).unwrap();
+        std::fs::copy(src.join("index.db-wal"), w.join("index.db-wal")).unwrap();
+        drop(live);
 
         let before = tree(&home);
         let s = scan(&home);
         assert_eq!(tree(&home), before, "the scan changed WrongStack's folders");
 
-        assert_eq!(s.project_dirs, 4);
-        assert_eq!(s.indexes.len(), 4, "{:#?}", s.indexes);
+        assert_eq!(s.project_dirs, 6);
+        assert_eq!(s.indexes.len(), 6, "{:#?}", s.indexes);
         assert!(!s.truncated);
         let by = |name: &str, wt: bool| {
             s.indexes
@@ -702,7 +804,29 @@ mod tests {
         assert_eq!(iw.checkout_root.as_deref(), Some(r"D:\wt\feature"));
 
         let ic = by("broken-000000", false);
-        assert!(ic.read_error.is_some() && ic.files.is_none());
+        assert!(ic.read_error.is_some() && ic.files.is_none() && !ic.empty);
+
+        let ie = by("empty-222222", false);
+        assert!(ie.empty && ie.read_error.is_none(), "{ie:#?}");
+        assert_eq!((ie.files, ie.symbols, ie.db_bytes), (Some(0), Some(0), 0));
+        assert!(!ia.empty);
+
+        let iwal = by("walonly-333333", false);
+        assert!(iwal.read_error.is_none(), "{iwal:#?}");
+        assert_eq!((iwal.files, iwal.symbols), (Some(3), Some(18)));
+        assert_eq!(iwal.schema_version.as_deref(), Some("5"));
+        assert!(iwal.counts_include_log);
+        // The private copy is gone.
+        assert!(
+            std::fs::read_dir(std::env::temp_dir())
+                .unwrap()
+                .flatten()
+                .all(|e| !e
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("wrongindex-scan-{}-", std::process::id()))),
+            "a scan copy was left behind"
+        );
 
         // The index server's token is never read, so never shown.
         let out = serde_json::to_string(&s).unwrap();

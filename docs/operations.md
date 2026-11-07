@@ -166,7 +166,7 @@ The desktop's Indexes view and `wrongindex indexes [--json] [--wrongstack-home <
 
 The desktop marks the indexes of registered projects (Open) and offers Add… for the others, which opens the read-only Add project preview for that checkout. Filters: written in the last 24 hours, in use now, not registered, checkout gone.
 
-The list changes nothing. Each index is opened with SQLite's `immutable=1`, because a WAL database opened even read-only leaves `-wal` and `-shm` files behind. Counts therefore leave out rows still only in a log. From `server.json` only the process id, project root, start time and runtime version are read. Its authentication token is never read, shown or stored. A scan of about 100 indexes in 3,600 project folders takes 2-3 s.
+The list changes nothing. Each index is opened with SQLite's `immutable=1`, because a WAL database opened even read-only leaves `-wal` and `-shm` files behind. Rows still only in a write-ahead log are counted by reading a private temporary copy of `index.db` and its log, removed right after, for an index of up to 64 MB with a log. Some WrongStack indexes hold everything in a never-checkpointed log, and `index.db` alone has no tables. A larger index with a log is read as it is, without the log's rows, and marked `*`. A 0-byte `index.db` is listed as an empty file. From `server.json` only the process id, project root, start time and runtime version are read. Its authentication token is never read, shown or stored. A scan of about 100 indexes in 3,600 project folders takes 2-3 s.
 
 ## 7. Metrics, logs and diagnostics
 

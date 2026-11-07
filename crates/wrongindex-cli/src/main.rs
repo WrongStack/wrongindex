@@ -1914,7 +1914,12 @@ fn machine_indexes(home: Option<&Path>, json: bool) -> Outcome {
             .as_deref()
             .map_or(String::new(), |w| format!(" [worktree {w}]"));
         let counts = match (i.files, &i.read_error) {
-            (Some(f), _) => format!("{f} files, {} symbols", i.symbols.unwrap_or(0)),
+            _ if i.empty => "empty file".to_string(),
+            (Some(f), _) => format!(
+                "{f} files, {} symbols{}",
+                i.symbols.unwrap_or(0),
+                if i.counts_include_log { "" } else { " *" }
+            ),
             (None, Some(_)) => "unreadable".to_string(),
             _ => "-".to_string(),
         };

@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Fixed
+
+- The list of this machine's indexes (Indexes view, `wrongindex indexes`) called some indexes "unreadable": WrongStack indexes whose rows were all still in a write-ahead log nobody had folded in (9 of 102 on one machine). It also counted the other indexes without the rows still only in their logs. For an index of up to 64 MB with a log, the list now reads a private temporary copy of the index and its log, removed right after, and counts everything. A larger index with a log is counted as it is and marked `*`. A 0-byte `index.db` (created, never written) is shown as an empty file. Nothing beside the indexes changes, as before.
+
 ## 0.1.4
 
 ### Fixed

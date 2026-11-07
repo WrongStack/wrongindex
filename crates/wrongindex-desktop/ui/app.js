@@ -500,7 +500,7 @@ function indexesView() {
     m.atMs ? el('span', { class: 'note' }, `Scanned ${ago(m.atMs)}${s ? ` in ${(s.tookMs / 1000).toFixed(1)} s` : ''}`) : null);
   const head = [
     el('h1', {}, 'Indexes on this machine'),
-    el('p', { class: 'note' }, `Every WrongStack index${s ? ` under ${s.wrongstackHome}` : ''}, read without changing anything. WrongStack writes most of them with its own engine; WrongIndex writes only the projects registered here. Counts leave out rows still in an index's write-ahead log; sizes include it.`),
+    el('p', { class: 'note' }, `Every WrongStack index${s ? ` under ${s.wrongstackHome}` : ''}, read without changing anything. WrongStack writes most of them with its own engine; WrongIndex writes only the projects registered here. Sizes include each index's write-ahead log; counts marked * leave out rows still only in the log of a large index.`),
     controls,
   ];
   if (m.error) return el('section', {}, ...head, el('p', { class: 'error' }, `The scan failed: ${m.error}`));
@@ -546,7 +546,9 @@ function indexesView() {
         where.length ? el('div', { class: i.checkoutExists === false ? 'note error' : 'note' }, where.join(' · ')) : null),
       el('td', { title: when(i.lastWriteMs) }, ago(i.lastWriteMs)),
       el('td', {}, megabytes(i.dbBytes + i.walBytes)),
-      el('td', {}, i.readError ? el('span', { class: 'error', title: i.readError }, 'unreadable') : `${(i.files ?? 0).toLocaleString()} / ${(i.symbols ?? 0).toLocaleString()}`),
+      el('td', {}, i.empty
+        ? el('span', { class: 'note', title: 'A 0-byte index.db: created, never written' }, 'empty file')
+        : i.readError ? el('span', { class: 'error', title: i.readError }, 'unreadable') : `${(i.files ?? 0).toLocaleString()} / ${(i.symbols ?? 0).toLocaleString()}${i.countsIncludeLog ? '' : ' *'}`),
       el('td', { class: w.active ? 'state current' : '' }, w.text),
       el('td', {}, action));
   });
