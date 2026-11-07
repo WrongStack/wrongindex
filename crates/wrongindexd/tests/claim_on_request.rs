@@ -216,3 +216,89 @@ async fn concurrent_claims_of_one_project_all_succeed_once() {
     );
     assert!(!phases.iter().any(|p| p == "conflict"), "{phases:?}");
 }
+
+/// Found by the v0.1.3 live test: a claim took over an index that
+/// WrongStack's own index server had open and was writing. A claim is now
+/// refused while another program has the index open, before any file is
+/// created, and the program is named; once it lets go, the claim succeeds.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_claim_is_refused_while_another_program_has_the_index_open() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let (_d, mut c) = start(&base.join("home")).await;
+    let pid = register(&mut c, &base, "held", "manual").await;
+    let index_dir = base.join("held-index");
+    // An index exists: claim, index, release.
+    c.call_raw(method::OWNERSHIP_ACQUIRE, Some(&pid), json!({}), None)
+        .await
+        .unwrap();
+    let admitted = c
+        .call_raw(
+            method::INDEX_REQUEST,
+            Some(&pid),
+            json!({"kind": "full"}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(wait_job(&mut c, &admitted).await["state"], "succeeded");
+    c.call_raw(method::OWNERSHIP_RELEASE, Some(&pid), json!({}), None)
+        .await
+        .unwrap();
+    let listing = |d: &Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    };
+    let backups =
+        |d: &Path| std::fs::read_dir(d.join(".wrongindex-backups")).map_or(0, |r| r.count());
+    let phases_before = journal(&mut c, &pid).await.len();
+    let backups_before = backups(&index_dir);
+
+    // This test process stands in for WrongStack: a connection in a read
+    // transaction, as an index server or a session keeps one.
+    let reader = rusqlite::Connection::open(index_dir.join("index.db")).unwrap();
+    reader
+        .execute_batch("BEGIN; SELECT count(*) FROM files;")
+        .unwrap();
+    let files_before = listing(&index_dir);
+    for maintenance in [false, true] {
+        let err = c
+            .call_raw(
+                method::OWNERSHIP_ACQUIRE,
+                Some(&pid),
+                json!({"maintenance": maintenance}),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), Some(ErrorCode::OwnerConflict), "{err}");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(&format!("pid {}", std::process::id()))
+                && msg.contains("Nothing was changed"),
+            "{msg}"
+        );
+    }
+    // Refused before anything: no journal entry, no backup, no new file.
+    assert_eq!(journal(&mut c, &pid).await.len(), phases_before);
+    assert_eq!(backups(&index_dir), backups_before);
+    assert_eq!(listing(&index_dir), files_before);
+    let s = c
+        .call_raw(method::OWNERSHIP_STATUS, Some(&pid), json!({}), None)
+        .await
+        .unwrap();
+    assert_ne!(s["state"], "owned", "{s}");
+
+    // Once it lets go, the claim goes through.
+    reader.execute_batch("COMMIT;").unwrap();
+    drop(reader);
+    let status = c
+        .call_raw(method::OWNERSHIP_ACQUIRE, Some(&pid), json!({}), None)
+        .await
+        .unwrap();
+    assert_eq!(status["state"], "owned", "{status}");
+}

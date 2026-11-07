@@ -44,6 +44,10 @@ $idx = Join-Path $work 'project-index'
 New-Item -ItemType Directory -Force (Join-Path $proj 'src') | Out-Null
 foreach ($i in 0..9) { [IO.File]::WriteAllText((Join-Path $proj "src\m$i.ts"), "export function fn_$i(): number { return $i; }`n") }
 $env:WRONGINDEX_HOME = $home_
+# WrongStack's index locations resolve into the work folder too: a click in
+# the test's window (Add project, by a person or anything reaching its
+# remote-debugging port) can never claim one of this machine's real indexes.
+$env:WRONGSTACK_HOME = Join-Path $work 'wrongstack-home'
 $result = [ordered]@{ installer = (Split-Path -Leaf $Installer) }
 $inDir = { param($p) $p.Path -and $p.Path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
 # Wait for the program itself only: `Start-Process -Wait` also waits for
@@ -167,6 +171,7 @@ try {
   Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | Stop-Process -Force -ErrorAction SilentlyContinue
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
+  Remove-Item Env:WRONGSTACK_HOME -ErrorAction SilentlyContinue
   Remove-Item Env:WRONGINDEX_UPDATE_URL -ErrorAction SilentlyContinue
 }
 $failures = @()

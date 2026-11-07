@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Fixed
+
+- WrongIndex could take over an index another program was writing. Registering a project whose WrongStack index server was running (for example with Add project and the pinned policy) let the service claim the index and write it while WrongStack's server kept writing too: two writers on one index. WrongStack versions with the adapter stop writing an index WrongIndex holds, but its running index server had already taken the index. A claim is now refused with `OWNER_CONFLICT` while any other program has the index open, before anything is written, and the message names the program ("the index is open by Bun (pid N) ... Nothing was changed"). A pinned or session project is claimed by itself once that program lets go. WrongStack's own hand-over (`indexing.service: wrongindex`) is unaffected: it stops its local writers before it asks.
+
 ## 0.1.3
 
 ### Added

@@ -214,6 +214,26 @@ pub async fn acquire(
         ));
     }
 
+    // 1b. Another program with the index open: WrongStack's own index
+    //     server, a WrongStack session, or anything else that may be writing
+    //     it now. Taking the index over would put a second writer beside it
+    //     (INV-01): the guard only stops writers that look for it. Refused
+    //     before any file is created; a later claim asks again.
+    let dir = index_dir.clone();
+    let open_by = tokio::task::spawn_blocking(move || crate::holders::of(&dir))
+        .await
+        .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+    if !open_by.is_empty() {
+        warn!("ownership_refused_open", {"projectId": project_id, "openBy": open_by});
+        return Err(ErrorBody::new(
+            ErrorCode::OwnerConflict,
+            format!(
+                "the index is open by {}, which may be writing it (WrongStack's index server or a WrongStack session). WrongIndex takes an index over only when no other program has it open: close that program, or let WrongStack hand the index over (indexing.service: wrongindex). Nothing was changed.",
+                crate::holders::describe(&open_by)
+            ),
+        ));
+    }
+
     // 2. Epoch bump + journal.
     let owner = shared.instance_id.clone();
     let (pid, o) = (project_id.to_string(), owner.clone());

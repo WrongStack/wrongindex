@@ -30,6 +30,10 @@ $shots = Join-Path $work 'shots'
 New-Item -ItemType Directory -Force $work, $shots | Out-Null
 Copy-Item -Recurse (Join-Path $root 'tests\fixtures\projects\treesitter-mix') $proj
 $env:WRONGINDEX_HOME = $home_
+# WrongStack's index locations resolve into the work folder too: a click in
+# the test's window (Add project, by a person or anything reaching its
+# remote-debugging port) can never claim one of this machine's real indexes.
+$env:WRONGSTACK_HOME = Join-Path $work 'wrongstack-home'
 $result = [ordered]@{ installer = $Installer; work = $work }
 $desktop = $null
 try {
@@ -86,6 +90,7 @@ try {
   $result.uninstallEntryLeft = [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
+  Remove-Item Env:WRONGSTACK_HOME -ErrorAction SilentlyContinue
 }
 # Every expectation is checked here: the gate passes only when all hold.
 $failures = @()

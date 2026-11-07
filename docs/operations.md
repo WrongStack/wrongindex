@@ -200,6 +200,7 @@ The list changes nothing. Each index is opened with SQLite's `immutable=1`, beca
 |---|---|---|
 | `freshness: unavailable`, `watchHealth: root_unavailable` | The checkout folder is gone (moved, drive removed) | Restore it; watching resumes within seconds. Nothing was deleted. |
 | `OWNER_CONFLICT` | Another process (another data root, or a claim not released) holds the index | Release it there, or stop that service |
+| `OWNER_CONFLICT` "the index is open by …" | Another program has the index open now, usually WrongStack's index server or a WrongStack session, and may be writing it; WrongIndex never claims an index beside another writer | Close that program, or let WrongStack hand the index over (`indexing.service: wrongindex`); a pinned or session project is claimed once it lets go. `wrongindex indexes` shows what holds each index |
 | `PROFILE_UNSUPPORTED` / "newer WrongStack" | The index was written by a newer or unknown schema | Update WrongIndex; the index is left untouched |
 | `PROJECT_UNAVAILABLE` on a job | The checkout root was missing when the job ran | Restore the folder; retry (desktop: Files and errors > Retry) |
 | `DATABASE_BUSY` on restore | Another process has the index open; the message names the programs that have it open ("Open by: bun.exe (pid 812)") | Close that program (often a WrongStack session of that project), then retry |
