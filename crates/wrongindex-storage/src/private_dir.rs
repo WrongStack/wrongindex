@@ -211,6 +211,39 @@ mod tests {
         }
     }
 
+    /// An SDDL trustee (`SY`, `LA`, `S-1-5-21-...`) as a full SID string.
+    #[cfg(windows)]
+    fn full_sid(trustee: &str) -> String {
+        use std::ptr::null_mut;
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertSidToStringSidW, ConvertStringSidToSidW,
+        };
+        use windows_sys::Win32::Security::PSID;
+        let w: Vec<u16> = trustee.encode_utf16().chain(Some(0)).collect();
+        let mut sid: PSID = null_mut();
+        // SAFETY: test-only; outputs freed with LocalFree.
+        unsafe {
+            assert_ne!(ConvertStringSidToSidW(w.as_ptr(), &mut sid), 0, "{trustee}");
+            let mut s: *mut u16 = null_mut();
+            assert_ne!(ConvertSidToStringSidW(sid, &mut s), 0);
+            let n = (0..).take_while(|&i| *s.add(i) != 0).count();
+            let out = String::from_utf16_lossy(std::slice::from_raw_parts(s, n));
+            LocalFree(s.cast());
+            LocalFree(sid);
+            out
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sddl_aliases_resolve_to_full_sids() {
+        assert_eq!(full_sid("SY"), "S-1-5-18");
+        assert_eq!(full_sid("BA"), "S-1-5-32-544");
+        let me = current_user_sid().unwrap();
+        assert_eq!(full_sid(&me), me);
+    }
+
     #[test]
     fn private_from_creation_unique_and_removed() {
         let parent = tempfile::tempdir().unwrap();
@@ -225,18 +258,20 @@ mod tests {
             for p in [a.path().to_path_buf(), a.path().join("program.py")] {
                 let d = dacl_sddl(&p);
                 // Protected (no inherited ACEs from the temp folder): exactly
-                // the user and LocalSystem.
-                let aces: Vec<&str> = d
+                // the user and LocalSystem. SDDL may write a well-known SID
+                // as an alias (the built-in Administrator account, which the
+                // CI runner uses, is `LA`), so each trustee is compared as a
+                // full SID.
+                let trustees: Vec<String> = d
                     .split('(')
                     .skip(1)
-                    .map(|a| a.trim_end_matches(')'))
+                    .map(|a| full_sid(a.trim_end_matches(')').rsplit(';').next().unwrap()))
                     .collect();
                 assert!(
-                    aces.iter()
-                        .all(|a| a.ends_with(&format!(";;;{me}")) || a.ends_with(";;;SY")),
-                    "{p:?}: {d}"
+                    trustees.iter().all(|t| *t == me || t == "S-1-5-18"),
+                    "{p:?}: {d} ({trustees:?}, user {me})"
                 );
-                assert!(aces.iter().any(|a| a.ends_with(&format!(";;;{me}"))), "{d}");
+                assert!(trustees.contains(&me), "{d}");
                 if p == a.path() {
                     assert!(d.starts_with("D:P"), "not protected: {d}");
                 }
