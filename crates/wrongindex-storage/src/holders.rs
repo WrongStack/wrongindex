@@ -1,7 +1,8 @@
 //! Which programs have an index open (Windows Restart Manager), for the
 //! messages that ask the user to close one: a write-ahead log a reader keeps
 //! from being cut (`resource.warning`, `resource: "wal"`), and a restore or
-//! a checkpoint refused with `DATABASE_BUSY`.
+//! a checkpoint refused with `DATABASE_BUSY`; and the list of this
+//! machine's indexes ([`crate::machine`]), which says what has each open.
 //!
 //! SQLite cannot say which connection holds a read transaction. This names
 //! every program that has the index's files open (`index.db`, `-wal`,

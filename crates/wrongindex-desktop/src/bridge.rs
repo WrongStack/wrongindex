@@ -169,6 +169,36 @@ pub struct Bridge {
     root: DataRoot,
 }
 
+/// A path as compared between the scan and the registry: separators and
+/// letter case alike (Windows paths are case-insensitive), no trailing
+/// separator.
+fn path_key(p: &str) -> String {
+    p.replace('/', "\\").trim_end_matches('\\').to_lowercase()
+}
+
+/// Mark each scanned index (`indexes[].indexDir`) with the registered
+/// project whose index directory it is (`registered: {projectId, displayName}`).
+fn mark_registered(scan: &mut Value, projects: &[Value]) {
+    let by_dir: std::collections::HashMap<String, (&Value, &Value)> = projects
+        .iter()
+        .filter_map(|p| {
+            let rec = &p["project"];
+            Some((
+                path_key(rec["indexDir"].as_str()?),
+                (&rec["projectId"], &rec["displayName"]),
+            ))
+        })
+        .collect();
+    if let Some(list) = scan["indexes"].as_array_mut() {
+        for i in list {
+            let key = i["indexDir"].as_str().map(path_key);
+            if let Some((id, name)) = key.and_then(|k| by_dir.get(&k)) {
+                i["registered"] = json!({"projectId": id, "displayName": name});
+            }
+        }
+    }
+}
+
 impl Bridge {
     pub fn new(root: DataRoot) -> Self {
         Self { root }
@@ -233,6 +263,37 @@ impl Bridge {
             "resolved": resolved,
             "inspection": inspection,
         }))
+    }
+
+    /// Every WrongStack index on this machine, read without changing
+    /// anything ([`wrongindex_storage::machine`]), each marked with the
+    /// registered project that uses it when the service answers. Works with
+    /// the service stopped: most of these indexes are written by WrongStack.
+    pub async fn machine_indexes(&self) -> Result<Value, UiError> {
+        let home = wrongindex_storage::wstack_global_root().ok_or_else(|| {
+            UiError::new("INVALID_REQUEST", "cannot determine the WrongStack home")
+        })?;
+        self.machine_indexes_in(home).await
+    }
+
+    async fn machine_indexes_in(&self, home: std::path::PathBuf) -> Result<Value, UiError> {
+        let scan = tokio::task::spawn_blocking(move || wrongindex_storage::machine::scan(&home))
+            .await
+            .map_err(|e| UiError::new("INTERNAL", e.to_string()))?;
+        let mut v =
+            serde_json::to_value(&scan).map_err(|e| UiError::new("INTERNAL", e.to_string()))?;
+        let snapshot = match self.client().await {
+            Ok(mut c) => c
+                .call_raw(method::EVENTS_SNAPSHOT, None, json!({}), None)
+                .await
+                .ok(),
+            Err(_) => None,
+        };
+        v["serviceConnected"] = json!(snapshot.is_some());
+        if let Some(s) = snapshot {
+            mark_registered(&mut v, s["projects"].as_array().map_or(&[][..], |a| a));
+        }
+        Ok(v)
     }
 
     pub async fn add_project(
@@ -618,6 +679,36 @@ mod tests {
             b.search("p", "Runner").await.unwrap_err().code,
             "SERVICE_UNAVAILABLE"
         );
+    }
+
+    #[test]
+    fn scanned_indexes_are_matched_to_registered_projects() {
+        let mut scan = json!({"indexes": [
+            {"indexDir": r"C:\Users\u\.wrongstack\projects\app-1\codebase-index"},
+            {"indexDir": r"C:\Users\u\.wrongstack\projects\other-2\codebase-index"},
+        ]});
+        let projects = [json!({"project": {
+            "projectId": "p_1", "displayName": "app",
+            "indexDir": "c:/users/U/.wrongstack/projects/app-1/codebase-index/",
+        }})];
+        mark_registered(&mut scan, &projects);
+        assert_eq!(
+            scan["indexes"][0]["registered"],
+            json!({"projectId": "p_1", "displayName": "app"})
+        );
+        assert!(scan["indexes"][1].get("registered").is_none());
+    }
+
+    #[tokio::test]
+    async fn the_machine_list_works_without_the_service() {
+        let tmp = std::env::temp_dir().join(format!("wi-desktop-m-{}", std::process::id()));
+        let b = Bridge::new(DataRoot::resolve(Some(&tmp)).unwrap());
+        let v = b
+            .machine_indexes_in(tmp.join("no-wrongstack"))
+            .await
+            .unwrap();
+        assert_eq!(v["serviceConnected"], false);
+        assert_eq!(v["indexes"], json!([]));
     }
 
     #[test]

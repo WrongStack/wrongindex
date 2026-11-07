@@ -155,6 +155,19 @@ WrongStack selects the service with `indexing.service` in its user config (not s
 
 WrongStack's own index engine never depends on WrongIndex. Without the service, every mode indexes and answers locally. The one exception is an index whose lock is held by a live service: that index is refused, never written. A lock file left behind by a service that is gone does not count. This needs WrongStack with the adapter: `main` since 2026-11-03 (WrongStack/WrongStack#430), the first release after v1.4.0. Older WrongStack versions (v1.4.0 and earlier) ignore the ownership lock: do not run them against an index WrongIndex owns.
 
+### Every WrongStack index on this machine
+
+The desktop's Indexes view and `wrongindex indexes [--json] [--wrongstack-home <dir>]` list every index under `~/.wrongstack/projects` (or `WRONGSTACK_HOME`), linked worktrees' indexes included, most recently written first. Neither needs the service. For each index the list shows:
+
+- the checkout. This comes from WrongStack's `meta.json`, else from its index server's record, else from the folder the indexed files share (marked as such), and is flagged when the checkout no longer exists;
+- the size, including the write-ahead log, and the last write;
+- the number of files and symbols;
+- what writes or holds it now. That is a WrongIndex service that owns it, WrongStack's index server (`server.json`, when that process still runs), or the programs that have it open (Windows Restart Manager). The last is asked only when no recorded writer runs and the index has a log or was written in the last 10 minutes, since the question walks every handle on the machine.
+
+The desktop marks the indexes of registered projects (Open) and offers Add… for the others, which opens the read-only Add project preview for that checkout. Filters: written in the last 24 hours, in use now, not registered, checkout gone.
+
+The list changes nothing. Each index is opened with SQLite's `immutable=1`, because a WAL database opened even read-only leaves `-wal` and `-shm` files behind. Counts therefore leave out rows still only in a log. From `server.json` only the process id, project root, start time and runtime version are read. Its authentication token is never read, shown or stored. A scan of about 100 indexes in 3,600 project folders takes 2-3 s.
+
 ## 7. Metrics, logs and diagnostics
 
 - `wrongindex metrics` reports, since the service started:

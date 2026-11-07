@@ -115,6 +115,13 @@ enum Command {
         #[arg(long)]
         wrongstack_home: Option<PathBuf>,
     },
+    /// List every WrongStack index on this machine: its checkout, size, last
+    /// write and what writes it (read-only; no service required).
+    Indexes {
+        /// WrongStack state root (default: WRONGSTACK_HOME or ~/.wrongstack).
+        #[arg(long)]
+        wrongstack_home: Option<PathBuf>,
+    },
     /// Install the newest release from GitHub over this installed copy
     /// (the installer's SHA-256 is checked against the release's SHA256SUMS.txt).
     SelfUpdate {
@@ -626,6 +633,7 @@ async fn run(cli: Cli) -> Outcome {
             Ok(exit_code::SUCCESS)
         }
         Command::Inspect { path } => inspect(&path, json),
+        Command::Indexes { wrongstack_home } => machine_indexes(wrongstack_home.as_deref(), json),
         Command::Debug { action } => debug(action),
         Command::ResolveIndexDir {
             root,
@@ -1846,6 +1854,89 @@ fn inspect(path: &Path, json: bool) -> Outcome {
         v if v.write_admissible() => exit_code::SUCCESS,
         _ => exit_code::INCOMPATIBLE_PROFILE,
     })
+}
+
+/// `wrongindex indexes`: every WrongStack index on this machine, newest
+/// write first (read-only, [`wrongindex_storage::machine`]).
+fn machine_indexes(home: Option<&Path>, json: bool) -> Outcome {
+    let home = match home {
+        Some(h) => h.to_path_buf(),
+        None => wrongindex_storage::wstack_global_root().ok_or_else(|| {
+            fail(
+                exit_code::INVALID_INPUT,
+                "cannot determine the WrongStack home",
+            )
+        })?,
+    };
+    let s = wrongindex_storage::machine::scan(&home);
+    if json {
+        print_json(
+            &serde_json::to_value(&s).map_err(|e| fail(exit_code::INTERNAL, e.to_string()))?,
+        );
+        return Ok(exit_code::SUCCESS);
+    }
+    let mb = |b: u64| format!("{:.1} MB", b as f64 / 1_048_576.0);
+    println!(
+        "{} WrongStack index(es), {} in {} ({} project folders looked at, {} ms){}",
+        s.indexes.len(),
+        mb(s.total_bytes),
+        s.wrongstack_home,
+        s.project_dirs,
+        s.took_ms,
+        if s.truncated { "; more not listed" } else { "" }
+    );
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64);
+    for i in &s.indexes {
+        let ago = i
+            .last_write_ms
+            .map_or("-".to_string(), |t| ago_text(now - t));
+        let writer = if i.wrongindex_owner.as_ref().is_some_and(|o| o.running) {
+            "WrongIndex".to_string()
+        } else if let Some(srv) = i.wrongstack_server.as_ref().filter(|s| s.running) {
+            format!("WrongStack server pid {}", srv.pid)
+        } else if !i.open_by.is_empty() {
+            format!(
+                "open: {}",
+                wrongindex_storage::holders::describe(&i.open_by)
+            )
+        } else {
+            "-".to_string()
+        };
+        let checkout = match (&i.checkout_root, i.checkout_exists) {
+            (Some(r), Some(false)) => format!("{r} (missing)"),
+            (Some(r), _) => r.clone(),
+            (None, _) => "(checkout unknown)".to_string(),
+        };
+        let wt = i
+            .worktree
+            .as_deref()
+            .map_or(String::new(), |w| format!(" [worktree {w}]"));
+        let counts = match (i.files, &i.read_error) {
+            (Some(f), _) => format!("{f} files, {} symbols", i.symbols.unwrap_or(0)),
+            (None, Some(_)) => "unreadable".to_string(),
+            _ => "-".to_string(),
+        };
+        println!(
+            "  {:>9}  {:>10}  {:<28}  {:<24}  {checkout}{wt}",
+            ago,
+            mb(i.db_bytes + i.wal_bytes),
+            counts,
+            writer
+        );
+    }
+    Ok(exit_code::SUCCESS)
+}
+
+fn ago_text(ms: i64) -> String {
+    let s = (ms / 1000).max(0);
+    match s {
+        0..60 => format!("{s}s ago"),
+        60..3600 => format!("{}m ago", s / 60),
+        3600..86400 => format!("{}h ago", s / 3600),
+        _ => format!("{}d ago", s / 86400),
+    }
 }
 
 /// `key=value` pairs to a settings patch; values are JSON when they parse

@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Added
+
+- Every WrongStack index on this machine, in the desktop's new Indexes view and `wrongindex indexes`. WrongStack writes most indexes with its own engine, and until now the desktop showed only the projects registered with WrongIndex. The list shows each index's checkout and whether it still exists, its size and last write, its files and symbols, and what writes or holds it now: a WrongIndex service, WrongStack's index server, or the programs that have it open. Filters show the indexes written in the last 24 hours, in use now, not registered, or whose checkout is gone. Add… opens the Add project preview for that checkout. The list needs no running service and changes nothing: indexes are opened with SQLite's `immutable=1`, and the index server's authentication token is never read.
+
 ## 0.1.2
 
 ### Added

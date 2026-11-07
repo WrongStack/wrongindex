@@ -25,6 +25,8 @@ const state = {
   // Updates: the last check (from GitHub, through the CLI) and the last
   // update started from a desktop, as recorded on disk.
   updates: { check: null, checking: false, last: null, starting: false },
+  // Every WrongStack index on this machine (a read-only scan, on request).
+  machine: { scan: null, busy: false, error: null, atMs: 0 },
 };
 
 // Per-viewer preferences in the WebView's own storage; the page works the
@@ -32,6 +34,7 @@ const state = {
 const AUTO_CHECK_KEY = 'wi.updates.autoCheck';
 const LAST_CHECK_KEY = 'wi.updates.lastCheckMs';
 const SEEN_UPDATE_KEY = 'wi.updates.seenAtMs';
+const INDEX_FILTER_KEY = 'wi.indexes.filter';
 const DAY_MS = 24 * 3600 * 1000;
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -430,6 +433,141 @@ function previewPanel() {
         await openProject(r.project.projectId);
       } }, 'Register project')),
     el('p', { class: 'note' }, 'Registering does not index yet. Claim ownership and choose a policy in the project view; indexing work is shown as jobs.'));
+}
+
+// ─── indexes on this machine ────────────────────────────────────────────────
+
+const RECENT_MS = 10 * 60 * 1000;
+const INDEX_FILTERS = {
+  all: 'All indexes',
+  day: 'Written in the last 24 hours',
+  active: 'In use now',
+  unregistered: 'Not registered in WrongIndex',
+  missing: 'Checkout no longer exists',
+};
+
+async function scanMachine() {
+  const m = state.machine;
+  if (m.busy) return;
+  m.busy = true;
+  m.error = null;
+  if (state.view === 'indexes') render(true);
+  try {
+    m.scan = await invoke('machine_indexes');
+    m.atMs = Date.now();
+  } catch (e) {
+    m.error = errText(e);
+  }
+  m.busy = false;
+  if (state.view === 'indexes') render(true);
+}
+
+/** Who writes or holds an index now, in words, and whether anything does. */
+function writerOf(i) {
+  const o = i.wrongindexOwner;
+  if (o && o.running) return { active: true, text: `WrongIndex service (pid ${o.pid})` };
+  const s = i.wrongstackServer;
+  if (s && s.running) {
+    return { active: true, text: `WrongStack index server (pid ${s.pid}${s.sinceMs ? `, since ${when(s.sinceMs)}` : ''})` };
+  }
+  if ((i.openBy ?? []).length) {
+    return { active: true, text: `Open by ${i.openBy.map((h) => `${h.name} (pid ${h.pid})`).join(', ')}` };
+  }
+  if (i.lastWriteMs && Date.now() - i.lastWriteMs < RECENT_MS) return { active: true, text: 'Written moments ago; nothing has it open now' };
+  return { active: false, text: '—' };
+}
+
+function indexName(i) {
+  const root = i.checkoutRoot;
+  if (!root) return i.projectDir;
+  const parts = root.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || root;
+}
+
+function indexesView() {
+  const m = state.machine;
+  // Started after this render, never from inside it.
+  if (!m.scan && !m.busy && !m.error) setTimeout(scanMachine, 0);
+  const s = m.scan;
+  const filter = load(INDEX_FILTER_KEY) in INDEX_FILTERS ? load(INDEX_FILTER_KEY) : 'all';
+  const select = el('select', {
+    id: 'index-filter', 'aria-label': 'Show',
+    onchange: (e) => { store(INDEX_FILTER_KEY, e.target.value); render(true); },
+  }, ...Object.entries(INDEX_FILTERS).map(([v, label]) => el('option', { value: v, selected: v === filter }, label)));
+  const controls = el('div', { class: 'row' },
+    el('button', { class: 'btn subtle', disabled: m.busy, onclick: scanMachine }, m.busy ? 'Scanning…' : 'Scan again'),
+    el('label', { for: 'index-filter' }, 'Show'), select,
+    m.atMs ? el('span', { class: 'note' }, `Scanned ${ago(m.atMs)}${s ? ` in ${(s.tookMs / 1000).toFixed(1)} s` : ''}`) : null);
+  const head = [
+    el('h1', {}, 'Indexes on this machine'),
+    el('p', { class: 'note' }, `Every WrongStack index${s ? ` under ${s.wrongstackHome}` : ''}, read without changing anything. WrongStack writes most of them with its own engine; WrongIndex writes only the projects registered here. Counts leave out rows still in an index's write-ahead log; sizes include it.`),
+    controls,
+  ];
+  if (m.error) return el('section', {}, ...head, el('p', { class: 'error' }, `The scan failed: ${m.error}`));
+  if (!s) return el('section', {}, ...head, el('p', { class: 'note', role: 'status' }, 'Scanning…'));
+
+  const all = s.indexes;
+  const day = Date.now() - DAY_MS;
+  const keep = {
+    all: () => true,
+    day: (i) => i.lastWriteMs && i.lastWriteMs > day,
+    active: (i) => writerOf(i).active,
+    unregistered: (i) => !i.registered,
+    missing: (i) => i.checkoutExists === false,
+  }[filter];
+  const shown = all.filter(keep);
+  const count = (pred) => all.filter(pred).length;
+  const cards = el('div', { class: 'cards' },
+    card('Indexes', all.length),
+    card('Total size', megabytes(s.totalBytes)),
+    card('Written in 24 h', count((i) => i.lastWriteMs && i.lastWriteMs > day)),
+    card('In use now', count((i) => writerOf(i).active)),
+    card('In WrongIndex', s.serviceConnected ? count((i) => i.registered) : '—'),
+    card('Checkout gone', count((i) => i.checkoutExists === false)));
+  const connected = state.overview?.connected;
+  const rows = shown.slice(0, 500).map((i) => {
+    const w = writerOf(i);
+    const where = [];
+    if (i.worktree) where.push(`linked worktree ${i.worktree}`);
+    if (i.checkoutSource === 'files') where.push('folder of the indexed files');
+    if (i.checkoutExists === false) where.push('no longer exists');
+    let action;
+    if (i.registered) {
+      action = el('button', { class: 'btn subtle', onclick: () => openProject(i.registered.projectId) }, `Open ${i.registered.displayName}`);
+    } else if (connected && i.checkoutExists && i.checkoutSource !== 'files') {
+      action = el('button', { class: 'btn subtle', onclick: () => addFromIndex(i) }, 'Add…');
+    } else {
+      action = el('span', { class: 'note' }, connected ? '' : 'service not running');
+    }
+    return el('tr', {},
+      el('td', {},
+        el('div', {}, indexName(i)),
+        el('div', { class: 'note mono' }, i.checkoutRoot ?? `(checkout unknown) ${i.projectDir}`),
+        where.length ? el('div', { class: i.checkoutExists === false ? 'note error' : 'note' }, where.join(' · ')) : null),
+      el('td', { title: when(i.lastWriteMs) }, ago(i.lastWriteMs)),
+      el('td', {}, megabytes(i.dbBytes + i.walBytes)),
+      el('td', {}, i.readError ? el('span', { class: 'error', title: i.readError }, 'unreadable') : `${(i.files ?? 0).toLocaleString()} / ${(i.symbols ?? 0).toLocaleString()}`),
+      el('td', { class: w.active ? 'state current' : '' }, w.text),
+      el('td', {}, action));
+  });
+  return el('section', {}, ...head, cards,
+    el('h2', {}, `${INDEX_FILTERS[filter]} (${shown.length})`),
+    shown.length
+      ? el('table', {},
+        el('thead', {}, el('tr', {}, ...['Project', 'Last written', 'Size', 'Files / symbols', 'Written or held by', ''].map(th))),
+        el('tbody', {}, rows))
+      : el('div', { class: 'empty' }, 'No index matches.'),
+    shown.length > 500 ? el('p', { class: 'note' }, `The first 500 of ${shown.length} are shown.`) : null,
+    s.truncated ? el('p', { class: 'note' }, 'More indexes exist than the scan lists.') : null);
+}
+
+/** Register an index's checkout: the read-only preview of Add project, filled in. */
+async function addFromIndex(i) {
+  const r = await call('preview_project', { path: i.checkoutRoot });
+  state.preview = { path: i.checkoutRoot, ...r };
+  state.selected = null;
+  state.detail = null;
+  go('projects');
 }
 
 function detailView() {
@@ -1078,6 +1216,8 @@ async function announceLastUpdate() {
 function go(view) {
   state.view = view;
   if (view === 'settings') { state.autostart = null; state.service = null; state.updates.last = null; }
+  // Opening the list scans again (a few seconds, read-only), unless just done.
+  if (view === 'indexes' && Date.now() - state.machine.atMs > 30000) state.machine.scan = null;
   if (view !== 'projects') { state.selected = null; state.detail = null; }
   render();
   document.getElementById('main').focus();
@@ -1102,7 +1242,7 @@ function render(force = false) {
     if (b.dataset.view === state.view) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   }
-  const views = { overview: overviewView, projects: projectsView, activity: activityView, diagnostics: diagnosticsView, settings: settingsView };
+  const views = { overview: overviewView, projects: projectsView, indexes: indexesView, activity: activityView, diagnostics: diagnosticsView, settings: settingsView };
   const main = document.getElementById('main');
   // Keep the scroll position across live refreshes of the same screen only.
   const screen = `${state.view}:${state.selected ?? ''}`;

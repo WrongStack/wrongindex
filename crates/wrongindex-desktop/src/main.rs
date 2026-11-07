@@ -29,6 +29,11 @@ async fn overview(bridge: State<'_, Bridge>) -> Res {
 }
 
 #[tauri::command]
+async fn machine_indexes(bridge: State<'_, Bridge>) -> Res {
+    bridge.machine_indexes().await
+}
+
+#[tauri::command]
 fn preview_project(bridge: State<'_, Bridge>, path: String) -> Res {
     bridge.preview(&path)
 }
@@ -290,6 +295,7 @@ fn main() {
         .manage(updater)
         .invoke_handler(tauri::generate_handler![
             overview,
+            machine_indexes,
             preview_project,
             add_project,
             project_action,

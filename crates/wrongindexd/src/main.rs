@@ -10,7 +10,7 @@ mod dirty;
 mod disk;
 mod engine;
 mod events;
-mod holders;
+use wrongindex_storage::holders;
 mod log;
 mod metrics;
 mod ownership;
