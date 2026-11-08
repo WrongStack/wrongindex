@@ -84,7 +84,7 @@ jobs:
             '- Git Bash: `curl -fsSL https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.sh | sh`',
             '- an installed copy: `wrongindex self-update`',
             '',
-            'Verify by hand: `sha256sum -c SHA256SUMS.txt` and `gh attestation verify <file> --repo WrongStack/wrongindex`. RELEASE-MANIFEST.json records the commit, the supported index profile, the toolchain and every hash; THIRD-PARTY-LICENSES.txt lists the bundled components.'
+            'Verify by hand: `sha256sum -c SHA256SUMS.txt` and `gh attestation verify <file> --repo WrongStack/wrongindex`. RELEASE-MANIFEST.json records the commit, the supported index profile, the toolchain and every hash; THIRD-PARTY-LICENSES.txt lists the bundled components. Rebuild and compare: `pwsh scripts/release/reproduce.ps1 -Tag <tag>`.'
           ) -join "`n"
           $files = (Get-ChildItem $out -Include *.exe,SHA256SUMS.txt,RELEASE-MANIFEST.json,THIRD-PARTY-LICENSES.txt -Recurse).FullName
           gh release create $env:TAG --title "WrongIndex $env:TAG" --notes $notes --latest @files

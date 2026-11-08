@@ -5,6 +5,13 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Fixed
+
+- The desktop program (`wrongindex-desktop.exe`) that the installer puts on disk could not be verified against the release. When Tauri packs the desktop into the installer it changes three bytes in it, a marker for the kind of package (`__TAURI_BUNDLE_TYPE_VAR_UNK` becomes `..._NSS`). The release manifest's desktop hash and the build-provenance attestation were both made from the build's copy, which is never shipped, so `gh attestation verify` failed for an installed desktop (checked on 0.1.6: the CLI verifies, the desktop does not). The manifest now records each program as the installer ships it, and says when the packer changed it and how (`builtSha256`, `bundlerPatch`). Any other difference stops the release, and so does a program missing from the installer. The release attests the shipped copies.
+- The release binaries contained the absolute paths of the build machine: the checkout and the Cargo folder, which include the build account's name. Because those paths differ in length between machines, everything after them in the file moved, and the link time and a random PDB id were written in too. So two builds of the same commit could not be compared. Paths are now replaced by fixed prefixes, and the linker writes content hashes instead of the time and the random id. Two builds of the same commit with the same toolchain, in different folders, now give byte-identical programs (the service, the CLI and the desktop as shipped; the NSIS installer around them is not byte-identical). `scripts/release/reproduce.ps1 -Tag <tag>` rebuilds a release and compares its programs with the hashes it published. On a machine with a Turkish locale, the packaging script built the name of the variable that carries these flags with the letter `İ`, so Cargo never read it; it now uses invariant casing and stops if a program still contains a build path.
+
 ## 0.1.6
 
 ### Fixed
