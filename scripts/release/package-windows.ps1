@@ -34,7 +34,11 @@ $reproFlags = @(
   '-Clink-arg=/Brepro'
 )
 if ($reproFlags -match ' ') { throw "a path to map contains a space: $($reproFlags -join ' | ')" }
-$flagsVar = "CARGO_TARGET_$($triple.ToUpper().Replace('-', '_'))_RUSTFLAGS"
+# Invariant upper case: under a Turkish locale ToUpper() turns the `i` of
+# `windows` into `İ`, a variable Cargo never reads (the flags were silently
+# dropped on such a machine).
+$flagsVar = "CARGO_TARGET_$($triple.ToUpperInvariant().Replace('-', '_'))_RUSTFLAGS"
+if ($flagsVar -cnotmatch '^CARGO_TARGET_[A-Z0-9_]+_RUSTFLAGS$') { throw "unexpected variable name $flagsVar" }
 if ([Environment]::GetEnvironmentVariable($flagsVar)) { throw "$flagsVar is already set; it would be replaced" }
 [Environment]::SetEnvironmentVariable($flagsVar, ($reproFlags -join ' '))
 try {
@@ -81,12 +85,19 @@ try {
   } finally {
     Pop-Location
   }
+  # The mapping took effect: no shipped binary names this machine's paths.
+  foreach ($name in 'wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe') {
+    $text = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes((Join-Path $target "release\$name")))
+    foreach ($local in $root.Path, $cargoHome) {
+      if ($text.IndexOf($local, [StringComparison]::OrdinalIgnoreCase) -ge 0) { throw "$name contains the build path $local; the path mapping did not apply" }
+    }
+  }
   $desktopVersion = (Get-Item (Join-Path $target 'release\wrongindex-desktop.exe')).VersionInfo.ProductVersion
   if ($desktopVersion -ne $version) { throw "wrongindex-desktop.exe is version $desktopVersion, expected $version" }
 
   $out = Join-Path $target 'release\bundle\nsis'
   $manifest = Get-ChildItem $out -Filter *.exe | ForEach-Object {
-    "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+    "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
   }
   # LF line endings: `sha256sum -c SHA256SUMS.txt` must work on any system.
   [IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), (($manifest -join "`n") + "`n"))

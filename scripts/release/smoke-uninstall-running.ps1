@@ -68,7 +68,7 @@ function Start-ReleaseServer {
   $name = Split-Path -Leaf $Installer
   New-Item -ItemType Directory -Force (Join-Path $srv "dl\$tag"), (Join-Path $srv 'releases\tags') | Out-Null
   Copy-Item $Installer (Join-Path $srv "dl\$tag\$name")
-  $hash = (Get-FileHash $Installer -Algorithm SHA256).Hash.ToLower()
+  $hash = (Get-FileHash $Installer -Algorithm SHA256).Hash.ToLowerInvariant()
   [IO.File]::WriteAllText((Join-Path $srv "dl\$tag\SHA256SUMS.txt"), "$hash  $name`n")
   $portFile = Join-Path $work 'release-server.port'
   $js = @'
