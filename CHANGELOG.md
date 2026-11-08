@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## 0.1.8
+
+### Fixed
+
+- Windows Security (Microsoft Defender) removed `wrongindex.exe` from the 0.1.7 installation on some machines, as `Trojan:Win32/Bearfoos.A!ml`, a false positive of its machine-learning detection (the releases are not code-signed). The service and the desktop were not affected, and 0.1.6's programs were not flagged. After that the install or `self-update` stopped with a message about a missing or unrunnable program. The program files are rebuilt in this release, which gives them a new verdict, but that is not a fix: `install.ps1` now says what happened when it finds the removal in Windows Security's history (what was removed, how to restore it, to check it against the release's SHA-256 and attestation, and to report the false positive to Microsoft), instead of only "was not found" or "does not run". If it happens to you, restore the file in Windows Security > Protection history and run the installer again; keep real-time protection on.
+
 ## 0.1.7
 
 ### Fixed

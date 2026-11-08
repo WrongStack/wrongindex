@@ -55,6 +55,20 @@
   }
   # The service this user's data root has, as `daemon status` reports it
   # (version and pid), or $null when none answers.
+  # Name of the threat Windows Security removed `path` for, or $null. Releases
+  # are unsigned, so its machine-learning detection can flag a new program.
+  function Get-DefenderRemoval([string]$path) {
+    try {
+      $d = Get-MpThreatDetection -ErrorAction Stop | Where-Object { $_.Resources -and ($_.Resources -join ';') -like "*$path*" } |
+        Sort-Object InitialDetectionTime -Descending | Select-Object -First 1
+      if ($d) { $n = (Get-MpThreat -ThreatID $d.ThreatID -ErrorAction SilentlyContinue).ThreatName; if ($n) { $n } else { 'a threat' } }
+    } catch { }
+  }
+  function Get-DefenderAdvice([string]$path) {
+    $t = Get-DefenderRemoval $path
+    if (-not $t) { return '' }
+    " Windows Security removed it as $t, a false positive of its machine-learning detection (these releases are not code-signed). Restore it in Windows Security > Virus & threat protection > Protection history > Actions > Restore, check it with ``sha256sum -c SHA256SUMS.txt`` and ``gh attestation verify``, report it at https://www.microsoft.com/wdsi/filesubmission, and run the installer again. Leave real-time protection on."
+  }
   function Get-WiService([string]$cli) {
     $s = Invoke-NativeOutput $cli daemon status
     if ($LASTEXITCODE -ne 0 -or $s -notmatch 'pid=(\d+)') { return $null }
@@ -194,13 +208,13 @@
     Where-Object { $_.DisplayName -like 'WrongIndex*' } | Select-Object -First 1
   $dir = if ($InstallDir) { $InstallDir } elseif ($entry -and $entry.InstallLocation) { $entry.InstallLocation.Trim('"') } else { $null }
   $cli = if ($dir) { Join-Path $dir 'wrongindex.exe' } else { $null }
-  if (-not $cli -or -not (Test-Path $cli)) { throw 'installed, but wrongindex.exe was not found where the installer reported' }
+  if (-not $cli -or -not (Test-Path $cli)) { throw ('installed, but wrongindex.exe was not found where the installer reported.' + $(if ($cli) { Get-DefenderAdvice $cli })) }
   if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
   # It must also run here: a binary missing a DLL prints nothing and fails.
   $v = Invoke-NativeOutput $cli --version
   if ($LASTEXITCODE -ne 0 -or -not $v) {
     $why = if ($LASTEXITCODE -eq -1073741515) { 'a DLL it needs is missing' } else { 'exit code 0x{0:X8}' -f $LASTEXITCODE }
-    throw "installed in $dir, but wrongindex.exe does not run ($why). Please report this at https://github.com/$Repo/issues"
+    throw ("installed in $dir, but wrongindex.exe does not run ($why)." + $(Get-DefenderAdvice $cli) + " Please report this at https://github.com/$Repo/issues")
   }
   Say "installed $v in $dir"
   $serviceFailed = $false
