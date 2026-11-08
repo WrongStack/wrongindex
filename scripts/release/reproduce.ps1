@@ -5,7 +5,8 @@
 #
 # Builds in a new temporary directory (a git worktree of the tag and its own
 # target directory) with scripts/release/package-windows.ps1, the script the
-# release workflow runs, then removes it unless -Keep is given. Needs what
+# release workflow runs, then removes it unless -Keep is given or a binary
+# differs. Needs what
 # that script needs (the pinned Rust toolchain, the Tauri CLI at the version
 # the manifest records, Node, 7-Zip) and Visual C++ build tools: SQLite is C
 # code, so a different compiler version gives different bytes. Both are
@@ -14,7 +15,8 @@
 # Releases built before the path mapping in package-windows.ps1 (0.1.6 and
 # earlier) carry the build machine's paths and link time; they cannot match.
 #
-# Exit code 0 when every binary matches, 1 when one differs, 2 on a failure.
+# Exit code 0 when every binary matches, 1 when one differs (the build is then
+# kept), 2 on a failure.
 param(
   [Parameter(Mandatory)][string]$Tag,
   [string]$Repo = 'WrongStack/wrongindex',
@@ -68,11 +70,13 @@ try {
   $code = 2
 } finally {
   $env:CARGO_TARGET_DIR = $targetBefore
-  if (-not $Keep) {
+  # A difference keeps the build, so the binaries can be compared (PE
+  # structure, strings) instead of rebuilt.
+  if (-not $Keep -and $code -ne 1) {
     git -C $root worktree remove --force $src 2>$null
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
   } else {
-    Write-Host "kept $work"
+    Write-Host "kept $work (remove it with: git worktree remove --force '$src'; Remove-Item -Recurse -Force '$work')"
   }
 }
 exit $code
