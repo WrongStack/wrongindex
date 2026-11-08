@@ -317,7 +317,7 @@ pub fn apply(
     let out = Command::new(&exe)
         .arg("--version")
         .output()
-        .map_err(|e| restore(format!("running the new CLI: {e}")))?;
+        .map_err(|e| restore(new_cli_failure(&e)))?;
     let installed = String::from_utf8_lossy(&out.stdout)
         .split_whitespace()
         .last()
@@ -338,6 +338,32 @@ pub fn apply(
         stopped,
         reopened_desktop,
     })
+}
+
+/// What to do when Windows Security took the program away (install.ps1 says
+/// the same).
+const SECURITY_ADVICE: &str = "Windows Security probably removed or blocked it as a false \
+positive of its machine-learning detection (these releases are not code-signed). Restore it in \
+Windows Security > Virus & threat protection > Protection history > Actions > Restore, check it \
+with `sha256sum -c SHA256SUMS.txt` and `gh attestation verify <file> --repo \
+WrongStack/wrongindex`, report it at https://www.microsoft.com/wdsi/filesubmission, and run the \
+update again. Leave real-time protection on.";
+
+/// The error for a new CLI that cannot be started right after the installer
+/// finished. Windows reports a program its antivirus blocked as 225
+/// (ERROR_VIRUS_INFECTED) or 226 (ERROR_VIRUS_DELETED), and one it removed as
+/// missing; the installer's own exit code was 0, so the rest of the new
+/// version (service, desktop) is in place and the message says so.
+fn new_cli_failure(e: &std::io::Error) -> String {
+    let taken =
+        matches!(e.raw_os_error(), Some(225 | 226)) || e.kind() == std::io::ErrorKind::NotFound;
+    if taken {
+        format!(
+            "running the new CLI: {e}. The installer itself finished, so the new service and desktop are installed; only wrongindex.exe is affected. {SECURITY_ADVICE}"
+        )
+    } else {
+        format!("running the new CLI: {e}")
+    }
 }
 
 pub fn summary(current: &Version, release: &Release) -> Value {
@@ -380,6 +406,28 @@ mod tests {
             wait_unlocked(&exe, Duration::from_secs(10)),
             "free after exit"
         );
+    }
+
+    /// A program Windows Security removed or blocked right after the installer
+    /// wrote it gets the advice (seen live: os error 225 on the v0.1.7 CLI);
+    /// any other failure keeps its plain message.
+    #[test]
+    fn a_new_cli_the_antivirus_took_gets_the_advice() {
+        use std::io::{Error, ErrorKind};
+        for e in [
+            Error::from_raw_os_error(225),
+            Error::from_raw_os_error(226),
+            Error::from(ErrorKind::NotFound),
+        ] {
+            let m = new_cli_failure(&e);
+            assert!(m.starts_with("running the new CLI: "), "{m}");
+            assert!(m.contains("The installer itself finished"), "{m}");
+            assert!(m.contains("Protection history"), "{m}");
+            assert!(m.contains("filesubmission"), "{m}");
+        }
+        let other = new_cli_failure(&Error::from_raw_os_error(5));
+        assert!(other.starts_with("running the new CLI: "), "{other}");
+        assert!(!other.contains("Protection history"), "{other}");
     }
 
     #[test]

@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Fixed
+
+- `wrongindex self-update`, and with it the desktop's Update, now says what to do when Windows Security removes or blocks the new `wrongindex.exe` right after the installer wrote it (Windows reports error 225 or 226, or the file is simply gone). Before, it ended with only "running the new CLI: ... (os error 225)". The message now says the installer itself finished, so the new service and desktop are installed and only `wrongindex.exe` is affected, and gives the same steps `install.ps1` gives in 0.1.8: restore it in Windows Security > Protection history, check it against the release's SHA-256 and attestation, report the false positive to Microsoft, run the update again, and keep real-time protection on.
+
 ## 0.1.8
 
 ### Fixed
