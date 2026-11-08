@@ -7,16 +7,24 @@
 //       dependencies are not shipped), with the license texts found in each
 //       crate's source, plus the bundled tree-sitter assets.
 //
-//   node scripts/release/manifest.mjs manifest --bin <release dir> --bundle <installer dir> --out <file>
+//   node scripts/release/manifest.mjs manifest --bin <release dir> --bundle <installer dir> --out <file> [--shipped-out <dir>]
 //       RELEASE-MANIFEST.json: source commit, the supported index profile
 //       (id, manifest hash, WrongStack baseline commit), toolchain, Cargo.lock
 //       hash, SHA-256 of every shipped binary and of the installer, bundled
 //       assets, and the third-party license summary.
 //
-// Reads only; runs `cargo metadata --locked` and `git`.
+//       A binary's hash is the one of the copy the installer ships, unpacked with
+//       7-Zip; where the bundler patched it (the desktop's bundle type marker),
+//       `builtSha256` and `bundlerPatch` say what was built and what changed.
+//       Any other difference, or a binary missing from the installer, fails.
+//       `--shipped-out` keeps those shipped copies (the release attests them).
+//
+// Reads only (the installer is unpacked into a temporary directory, removed
+// afterwards); runs `cargo metadata --locked`, `git` and 7-Zip.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,6 +63,67 @@ const authenticode = (p) => {
   return null;
 };
 const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop'];
+
+// The installer's files, unpacked by 7-Zip (it reads NSIS installers) into a
+// new temporary directory the caller removes.
+function extract(installer) {
+  const candidates = [path.join(process.env.ProgramFiles ?? 'C:\\Program Files', '7-Zip', '7z.exe'), '7z'];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrongindex-manifest-'));
+  for (const exe of candidates) {
+    try {
+      execFileSync(exe, ['x', installer, `-o${dir}`, '-y'], { stdio: ['ignore', 'ignore', 'pipe'] });
+      return dir;
+    } catch (e) {
+      if (e.code !== 'ENOENT') {
+        fs.rmSync(dir, { recursive: true, force: true });
+        throw new Error(`unpacking ${installer} with ${exe}: ${e.message}`);
+      }
+    }
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  throw new Error('7-Zip (7z) is needed to read the binaries the installer ships');
+}
+
+// The file named `name` (any letter case) under `dir`, or null.
+function findFile(dir, name) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      const found = findFile(p, name);
+      if (found) return found;
+    } else if (e.name.toLowerCase() === name.toLowerCase()) {
+      return p;
+    }
+  }
+  return null;
+}
+
+// Tauri's bundler writes the bundle type into the desktop binary it packs
+// (`__TAURI_BUNDLE_TYPE_VAR_UNK` becomes `..._NSS` for NSIS), so the shipped
+// copy differs from the build in those three bytes. What the patch was, when
+// that is the only difference; null otherwise.
+const MARKER = Buffer.from('__TAURI_BUNDLE_TYPE_VAR_');
+function patchOnly(built, shipped) {
+  if (built.length !== shipped.length) return null;
+  const patches = [];
+  let from = 0;
+  const allowed = [];
+  for (let at = built.indexOf(MARKER, from); at >= 0; at = built.indexOf(MARKER, from)) {
+    const tag = at + MARKER.length;
+    allowed.push([tag, tag + 3]);
+    from = tag;
+  }
+  for (let i = 0; i < built.length; i++) {
+    if (built[i] === shipped[i]) continue;
+    const span = allowed.find(([s, e]) => i >= s && i < e);
+    if (!span) return null;
+    const [s, e] = span;
+    const text = `${MARKER}${built.subarray(s, e)} -> ${MARKER}${shipped.subarray(s, e)} at 0x${(s - MARKER.length).toString(16)}`;
+    if (!patches.includes(text)) patches.push(text);
+    i = e - 1;
+  }
+  return patches.length ? `Tauri bundle type marker: ${patches.join('; ')}` : null;
+}
 
 // The DLLs a PE file imports (its import directory), lower-cased.
 function peImports(file) {
@@ -184,7 +253,9 @@ if (mode === 'licenses') {
   const bin = opt('--bin');
   const bundle = opt('--bundle');
   const out = opt('--out');
-  if (!bin || !out) throw new Error('--bin <release dir> --out <file> [--bundle <installer dir>]');
+  // Where to leave the binaries as the installer ships them (attested).
+  const shippedOut = opt('--shipped-out');
+  if (!bin || !out) throw new Error('--bin <release dir> --out <file> [--bundle <installer dir> [--shipped-out <dir>]]');
   const crates = shippedCrates();
   const histogram = {};
   for (const c of crates) histogram[c.license ?? '(none)'] = (histogram[c.license ?? '(none)'] ?? 0) + 1;
@@ -197,10 +268,37 @@ if (mode === 'licenses') {
   }
   const needsRedist = Object.entries(binaries).flatMap(([n, b]) => b.imports.filter((d) => VC_REDIST.test(d)).map((d) => `${n} (${d})`));
   const installers = {};
+  const notShipped = [];
   if (bundle && fs.existsSync(bundle)) {
     for (const n of fs.readdirSync(bundle).filter((f) => f.endsWith('.exe'))) {
       const p = path.join(bundle, n);
       installers[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p) };
+      // Each binary as the installer ships it, which is what a user can
+      // check: the bundler patches the desktop's copy (see `shipped`).
+      const dir = extract(p);
+      try {
+        for (const [name, b] of Object.entries(binaries)) {
+          const file = findFile(dir, name);
+          if (!file) {
+            notShipped.push(`${name} (not in ${n})`);
+            continue;
+          }
+          if (shippedOut) {
+            fs.mkdirSync(shippedOut, { recursive: true });
+            fs.copyFileSync(file, path.join(shippedOut, name));
+          }
+          const got = sha256(file);
+          if (got === b.sha256) continue;
+          const why = patchOnly(fs.readFileSync(path.join(bin, name)), fs.readFileSync(file));
+          if (!why) {
+            notShipped.push(`${name} (the copy in ${n} differs from the build beyond the bundler's marker)`);
+            continue;
+          }
+          binaries[name] = { ...b, sha256: got, bytes: fs.statSync(file).size, builtSha256: b.sha256, bundlerPatch: why };
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   }
   const ts = treeSitter();
@@ -251,6 +349,10 @@ if (mode === 'licenses') {
   console.log(out);
   const absent = ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe'].filter((n) => !binaries[n]);
   if (buildInfo && !buildInfo.sqlite?.fts5Trigram) absent.push('SQLite FTS5 trigram tokenizer');
+  if (notShipped.length) {
+    console.error(`not shipped as built: ${notShipped.join(', ')}`);
+    process.exit(1);
+  }
   if (absent.length || (bundle && !Object.keys(installers).length)) {
     console.error(`missing: ${[...absent, ...(bundle && !Object.keys(installers).length ? ['installer'] : [])].join(', ')}`);
     process.exit(1);
