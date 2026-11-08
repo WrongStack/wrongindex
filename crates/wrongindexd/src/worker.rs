@@ -191,6 +191,9 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
                     "projectId": done.project_id, "jobId": done.job_id, "files": n,
                     "generation": done.result.as_ref().map(|r| r["generation"].clone()),
                 });
+                // A watcher that never reported anything is replaced by
+                // polling (see `watch::Supervisor::note_missed`).
+                shared.watch.note_missed(&done.project_id, n);
             }
             // An explicit write job that succeeded closes a watcher circuit
             // (WI-208); the watcher's own batches settle in the supervisor.

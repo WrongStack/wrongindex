@@ -11,7 +11,9 @@
 //! queue a full reconciliation; events arriving during that scan stay in the
 //! dirty set and run afterwards, so nothing falls into a gap. A checkout
 //! whose file system reports no changes is polled instead (see `poll`); the
-//! poller's first pass comes before the reconciliation there.
+//! poller's first pass comes before the reconciliation there. So is one
+//! whose watcher turns out silent: nothing reported since the attach while a
+//! periodic reconciliation found changes ([`Supervisor::note_missed`]).
 //!
 //! Scheduling: at most one automatic job per project. Ready batches become
 //! fenced jobs (incremental with paths, or full for reconciliation); a
@@ -97,6 +99,13 @@ struct ProjectWatch {
     corrupt: Option<String>,
     /// The project's `watchMode` when it was attached.
     mode: WatchMode,
+    /// Events the operating system's watcher reported since it was attached,
+    /// before any filter (the index's own writes included).
+    native_events: u64,
+    /// The operating system's watcher was found silent (see
+    /// [`Supervisor::note_missed`]): why this project is polled from now on,
+    /// for as long as this service runs.
+    silent: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -461,6 +470,9 @@ impl Supervisor {
                 if events_lost() {
                     return;
                 }
+                if matches!(w.watcher, Some(Watching::Native(_))) {
+                    w.native_events += 1;
+                }
                 if rescan || w.overflowed.swap(false, Ordering::SeqCst) {
                     w.dirty.mark_reconcile(
                         if rescan {
@@ -528,9 +540,14 @@ impl Supervisor {
         mode: WatchMode,
     ) -> Result<&'static str, String> {
         let overflowed = Arc::new(AtomicBool::new(false));
+        let silent = self
+            .projects
+            .lock()
+            .ok()
+            .and_then(|g| g.get(project_id).and_then(|w| w.silent.clone()));
         let reason = match mode {
             WatchMode::Poll => Some("polling chosen for this project (watchMode poll)".to_string()),
-            WatchMode::Auto => crate::poll::refused(root),
+            WatchMode::Auto => silent.or_else(|| crate::poll::refused(root)),
         };
         let watching = match reason {
             None => Watching::Native(self.native(project_id, root, overflowed.clone())?),
@@ -564,6 +581,7 @@ impl Supervisor {
         w.initial_done = false;
         w.disk_wait = None;
         w.mode = mode;
+        w.native_events = 0;
         // Watcher first, then the full attach reconciliation (a poller asks
         // for it after its first pass).
         if !polled {
@@ -580,7 +598,16 @@ impl Supervisor {
     ) -> Result<notify::RecommendedWatcher, String> {
         let tx = self.tx.clone();
         let pid = project_id.to_string();
+        // Test hook, debug builds only: the watcher is set up and never
+        // reports, as on a file system that accepts the request and never
+        // answers it.
+        #[cfg(debug_assertions)]
+        let silent = std::env::var_os("WRONGINDEX_DEBUG_SILENT_WATCHER").is_some();
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            #[cfg(debug_assertions)]
+            if silent {
+                return;
+            }
             let msg = match res {
                 Ok(ev) => WatchMsg::Event {
                     project_id: pid.clone(),
@@ -602,6 +629,53 @@ impl Supervisor {
             .watch(root, RecursiveMode::Recursive)
             .map_err(|e| e.to_string())?;
         Ok(watcher)
+    }
+
+    /// A periodic reconciliation found `files` changed files that no event
+    /// had reported. Where the operating system's watcher has reported
+    /// nothing at all since it was attached, it is silent: some file systems
+    /// (SMB servers among them) accept the request for change notifications
+    /// and never answer it, which [`crate::poll::refused`] cannot tell. Such a
+    /// project (`watchMode` auto) is polled from then on: the watcher is
+    /// dropped here and the next round attaches a poller, whose first pass
+    /// and the attach reconciliation follow. `true` when it switched.
+    ///
+    /// A watcher that reported anything is not silent; a missed change there
+    /// (an event queue the OS dropped) is only logged by the caller. With
+    /// polling off (`pollIntervalSeconds` 0) the watcher stays and the
+    /// project shows why its edits wait for the next reconciliation.
+    pub fn note_missed(&self, project_id: &str, files: u64) -> bool {
+        let Ok(mut g) = self.projects.lock() else {
+            return false;
+        };
+        let Some(w) = g.get_mut(project_id) else {
+            return false;
+        };
+        if !matches!(w.watcher, Some(Watching::Native(_)))
+            || w.native_events > 0
+            || w.mode != WatchMode::Auto
+        {
+            return false;
+        }
+        let reason = format!(
+            "the file system accepted the request for change notifications but reported nothing, while a periodic reconciliation found {files} changed file{}",
+            if files == 1 { "" } else { "s" }
+        );
+        if self.poll_every_ms.load(Ordering::SeqCst) == 0 {
+            warn!("watch_silent", {"projectId": project_id, "files": files, "polling": false});
+            w.last_error = Some(format!(
+                "watcher: {reason}; polling is off (pollIntervalSeconds 0), so edits are found only by the periodic reconciliation"
+            ));
+            return false;
+        }
+        warn!("watch_silent", {"projectId": project_id, "files": files, "polling": true});
+        w.silent = Some(reason);
+        w.watcher = None;
+        w.health = "off";
+        w.dirty = DirtySet::default();
+        w.initial_done = false;
+        w.disk_wait = None;
+        true
     }
 
     fn detach(&self, project_id: &str) {

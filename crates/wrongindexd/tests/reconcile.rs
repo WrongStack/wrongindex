@@ -259,6 +259,10 @@ async fn a_missed_edit_is_found_by_the_periodic_reconciliation() {
     .await;
     let mut stream = subscribe(&home, &mut c).await;
     let (pid, root) = project(&mut c, &mut stream, &base).await;
+    // The watcher reports (a file in an ignored directory: an event, no
+    // run), so it is not taken for a silent one below.
+    std::fs::create_dir_all(root.join("node_modules")).unwrap();
+    std::fs::write(root.join("node_modules/seen.txt"), "x").unwrap();
 
     // Periodic runs come, find nothing, publish nothing.
     let generation = current(&mut c, &pid).await["generation"].clone();
@@ -315,6 +319,12 @@ async fn a_missed_edit_is_found_by_the_periodic_reconciliation() {
         "{m}"
     );
     assert_eq!(m["limits"]["reconcileMinutes"], 15, "{m}");
+    // One lost edit from a watcher that does report is no reason to poll.
+    assert_eq!(
+        status(&mut c, &pid).await["watchHealth"],
+        "native",
+        "a reporting watcher was given up"
+    );
 }
 
 /// A file rewritten with the same size and its old timestamp, its events

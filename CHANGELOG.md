@@ -7,6 +7,10 @@ and how, is in [docs/status.md](docs/status.md).
 
 ## Unreleased
 
+### Fixed
+
+- A checkout on a share that accepts the request for change notifications and never sends any (an SMB server with notifications turned off, for example) looked watched while every edit waited up to 15 minutes for the periodic reconciliation. When that reconciliation finds changed files while the watcher has reported nothing at all since it was attached, the project is now polled (`watchHealth: polling`, with the reason in its status) until the service restarts. A watcher that has reported anything is kept. `wrongindex project watch-mode <id> poll` still chooses polling for good.
+
 ### Changed
 
 - `install.ps1` (and `install.sh`, which runs it) over an existing installation stops the running service and an open WrongIndex window itself, installs, and starts both again on the new version, saying what it did at each step ("stopping the service (0.1.4, pid N)", "service started again (0.1.5, pid M)", "desktop reopened"). Before, the installer stopped and restarted the service on its own and the script did not report it; an open window was closed and stayed closed. A service that was not running is not started. The script takes effect from the repository's `main` branch, without a new release.

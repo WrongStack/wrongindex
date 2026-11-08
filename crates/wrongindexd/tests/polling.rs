@@ -11,6 +11,9 @@
 //!   reports changes is polled anyway, keeps its mode across a restart, and
 //!   goes back to the system's notifications with `auto`, no revision
 //!   change either way;
+//! * a watcher that is accepted and never reports (debug hook
+//!   `WRONGINDEX_DEBUG_SILENT_WATCHER`) is replaced by polling once a
+//!   periodic reconciliation finds a change it did not report;
 //! * a real WSL share (`--ignored`, `WRONGINDEX_TEST_WSL_DISTRO`): the file
 //!   system refuses change notifications, which is found without any hook,
 //!   and edits made there are indexed.
@@ -289,6 +292,60 @@ async fn configure(c: &mut Client, pid: &str, patch: Value) -> Value {
     c.call_raw(method::PROJECT_CONFIGURE, Some(pid), patch, None)
         .await
         .unwrap()
+}
+
+/// A watcher the file system accepts and then never answers (some SMB
+/// servers; here the debug hook `WRONGINDEX_DEBUG_SILENT_WATCHER`) cannot be
+/// told at attach. Once a periodic reconciliation finds a change while the
+/// watcher has reported nothing since it was attached, the project is
+/// polled, says why, and later edits reach the index.
+#[tokio::test(flavor = "multi_thread")]
+#[cfg_attr(not(debug_assertions), ignore = "the hooks exist in debug builds only")]
+async fn a_watcher_that_never_reports_is_replaced_by_polling() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let home = base.join("home");
+    let root = base.join("demo");
+    write_project(&root);
+    let (_d, mut c) = start_with(
+        &home,
+        &[
+            ("WRONGINDEX_DEBUG_SILENT_WATCHER", "1"),
+            ("WRONGINDEX_DEBUG_RECONCILE_EVERY_SECS", "3"),
+        ],
+    )
+    .await;
+    settings(&mut c, json!({"pollIntervalSeconds": 1})).await;
+    let mut stream = subscribe(&home, &mut c).await;
+    let pid = register(&mut c, &root, &base.join("idx")).await;
+    health(&mut stream, &pid, "native").await;
+
+    // An edit the watcher does not report: the periodic reconciliation finds
+    // it, and the watcher is given up.
+    std::fs::write(
+        root.join("src/m3.ts"),
+        "export function missedBySilentWatcher(): number { return 3; }\n",
+    )
+    .unwrap();
+    until_hits(
+        &mut c,
+        &pid,
+        "missedBySilentWatcher",
+        true,
+        Duration::from_secs(30),
+    )
+    .await;
+    health(&mut stream, &pid, "polling").await;
+    let s = status(&mut c, &pid).await;
+    let reason = s["polling"]["reason"].as_str().unwrap_or_default();
+    assert!(
+        reason.contains("reported nothing") && reason.contains("found 1 changed file"),
+        "{s}"
+    );
+
+    // Polled from now on.
+    edits_reach_the_index(&mut c, &pid, &root).await;
+    assert_eq!(status(&mut c, &pid).await["watchHealth"], "polling");
 }
 
 async fn health(stream: &mut EventStream, pid: &str, want: &'static str) {

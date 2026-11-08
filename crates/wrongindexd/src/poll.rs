@@ -8,7 +8,11 @@
 //! crate then sets its watch up without a word and never reports anything:
 //! such a project looked current while every edit was missed (found on a
 //! WSL share, 2026-11-04). [`refused`] asks the file system before a
-//! watcher is trusted. Where it says no, a [`Poller`] walks the checkout
+//! watcher is trusted. Some file systems (SMB servers among them) accept
+//! the request and then never answer it; that shows only later, when a
+//! periodic reconciliation finds changes while the watcher has reported
+//! nothing at all since it was attached, and the project is polled from then
+//! on (`watch::Supervisor::note_missed`). Where it says no, a [`Poller`] walks the checkout
 //! every `pollIntervalSeconds` (default 5; 0 = no polling, and the project
 //! is reported `failed`) and compares each indexable file's size and
 //! modification time with the pass before. What differs goes to the
