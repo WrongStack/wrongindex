@@ -4,6 +4,10 @@ This document defines what a WrongIndex build is certified against, how the cert
 
 **2026-11-11 release readiness:** the historical certification below applies to the earlier Tauri/profile builds, not the new GPUI candidate. Current implementation evidence and pending requirements are recorded in [status.md](status.md). The candidate is not release-qualified while required checks are FAIL or NOT RUN. GPUI is an additional preview client; the existing desktop stays available.
 
+The next preview version is prepared as **0.2.0**. Its own source/artifact/signing freeze and qualification remain pending; the successful 0.1.9 engineering builds and running soaks below are not automatically transferred to it. No release tag has been created. The application version changes while protocol version 1 and the existing storage profile remain unchanged.
+
+Current review source `37959dec183d5c06470b1111a623962d567d0eb5` passed [hosted artifact validation](https://github.com/WrongStack/wrongindex/actions/runs/43074844036): workspace 328/0/33 ignored, real-volume disk-full 1/0, shipped-daemon client actors 3/0, packaging and provenance. Downloaded installer/all four programs passed exact-source attestation and integrity checks, disposable native install/uninstall and live WrongStack MCP/CLI/WebUI proofs. That exact unsigned artifact still FAILS startup under the tested clean-Windows Smart App Control policy. Two distinct native daemon binaries have separate running 24-hour tests; neither is PASS yet. This evidence does not change historical manual rows or approve a future versioned/signed release.
+
 ## 1. The certified profile
 
 | Item | Value |

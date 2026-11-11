@@ -5,7 +5,9 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
-## Unreleased
+## 0.2.0
+
+Unreleased preview candidate. Publication requires final source/artifact qualification; the unsigned clean-Windows failure and remaining acceptance gates are recorded in `docs/status.md`.
 
 ### Added
 
