@@ -1792,6 +1792,12 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("project");
         std::fs::create_dir(&root).unwrap();
+        // Git expands Windows runner temp aliases such as RUNNER~1. As in
+        // discovery's Git-mode fixtures, use the canonical long spelling so
+        // this test exercises Git trust rather than the walk fallback.
+        let canonical = std::fs::canonicalize(&root).unwrap();
+        let canonical = canonical.to_string_lossy();
+        let root = PathBuf::from(canonical.strip_prefix(r"\\?\").unwrap_or(&canonical));
         std::fs::write(root.join("config.json"), "{\"port\":1}").unwrap();
         std::fs::write(root.join("noise.txt"), "before").unwrap();
         for args in [
@@ -1817,6 +1823,11 @@ mod tests {
                     .success()
             );
         }
+        assert_eq!(
+            wrongindex_discovery::discover(&root, &[]).source,
+            wrongindex_discovery::Source::Git,
+            "the fixture must exercise Git trust"
+        );
         let first = super::scan(&root, &Default::default()).unwrap();
         let control = temp.path().join("control");
         assert!(super::index_once(&root, &control, &control.join("index.db"), Some(first)).is_ok());

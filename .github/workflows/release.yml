@@ -82,6 +82,12 @@ jobs:
       - name: Build installer, release manifest and license inventory
         shell: pwsh
         run: scripts/release/package-windows.ps1
+      - name: Native client actor acceptance against the shipped daemon
+        shell: pwsh
+        run: |
+          $env:WRONGINDEX_TEST_DAEMON = (Resolve-Path 'target/release/bundle/shipped/wrongindexd.exe').Path
+          cargo test -p wrongindex-gpui --locked -- --ignored
+          if ($LASTEXITCODE) { throw 'Native client actor acceptance failed' }
       - name: Attest build provenance
         # The binaries as the installer ships them (the bundler patches the
         # desktop's copy; see scripts/release/manifest.mjs), so an installed
