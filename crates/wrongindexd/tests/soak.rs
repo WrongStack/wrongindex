@@ -105,7 +105,12 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
     let home = base.join("home");
-    let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
+    // Qualification can exercise the exact packaged artifact without Cargo
+    // replacing it with a test build of the same version.
+    let daemon_exe = std::env::var_os("WRONGINDEX_TEST_DAEMON")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_wrongindexd")));
+    let child = Command::new(&daemon_exe)
         .arg("--data-root")
         .arg(&home)
         .env_remove("WRONGINDEX_ENGINE")
@@ -115,6 +120,10 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
         .spawn()
         .unwrap();
     let daemon_pid = child.id();
+    eprintln!(
+        "soak subject: {} pid {daemon_pid}, duration {secs}s",
+        daemon_exe.display()
+    );
     let _daemon = Daemon(child);
     let root = DataRoot::resolve(Some(&home)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -192,6 +201,13 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
         if last_sample.elapsed() >= Duration::from_secs(5) {
             if let Some(s) = sample(daemon_pid) {
                 samples.push(s);
+                eprintln!(
+                    "soak sample: elapsed={}s edits={n} workingSet={} handles={} threads={}",
+                    start.elapsed().as_secs(),
+                    s.0,
+                    s.1,
+                    s.2
+                );
             }
             last_sample = Instant::now();
         }

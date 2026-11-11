@@ -284,6 +284,7 @@ mod tests {
     fn info(id: &str) -> EndpointInfo {
         EndpointInfo {
             endpoint: "e".into(),
+            client_bridge: None,
             daemon_instance_id: id.into(),
             daemon_version: "0".into(),
             pid: 1,

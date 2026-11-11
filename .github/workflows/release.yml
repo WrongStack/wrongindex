@@ -25,6 +25,17 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          repository: WrongStack/WrongStack
+          ref: main
+          path: target/wrongstack-source
+          persist-credentials: false
+      - name: Refuse unreviewed WrongStack contract drift
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-a6211d4792ce.json --out target/wrongstack-drift.json
       - name: Tag matches the version and has release notes
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -39,6 +50,31 @@ jobs:
         run: rustup show active-toolchain || rustup toolchain install
       - name: Test
         run: cargo test --workspace --locked
+      - name: Disk full on an isolated real volume
+        shell: pwsh
+        run: |
+          if (Get-PSDrive -Name W -ErrorAction SilentlyContinue) { throw 'W: is already in use; refusing to touch it' }
+          $vhd = Join-Path $env:RUNNER_TEMP "wrongindex-small-$env:GITHUB_RUN_ID.vhdx"
+          $attach = Join-Path $env:RUNNER_TEMP 'wrongindex-volume-attach.txt'
+          Set-Content $attach @(
+            "create vdisk file=`"$vhd`" maximum=64 type=expandable",
+            "select vdisk file=`"$vhd`"",
+            'attach vdisk',
+            'create partition primary',
+            'format fs=ntfs quick label=WISMALL',
+            'assign letter=W'
+          )
+          try {
+            diskpart /s $attach
+            if (-not (Test-Path 'W:\')) { throw 'The isolated test volume did not appear' }
+            $env:WRONGINDEX_TEST_SMALL_VOLUME = 'W:\'
+            cargo test -p wrongindexd --test real_disk_full --locked -- --ignored
+            if ($LASTEXITCODE) { throw 'Real-volume disk-full acceptance failed' }
+          } finally {
+            $detach = Join-Path $env:RUNNER_TEMP 'wrongindex-volume-detach.txt'
+            Set-Content $detach @("select vdisk file=`"$vhd`"", 'detach vdisk')
+            diskpart /s $detach
+          }
       - name: Install the Tauri CLI
         # Outside the repository so the pinned workspace toolchain does not apply.
         working-directory: ${{ runner.temp }}

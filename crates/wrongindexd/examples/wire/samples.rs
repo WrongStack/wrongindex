@@ -397,6 +397,7 @@ pub fn samples() -> Value {
         }),
         "EndpointInfo": to(EndpointInfo {
             endpoint: "\\\\.\\pipe\\wrongindex-0123456789abcdef".into(),
+            client_bridge: Some("C:\\Program Files\\WrongIndex\\wrongindexd.exe".into()),
             daemon_instance_id: hello.daemon_instance_id.clone(),
             daemon_version: hello.daemon_version.clone(),
             pid: 4242,

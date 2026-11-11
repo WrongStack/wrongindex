@@ -521,10 +521,7 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
     let in_process: Vec<usize> = (0..n)
         .filter(|&i| !files[i].failed && routes[i] == Route::InProcess)
         .collect();
-    let threads = std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .clamp(1, 16)
-        .min(in_process.len().max(1));
+    let threads = crate::parse_budget::slots().min(in_process.len().max(1));
     let per = in_process.len().div_ceil(threads).max(1);
     type ThreadOut = Result<Vec<(usize, Option<Parsed>)>, NativeError>;
     let results: Vec<ThreadOut> = std::thread::scope(|s| {
@@ -537,7 +534,10 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
                     .stack_size(PARSE_STACK_BYTES)
                     .spawn_scoped(s, move || {
                         ids.iter()
-                            .map(|&i| parse_in_process(&files[i]).map(|p| (i, p)))
+                            .map(|&i| {
+                                let _permit = crate::parse_budget::acquire();
+                                parse_in_process(&files[i]).map(|p| (i, p))
+                            })
                             .collect::<Result<Vec<_>, _>>()
                     })
             })
@@ -1637,8 +1637,8 @@ fn index_once(
     )?;
     set_meta(&tx, "rank_version", crate::rank::RANK_VERSION)?;
     set_meta(&tx, "rank_stale_files", "0")?;
-    // Git trust pass: every file Git reports clean gets `blob:contentHash`;
-    // a new stamp is only written if the checkout did not move meanwhile.
+    // Match current WrongStack: validate each new stamp against its own file.
+    // Unrelated worktree edits must not discard the usable generation.
     let t = std::time::Instant::now();
     if let Some(git) = &git {
         let stamps: Vec<(String, &str)> = files
@@ -1650,17 +1650,16 @@ fn index_once(
                     .map(|b| (format!("{b}:{}", f.content_hash), f.path.as_str()))
             })
             .collect();
-        if !stamps.is_empty() {
-            let now = wrongindex_discovery::discover(project_root, &[]);
-            if now.snapshot_key != git.snapshot_key
-                || now.files != files.iter().map(|f| f.path.clone()).collect::<Vec<_>>()
-            {
-                return Err(NativeError::SourceChanged);
-            }
-        }
+        let now = if stamps.is_empty() {
+            None
+        } else {
+            wrongindex_discovery::git::current_clean_blobs(project_root)
+        };
         let mut update = tx.prepare_cached("UPDATE files SET git_blob = ?1 WHERE file = ?2")?;
         for (stamp, file) in stamps {
-            update.execute([stamp.as_str(), file])?;
+            if now.as_ref().and_then(|m| m.get(file)) == git.clean_blobs.get(file) {
+                update.execute([stamp.as_str(), file])?;
+            }
         }
     }
     timing("write: git trust", t);
@@ -1788,6 +1787,74 @@ fn insert_fts(tx: &Connection, rows: &[(i64, String)]) -> rusqlite::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unrelated_git_edit_does_not_discard_the_scanned_generation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("config.json"), "{\"port\":1}").unwrap();
+        std::fs::write(root.join("noise.txt"), "before").unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["add", "."],
+            vec![
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-qm",
+                "fixture",
+            ],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .current_dir(&root)
+                    .args(args)
+                    .output()
+                    .unwrap()
+                    .status
+                    .success()
+            );
+        }
+        let first = super::scan(&root, &Default::default()).unwrap();
+        let control = temp.path().join("control");
+        assert!(super::index_once(&root, &control, &control.join("index.db"), Some(first)).is_ok());
+        // Force the suspension boundary: scan first, then an unrelated edit,
+        // then publication. No sleep or concurrent-writer timing is involved.
+        let first = super::scan(&root, &Default::default()).unwrap();
+        std::fs::write(root.join("noise.txt"), "after").unwrap();
+        let index = temp.path().join("index");
+        let result = super::index_once(&root, &index, &index.join("index.db"), Some(first));
+        assert!(
+            result.is_ok(),
+            "unrelated Git changes must not discard good file rows: {result:?}"
+        );
+        let conn = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        let trusted: String = conn
+            .query_row("SELECT git_blob FROM files", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            !trusted.is_empty(),
+            "unchanged indexed file retains its trust stamp"
+        );
+        let first = super::scan(&root, &Default::default()).unwrap();
+        std::fs::write(root.join("config.json"), "{\"port\":2}").unwrap();
+        let changed = temp.path().join("changed");
+        let result = super::index_once(&root, &changed, &changed.join("index.db"), Some(first));
+        assert!(
+            result.is_ok(),
+            "changed files keep the scanned rows without a new trust stamp: {result:?}"
+        );
+        let conn = rusqlite::Connection::open(changed.join("index.db")).unwrap();
+        let trusted: String = conn
+            .query_row("SELECT git_blob FROM files", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            trusted.is_empty(),
+            "a changed indexed file must never be vouched for"
+        );
+    }
     use super::*;
 
     #[test]

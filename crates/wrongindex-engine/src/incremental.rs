@@ -1134,7 +1134,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     if let Some(g) = &git
         && g.snapshot_key.is_some()
     {
-        let mut updates: Vec<(String, String)> = Vec::new();
+        let mut updates: Vec<(String, String, String)> = Vec::new();
         let mut blesses = false;
         for file in &discovered {
             if failed.contains(file) {
@@ -1163,16 +1163,25 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
             if !desired.is_empty() {
                 blesses = true;
             }
-            updates.push((file.clone(), desired));
+            updates.push((file.clone(), desired, current));
         }
         if blesses {
-            let now = wrongindex_discovery::discover(project_root, &[]);
-            if now.snapshot_key != g.snapshot_key || now.files != discovered {
-                return Err(NativeError::SourceChanged);
-            }
+            let now = wrongindex_discovery::git::current_clean_blobs(project_root);
+            updates.retain_mut(|(file, desired, current)| {
+                if desired.is_empty()
+                    || now.as_ref().and_then(|m| m.get(file)) == g.clean_blobs.get(file)
+                {
+                    return true;
+                }
+                if current.is_empty() {
+                    return false;
+                }
+                desired.clear();
+                true
+            });
         }
         let mut up = tx.prepare_cached("UPDATE files SET git_blob = ? WHERE file = ?")?;
-        for (file, blob) in &updates {
+        for (file, blob, _) in &updates {
             up.execute([blob, file])?;
         }
     }

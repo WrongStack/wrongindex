@@ -9,6 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  wrongstack-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          repository: WrongStack/WrongStack
+          ref: main
+          path: target/wrongstack-source
+          persist-credentials: false
+      - name: Drift gate behavior
+        run: bun run test:baseline
+      - name: Certification cannot pass unexecuted requirements
+        run: bun run test:certification
+      - name: Current WrongStack source matches the reviewed contract
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-a6211d4792ce.json --out target/wrongstack-drift.json
   windows:
     # Named pipes, pipe DACLs, and path semantics require Windows (validation §8).
     runs-on: windows-latest

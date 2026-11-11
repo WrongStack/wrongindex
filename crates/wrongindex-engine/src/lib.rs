@@ -17,6 +17,7 @@ pub mod js;
 pub mod jsre;
 pub mod native;
 pub mod parse;
+mod parse_budget;
 pub mod paths;
 pub mod query;
 pub mod rank;

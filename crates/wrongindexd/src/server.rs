@@ -83,6 +83,7 @@ pub struct Shared {
     pub wake_worker: Notify,
     pub owners: crate::ownership::Owners,
     connections: AtomicUsize,
+    query_slots: Arc<tokio::sync::Semaphore>,
     sqlite_version: String,
     pub engine: crate::engine::Engine,
     pub watch: crate::watch::Supervisor,
@@ -264,10 +265,12 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         data_root: cfg.root.path().to_path_buf(),
         disk: crate::disk::Monitor::default(),
         wal: crate::wal::Care::default(),
+        query_slots: Arc::new(tokio::sync::Semaphore::new(4)),
     });
     shared.apply_settings();
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
+        client_bridge: Some(std::env::current_exe()?.to_string_lossy().into_owned()),
         daemon_instance_id: instance_id.clone(),
         daemon_version: env!("CARGO_PKG_VERSION").to_string(),
         pid: std::process::id(),
@@ -1056,6 +1059,14 @@ async fn dispatch_inner(
             })
         }
         method::INDEX_QUERY => {
+            let query_permit = Arc::new(shared.query_slots.clone().try_acquire_owned().map_err(
+                |_| {
+                    ErrorBody::new(
+                        ErrorCode::QueueSaturated,
+                        "native query slots are full; retry later",
+                    )
+                },
+            )?);
             let pid = require_project(&req)?;
             #[derive(Deserialize)]
             struct QueryParams {
@@ -1106,7 +1117,9 @@ async fn dispatch_inner(
                     q.op.clone(),
                     args.clone(),
                 );
+                let slot = query_permit.clone();
                 let r = tokio::task::spawn_blocking(move || {
+                    let _slot = slot;
                     wrongindex_engine::query::Reader::open(&dir)?.call_snapshot(&op, &a2)
                 })
                 .await
@@ -1130,6 +1143,14 @@ async fn dispatch_inner(
                     }
                     Err(QueryError::InvalidArgs(m)) => {
                         return Err(ErrorBody::new(ErrorCode::InvalidRequest, m));
+                    }
+                    Err(QueryError::Sqlite(rusqlite::Error::SqliteFailure(e, _)))
+                        if e.code == rusqlite::ErrorCode::OperationInterrupted =>
+                    {
+                        return Err(ErrorBody::new(
+                            ErrorCode::DeadlineExceeded,
+                            "native SQLite query exceeded its execution budget",
+                        ));
                     }
                     Err(QueryError::Sqlite(e)) if wrongindex_storage::integrity::is_corrupt(&e) => {
                         let e = crate::damage::corrupt(&format!("the index is damaged ({e})"));
@@ -1198,11 +1219,19 @@ async fn dispatch_inner(
                     }
                 }
             }
+            let watch_status = shared.watch.status(&pid);
+            let last_error = watch_status
+                .last_error
+                .as_deref()
+                .or(publication.last_error.as_deref());
             let mut out = json!({
                 "projectId": pid,
                 "daemonInstanceId": shared.instance_id,
                 "generation": publication.generation,
                 "graphStamp": publication.graph_stamp,
+                "indexing": job_running(),
+                "freshness": crate::watch::Supervisor::freshness(&watch_status, last_error),
+                "lastError": last_error,
                 "observedAt": now_ms(),
                 "backend": backend,
                 "result": result,
@@ -1271,6 +1300,11 @@ async fn dispatch_inner(
                 "maxLogBytes": crate::log::MAX_LOG_BYTES,
                 "maxIndexFileBytes": wrongindex_engine::native::MAX_INDEX_FILE_BYTES,
                 "parallelJobs": settings.parallel_jobs,
+                "effectiveParallelJobs": crate::confine::parallel_jobs(settings.parallel_jobs, settings.native_memory_mb, settings.worker_memory_mb),
+                "maxConcurrentQueries": 4,
+                "queryBudgetMs": 30_000,
+                "nativeMemoryCapBytes": crate::confine::cap_bytes(settings.native_memory_mb),
+                "workerMemoryCapBytes": crate::confine::cap_bytes(settings.worker_memory_mb),
                 "nativeMemoryMb": settings.native_memory_mb,
                 "workerMemoryMb": settings.worker_memory_mb,
                 "backupKeep": settings.backup_keep,

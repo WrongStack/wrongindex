@@ -4,6 +4,7 @@
 //! (first named-pipe instance) -> registry open/migrate/recover -> credential
 //! and discovery publication -> accept authenticated clients.
 
+mod bridge;
 mod confine;
 mod damage;
 mod dirty;
@@ -36,6 +37,9 @@ use wrongindex_ipc::DataRoot;
     about = "WrongIndex per-user indexing service"
 )]
 struct Args {
+    /// Verified byte transport for clients without Win32 bindings.
+    #[arg(long, hide = true)]
+    ipc_bridge: bool,
     /// Data root (default: WRONGINDEX_HOME or ~/.wrongindex).
     #[arg(long)]
     data_root: Option<PathBuf>,
@@ -248,6 +252,18 @@ fn main() -> ExitCode {
             return ExitCode::from(70);
         }
     };
+    if args.ipc_bridge {
+        let result = runtime.block_on(bridge::run(&root));
+        // A closed peer must not wait for the stdio blocking reader at exit.
+        runtime.shutdown_background();
+        return match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => {
+                eprintln!("wrongindexd: verified IPC bridge unavailable");
+                ExitCode::from(70)
+            }
+        };
+    }
     let config = server::Config {
         root,
         drain: Duration::from_secs(args.drain_seconds),

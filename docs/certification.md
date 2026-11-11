@@ -2,6 +2,8 @@
 
 This document defines what a WrongIndex build is certified against, how the certification is run, and what the latest run showed. It lists every requirement of the [delivery backlog](plan/delivery-backlog.md) with its evidence, every known difference from WrongStack, and every item that was not run. Nothing outside this document is claimed.
 
+**2026-11-11 release readiness:** the historical certification below applies to the earlier Tauri/profile builds, not the new GPUI candidate. Current implementation evidence and pending requirements are recorded in [status.md](status.md). The candidate is not release-qualified while required checks are FAIL or NOT RUN. GPUI is an additional preview client; the existing desktop stays available.
+
 ## 1. The certified profile
 
 | Item | Value |
@@ -30,6 +32,10 @@ node scripts/release/certify.mjs [--out <dir>] [--only G06,G08]
 ```
 
 Inputs come from the environment. A gate whose input is missing is reported `NOT RUN` with the reason. It is never skipped silently.
+
+A selected check exits nonzero on FAIL or NOT RUN. A full qualification also requires a clean source commit and current manual evidence; `releaseReady` is false for any focused selection. G11 requires at least 86,400 seconds. A shorter diagnostic soak remains useful, but cannot qualify a release.
+
+Pass `--manual-evidence <json>` after a person has performed the manual checks. Its structure is `{ "commit": "<exact clean commit>", "installerSha256": "<sha256>", "items": [{ "id": "M01", "status": "PASS", "evidence": "<record reference>" }] }`. Only evidence for the exact installer is admitted. No manual PASS is inherited from a historical build; signing remains waived as already authorized.
 
 | Variable | Used by | Meaning |
 |---|---|---|
@@ -72,6 +78,7 @@ The run writes `certification.json`, `certification.md`, one log per gate, `THIR
 | G20 | Third-party license inventory: every shipped crate declares a license; bundled-asset license texts match their recorded hashes | WI-009, WI-703 | `manifest.mjs licenses` |
 | G21 | Release manifest: commit, profile hashes, toolchain, Cargo.lock, SQLite, binary and installer hashes with Authenticode status, the DLLs each binary imports; fails when a binary needs the Visual C++ redistributable | WI-001, WI-700, WI-703 | `manifest.mjs manifest` |
 | G22 | Disk full on a real volume: a native run that runs out of space is rolled back (`index.db` byte-identical) and reported as `diskFull`; the service refuses a job before running it, with the real free space | WI-603 | `real_disk_full -- --ignored` with `WRONGINDEX_TEST_SMALL_VOLUME` (CI attaches a 64 MB VHD) |
+| G23 | GPUI client actor uses real IPC, registers/indexes, reports offline failure and leaves pinned watching alive when dropped | WI-GPUI-01 | `cargo test --release -p wrongindex-gpui --locked -- --ignored` with `WRONGINDEX_TEST_DAEMON` |
 
 Manual items. The runner always records these as `NOT RUN` until a person does them:
 

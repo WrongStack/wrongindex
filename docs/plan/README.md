@@ -1,6 +1,6 @@
 # WrongIndex implementation program
 
-Status: proposed implementation plan; no WrongIndex service has been implemented.
+Status: original implementation plan (2026-11-01). Its invariants and ADRs remain binding; implementation has since progressed. See [current status](../status.md), [certification](../certification.md), and the [2026-11-11 system review](../system-review-2026-11-11.md) for implemented behavior, evidence limits and integration priorities.
 
 Planning date: 2026-11-01. Intended owner: WrongIndex maintainers, with the WrongStack index maintainers owning integration approval. Implementation owners are not yet assigned.
 
@@ -28,6 +28,8 @@ The principal deliverable is a working service and desktop application, not mere
 | [Desktop and operations](desktop-and-operations.md) | Screens, interactions, CLI, configuration, observability, install/update/uninstall behavior |
 | [Delivery backlog](delivery-backlog.md) | Ordered milestones, task IDs, dependencies, exit criteria, estimates, and initial implementation handoff |
 | [Validation](validation.md) | Requirement-to-test matrix, compatibility fixtures, fault injection, benchmarks, CI, and release evidence |
+| [Integration hardening](integration-hardening.md) | Current execution milestones and GPUI user request |
+| [Hardening decisions](hardening-decisions.md) | Binding ADR updates 015..020, including GPUI and supervised worker delegation |
 
 ## 3. Scope and completion levels
 

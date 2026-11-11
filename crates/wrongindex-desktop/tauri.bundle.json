@@ -16,7 +16,8 @@
     },
     "externalBin": [
       "binaries/wrongindexd",
-      "binaries/wrongindex"
+      "binaries/wrongindex",
+      "binaries/wrongindex-gpui"
     ],
     "windows": {
       "nsis": {

@@ -63,7 +63,12 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             break;
         }
         let mut started = false;
-        let parallel = shared.settings.get().parallel_jobs.max(1);
+        let settings = shared.settings.get();
+        let parallel = crate::confine::parallel_jobs(
+            settings.parallel_jobs,
+            settings.native_memory_mb,
+            settings.worker_memory_mb,
+        );
         if running.len() < parallel {
             let queued = match shared.registry(|r| r.queued_jobs()).await {
                 Ok(q) => q,
@@ -654,6 +659,11 @@ async fn execute(
             let mut args = json!({
                 "projectRoot": project.checkout_root,
                 "indexDir": project.index_dir,
+                "writeDelegation": {
+                    "instanceId": shared.instance_id,
+                    "pid": std::process::id(),
+                    "epoch": fence.owner_epoch,
+                },
             });
             if kind == JobKind::Incremental {
                 args["files"] = params["paths"].clone();
@@ -758,7 +768,18 @@ async fn run_native(
         .release_store(&project.checkout_root, &project.index_dir)
         .await;
     let started = std::time::Instant::now();
-    let memory_mb = shared.settings.get().native_memory_mb;
+    let settings = shared.settings.get();
+    let memory_mb = settings.native_memory_mb;
+    let parallel = crate::confine::parallel_jobs(
+        settings.parallel_jobs,
+        settings.native_memory_mb,
+        settings.worker_memory_mb,
+    );
+    let parser_slots = (std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .saturating_sub(1)
+        / parallel)
+        .clamp(1, 16);
     let (s2, pid) = (shared.clone(), project.project_id.clone());
     let on_progress = move |mut step: serde_json::Value| {
         let job_id = s2
@@ -785,6 +806,7 @@ async fn run_native(
         replace,
         targets,
         memory_mb,
+        parser_slots,
         on_progress,
     )
     .await;
@@ -820,6 +842,7 @@ async fn rebuild_in_child(
     replace: bool,
     targets: Option<&[String]>,
     memory_mb: u64,
+    parser_slots: usize,
     on_progress: impl Fn(serde_json::Value) + Send + 'static,
 ) -> Result<serde_json::Value, NativeOutcome> {
     let exe = std::env::current_exe()
@@ -842,6 +865,7 @@ async fn rebuild_in_child(
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::piped())
     .env("WRONGINDEX_NATIVE_PROGRESS", "1")
+    .env("WRONGINDEX_NATIVE_PARSER_SLOTS", parser_slots.to_string())
     .kill_on_drop(true);
     if memory_mb > 0 {
         cmd.env("WRONGINDEX_NATIVE_MEMORY_MB", memory_mb.to_string());

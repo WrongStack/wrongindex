@@ -209,7 +209,13 @@ where
                 .iter()
                 .map(|&i| {
                     let (f, c) = (&f, cs[i]);
-                    (i, s.spawn(move || f(c)))
+                    (
+                        i,
+                        s.spawn(move || {
+                            let _permit = crate::parse_budget::acquire();
+                            f(c)
+                        }),
+                    )
                 })
                 .collect();
             for (i, h) in handles {

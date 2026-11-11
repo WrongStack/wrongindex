@@ -238,6 +238,7 @@
       "workerMemoryMb": 0
     },
     "EndpointInfo": {
+      "clientBridge": "C:\\Program Files\\WrongIndex\\wrongindexd.exe",
       "daemonInstanceId": "d_0123456789abcdef",
       "daemonVersion": "0.1.0",
       "endpoint": "\\\\.\\pipe\\wrongindex-0123456789abcdef",

@@ -39,6 +39,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - project detail with the running phase, files and errors (retry), backups (restore), search inspector and jobs;
   - activity, diagnostics export, settings, and a tray with pause/resume.
   - Closing or quitting it never stops the service.
+- `wrongindex-gpui`: native GPUI Windows client in preview. It shows actual service, project, publication and job state; supports read-only add-project preview, registration, indexing, reconciliation, integrity checks, watch policy and pause/resume. IPC and inspection run off the UI thread. The candidate installer includes it beside Tauri with a separate Native (Preview) shortcut. Published installers still use Tauri until this candidate is qualified; GPUI tray, search, updates and accessibility/DPI acceptance remain separate work.
 - A strictly read-only profile inspector for WrongStack `index.db` files (schema v5).
 
 ## Install (Windows)
@@ -85,7 +86,20 @@ cargo build --release
 
 Without `--index-dir`, the project is registered with the index location WrongStack itself uses (`~/.wrongstack/projects/<slug>/codebase-index`, linked-worktree aware); `wrongindex resolve-index-dir <root>` prints it. Registering a project never modifies the source tree or the index. Use `--data-root <dir>` (or `WRONGINDEX_HOME`) for an isolated instance.
 
+Run the native GUI from source (Windows):
+
+```powershell
+cargo build --release -p wrongindexd -p wrongindex-cli -p wrongindex-gpui --locked
+.\target\release\wrongindex-gpui.exe
+# Isolated instance, optionally selecting the daemon executable:
+.\target\release\wrongindex-gpui.exe --data-root C:\temp\wrongindex-preview --daemon .\target\release\wrongindexd.exe
+```
+
+The current hardened WrongStack JS adapter requires the matching source-built daemon's verified Windows byte bridge; deploy them together. It refuses older discovery metadata rather than sending credentials to an unverified pipe. A guarded compatibility-worker engine also needs the scoped write-delegation API described in [the hardening decisions](docs/plan/hardening-decisions.md). The native engine remains the default.
+
 ## Building the installer
+
+The current unreleased candidate failed clean-Windows installation, including an identical guest-local installer copy. A fresh offline Sandbox diagnostic matched enforced block events to the exact hashes of the installer, CLI, daemon and GPUI executable; the Microsoft-signed neighbouring control passed. The blocking policy is `VerifiedAndReputableDesktop`, which Microsoft identifies as [Smart App Control](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/operations/inbox-appcontrol-policies). Installation and GPUI window startup were not reached. This remains a release blocker; the historical unsigned-build waiver is not startup acceptance. Signing infrastructure is not configured; all executable components, including the generated uninstaller, need acceptance against the final signed package. See [current evidence](docs/status.md).
 
 ```powershell
 cargo install tauri-cli --version "=2.12.4" --locked   # once
@@ -102,6 +116,8 @@ Runtime requirements for native indexing of every language: Python (Python files
 
 Data root layout, settings, ownership, backups and restore, WrongStack integration, metrics, logs and troubleshooting are covered in [docs/operations.md](docs/operations.md).
 
+The [2026-11-11 system review](docs/system-review-2026-11-11.md) maps the implementation and both integration routes, separates current tests from historical certification, and prioritizes compatibility drift, freshness propagation, IPC hardening and measured performance.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -113,6 +129,7 @@ Data root layout, settings, ownership, backups and restore, WrongStack integrati
 | `crates/wrongindexd` | Daemon entry point, dispatch, job worker |
 | `crates/wrongindex-cli` | `wrongindex` CLI |
 | `crates/wrongindex-desktop` | Desktop app (Tauri 2; static UI in `ui/`, Rust bridge over the IPC client) |
+| `crates/wrongindex-gpui` | Native GPUI preview client using authenticated Rust IPC |
 | `packages/legacy-worker` | Compatibility worker running WrongStack's indexer (preview backend) |
 | `contracts/baseline` | Captured WrongStack source baseline (commit + per-file hashes) |
 | `contracts/profiles` | Storage profile manifest and DDL generated from the oracle |

@@ -5,6 +5,23 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Added
+
+- Native GPUI Windows preview client beside the existing desktop: real service/project state, read-only registration preview, indexing, reconciliation, integrity checks, policy, pause/resume and activity. Candidate packaging includes a separate Native (Preview) shortcut and covers the executable in integrity/license manifests. This candidate has not been published or installed as a release.
+- Immutable current WrongStack contract snapshot and CI drift refusal. A recorded overlay can test pending compatibility changes without changing the commit-only oracle.
+
+### Fixed
+
+- The native GPUI pause/resume action sends the daemon's required settings envelope; a real-IPC regression verifies acknowledgements, persisted state and preservation of unrelated settings.
+- An unrelated Git edit no longer discards an otherwise usable generation; each clean-file trust stamp is revalidated independently.
+- The matching WrongStack adapter uses a native Windows bridge that verifies the connected server before forwarding credentials, bounds waits/queues, separates control/read traffic and invalidates expired streams. Older discovery without the bridge is refused by the new adapter.
+- Generation/freshness metadata survives direct and MCP integration, stale publication lineages are rejected, and external publication changes invalidate host caches.
+- Supervised compatibility workers can use an exact path/parent/instance/epoch write scope in matching WrongStack builds while ordinary writers remain blocked. Guarded engines lacking the API fail before mutable initialization.
+- Native SQLite work has an execution budget and bounded query admission; job admission reserves memory and parser families share a slot budget.
+- Certification fails when a selected required check is NOT RUN; focused results cannot qualify a release, historical manual acceptance is not reused for new artifacts, and release soak qualification requires 24 hours.
+
 ## 0.1.9
 
 ### Fixed
