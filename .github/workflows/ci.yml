@@ -27,7 +27,7 @@ jobs:
       - name: Certification cannot pass unexecuted requirements
         run: bun run test:certification
       - name: Current WrongStack source matches the reviewed contract
-        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-a6211d4792ce.json --out target/wrongstack-drift.json
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-198aade0b7e6.json --out target/wrongstack-drift.json
   windows:
     # Named pipes, pipe DACLs, and path semantics require Windows (validation §8).
     runs-on: windows-latest

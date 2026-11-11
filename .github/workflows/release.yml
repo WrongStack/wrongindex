@@ -35,7 +35,7 @@ jobs:
           path: target/wrongstack-source
           persist-credentials: false
       - name: Refuse unreviewed WrongStack contract drift
-        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-a6211d4792ce.json --out target/wrongstack-drift.json
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-198aade0b7e6.json --out target/wrongstack-drift.json
       - name: Tag matches the version and has release notes
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
