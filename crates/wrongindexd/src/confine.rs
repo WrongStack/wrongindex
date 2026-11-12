@@ -21,12 +21,29 @@ const MIB: usize = 1 << 20;
 /// once, see the `parallelJobs` setting), else at least 256 MiB.
 pub fn cap_bytes(mb: u64) -> usize {
     const MIN: u64 = 2 << 30;
+    let total = physical_memory();
+    let budget = (total / 2).max(MIN);
     if mb > 0 {
-        return usize::try_from(mb.max(256))
-            .unwrap_or(usize::MAX)
-            .saturating_mul(MIB);
+        return usize::try_from(mb.max(256).saturating_mul(MIB as u64).min(budget))
+            .unwrap_or(usize::MAX);
     }
-    usize::try_from((physical_memory() / 4).max(MIN)).unwrap_or(usize::MAX)
+    usize::try_from((total / 4).max(MIN).min(budget)).unwrap_or(usize::MAX)
+}
+
+/// Conservative aggregate admission: all simultaneously active run trees
+/// fit within half physical RAM (2 GiB minimum). Reserve the remainder for
+/// the host, query/SQLite readers and the desktop. Existing jobs drain when
+/// settings lower the limit; new jobs wait rather than oversubscribe it.
+pub fn parallel_jobs(requested: usize, native_mb: u64, worker_mb: u64) -> usize {
+    parallel_for_budget(
+        requested,
+        cap_bytes(native_mb).max(cap_bytes(worker_mb)),
+        (physical_memory() / 2).max(2 << 30) as usize,
+    )
+}
+
+fn parallel_for_budget(requested: usize, per_run: usize, budget: usize) -> usize {
+    requested.clamp(1, 8).min((budget / per_run.max(1)).max(1))
 }
 
 /// Bytes of physical memory (0 when that cannot be told).
@@ -510,5 +527,13 @@ mod tests {
         let auto = cap_bytes(0);
         assert!(auto >= 2 << 30);
         assert!(auto as u64 >= physical_memory() / 4);
+    }
+
+    #[test]
+    fn aggregate_admission_reserves_memory_for_the_host() {
+        assert_eq!(parallel_for_budget(8, 4 << 30, 8 << 30), 2);
+        assert_eq!(parallel_for_budget(8, 512 << 20, 8 << 30), 8);
+        assert_eq!(parallel_for_budget(0, 4 << 30, 8 << 30), 1);
+        assert_eq!(parallel_for_budget(8, 4 << 30, 2 << 30), 1);
     }
 }

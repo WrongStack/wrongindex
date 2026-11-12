@@ -10,10 +10,11 @@ members = [
   "crates/wrongindexd",
   "crates/wrongindex-cli",
   "crates/wrongindex-desktop",
+  "crates/wrongindex-gpui",
 ]
 
 [workspace.package]
-version = "0.1.9"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.93"
 publish = false
@@ -21,6 +22,8 @@ license = "MIT"
 repository = "https://github.com/wrongstack/wrongindex"
 
 [workspace.dependencies]
+gpui = { version = "=0.2.2", default-features = false }
+tauri-winres = "=0.3.7"
 wrongindex-contracts = { path = "crates/wrongindex-contracts" }
 wrongindex-storage = { path = "crates/wrongindex-storage" }
 wrongindex-registry = { path = "crates/wrongindex-registry" }
@@ -32,14 +35,14 @@ anyhow = "=1.0.104"
 clap = { version = "=4.6.7", features = ["derive"] }
 getrandom = "0.3"
 hex = "=0.4.3"
-rusqlite = { version = "=0.41.1", features = ["bundled", "backup"] }
+rusqlite = { version = "=0.41.1", features = ["bundled", "backup", "hooks"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 sha2 = "=0.11.1"
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 unicode-general-category = "=1.1.0"
-tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time", "signal", "process"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "sync", "time", "signal", "process"] }
 uuid = { version = "=1.29.0", features = ["v4"] }
 notify = "=8.2.1"
 # TS/JS parsing (WI-505/506). 0.133.0 is the newest oxc release that builds on the
@@ -73,6 +76,7 @@ windows-sys = { version = "=0.61.2", features = [
   "Win32_System_Pipes",
   "Win32_System_JobObjects",
   "Win32_System_SystemInformation",
+  "Win32_System_ProcessStatus",
   "Win32_System_IO",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_RestartManager",

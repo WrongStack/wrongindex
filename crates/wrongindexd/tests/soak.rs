@@ -18,6 +18,10 @@ use serde_json::{Value, json};
 use wrongindex_contracts::method;
 use wrongindex_ipc::{Client, DataRoot};
 
+#[path = "common/process_sample.rs"]
+mod process_sample;
+use process_sample::sample;
+
 struct Daemon(Child);
 impl Drop for Daemon {
     fn drop(&mut self) {
@@ -46,26 +50,6 @@ fn copy_dir(src: &Path, dst: &Path) {
             std::fs::copy(e.path(), to).unwrap();
         }
     }
-}
-
-/// (working set bytes, handles, threads) of a process.
-fn sample(pid: u32) -> Option<(u64, u64, u64)> {
-    let out = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!(
-                "$p = Get-Process -Id {pid}; '{{0}} {{1}} {{2}}' -f $p.WorkingSet64, $p.HandleCount, $p.Threads.Count"
-            ),
-        ])
-        .output()
-        .ok()?;
-    let s = String::from_utf8_lossy(&out.stdout);
-    let v: Vec<u64> = s
-        .split_whitespace()
-        .filter_map(|x| x.parse().ok())
-        .collect();
-    (v.len() == 3).then(|| (v[0], v[1], v[2]))
 }
 
 async fn status(c: &mut Client, pid: &str) -> Value {
@@ -105,7 +89,12 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
     let home = base.join("home");
-    let child = Command::new(env!("CARGO_BIN_EXE_wrongindexd"))
+    // Qualification can exercise the exact packaged artifact without Cargo
+    // replacing it with a test build of the same version.
+    let daemon_exe = std::env::var_os("WRONGINDEX_TEST_DAEMON")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_wrongindexd")));
+    let child = Command::new(&daemon_exe)
         .arg("--data-root")
         .arg(&home)
         .env_remove("WRONGINDEX_ENGINE")
@@ -115,6 +104,10 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
         .spawn()
         .unwrap();
     let daemon_pid = child.id();
+    eprintln!(
+        "soak subject: {} pid {daemon_pid}, duration {secs}s",
+        daemon_exe.display()
+    );
     let _daemon = Daemon(child);
     let root = DataRoot::resolve(Some(&home)).unwrap();
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -173,13 +166,13 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
     let mut n = 0u64;
     let mut last_tick = Instant::now();
     while start.elapsed() < Duration::from_secs(secs) {
-        // A machine that sleeps stops the edits but not the clock: the edit
-        // phase would end early and the plateau rest on a fraction of it.
-        // That run proves nothing either way.
+        // Sleep or a stalled observer interrupts the edit workload. A long
+        // gap alone cannot prove that Windows slept; either way, this is
+        // not continuous-workload acceptance. Keep the original 30 s gate.
         let gap = last_tick.elapsed();
         if gap > Duration::from_secs(30) {
             println!(
-                "NOT RUN: the machine was suspended during the soak ({} s without a tick after {n} edits); rerun it awake",
+                "NOT RUN: the soak workload was interrupted ({} s without a tick after {n} edits); sleep or an observer stall is not continuous-workload acceptance",
                 gap.as_secs()
             );
             return;
@@ -192,6 +185,13 @@ async fn many_projects_under_steady_edits_plateau_and_converge() {
         if last_sample.elapsed() >= Duration::from_secs(5) {
             if let Some(s) = sample(daemon_pid) {
                 samples.push(s);
+                eprintln!(
+                    "soak sample: elapsed={}s edits={n} workingSet={} handles={} threads={}",
+                    start.elapsed().as_secs(),
+                    s.0,
+                    s.1,
+                    s.2
+                );
             }
             last_sample = Instant::now();
         }

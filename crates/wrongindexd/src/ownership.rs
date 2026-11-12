@@ -155,11 +155,41 @@ impl Owners {
         }
     }
 
-    fn take_all(&self) -> Vec<(String, OwnerGuard)> {
-        self.guards
-            .lock()
-            .map(|mut g| g.drain().collect())
-            .unwrap_or_default()
+    /// Take every guard whose project has no run in flight; the others stay
+    /// held, and their project ids are returned beside (same lock order as
+    /// `begin_run`, so no run can start in between).
+    fn take_all_idle(&self) -> (Vec<(String, OwnerGuard)>, Vec<String>) {
+        let (Ok(mut guards), Ok(runs)) = (self.guards.lock(), self.runs.lock()) else {
+            return (Vec::new(), Vec::new());
+        };
+        let busy: Vec<String> = guards
+            .keys()
+            .filter(|p| runs.contains_key(*p))
+            .cloned()
+            .collect();
+        let idle: Vec<String> = guards
+            .keys()
+            .filter(|p| !runs.contains_key(*p))
+            .cloned()
+            .collect();
+        let taken = idle
+            .into_iter()
+            .filter_map(|p| guards.remove(&p).map(|g| (p, g)))
+            .collect();
+        (taken, busy)
+    }
+
+    /// [`Self::take_all_idle`], after waiting up to `wait` for the runs in
+    /// flight to end.
+    async fn take_all_when_idle(&self, wait: Duration) -> (Vec<(String, OwnerGuard)>, Vec<String>) {
+        let deadline = tokio::time::Instant::now() + wait;
+        loop {
+            let notified = self.run_done.notified();
+            let busy = self.runs.lock().map(|r| !r.is_empty()).unwrap_or(false);
+            if !busy || tokio::time::timeout_at(deadline, notified).await.is_err() {
+                return self.take_all_idle();
+            }
+        }
     }
 }
 
@@ -262,12 +292,26 @@ pub async fn acquire(
         Ok(guard) => {
             let dir = index_dir.clone();
             let keep = shared.settings.get().backup_keep;
+            let me = release_owner_key(shared);
+            // This service taking back what it released itself, untouched
+            // since (a restart): its own last state, not a transfer. Copying
+            // it again would cost a full copy of every index at every start
+            // and push the backups of real transfers out of the kept ones.
             match tokio::task::spawn_blocking(move || {
-                wrongindex_storage::backup::snapshot(&dir, epoch, keep)
+                let why = if maintenance {
+                    Err("maintenance claim".to_string())
+                } else {
+                    wrongindex_storage::backup::release_check(&dir, &me, epoch)
+                };
+                match why {
+                    Ok(()) => Ok((None, None)),
+                    Err(why) => wrongindex_storage::backup::snapshot(&dir, epoch, keep)
+                        .map(|b| (b, Some(why))),
+                }
             })
             .await
             {
-                Ok(Ok(backup)) => Ok((guard, backup)),
+                Ok(Ok((backup, why))) => Ok((guard, backup, why)),
                 Ok(Err(e)) => Err(Err(format!("backup before transfer failed: {e}"))),
                 Err(e) => Err(Err(format!("backup task failed: {e}"))),
             }
@@ -283,12 +327,15 @@ pub async fn acquire(
             warn!("ownership_backup_failed", {"projectId": project_id, "epoch": epoch, "error": why});
             Err(ErrorBody::new(ErrorCode::Internal, why))
         }
-        Ok((guard, backup)) => {
+        Ok((guard, backup, why)) => {
             let evidence = json!({
                 "lock": index_dir.join(wrongindex_storage::owner_lock::LOCK_FILE).display().to_string(),
                 "verdict": inspection.verdict,
                 "maintenance": maintenance,
                 "backup": backup.map(|b| b.display().to_string()),
+                // Why a backup was taken, or that none was needed: this
+                // service's own release, untouched since.
+                "backupReason": why.unwrap_or_else(|| "unchanged since this service released it".into()),
             });
             let status = shared
                 .registry(move |r| r.finish_acquire(&pid, &o, epoch, Ok(evidence)))
@@ -370,9 +417,19 @@ pub async fn release(
             .release_store(&project.checkout_root, &project.index_dir)
             .await;
     }
-    tokio::task::spawn_blocking(move || guard.release())
-        .await
-        .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
+    // An explicit release hands the index over (to WrongStack, another
+    // service): the next claim is a transfer and backs it up. Only the
+    // release at shutdown is marked (see `release_all_for_shutdown`).
+    tokio::task::spawn_blocking(move || {
+        let _ = std::fs::remove_file(
+            guard
+                .index_dir()
+                .join(wrongindex_storage::backup::RELEASED_FILE),
+        );
+        guard.release()
+    })
+    .await
+    .map_err(|e| ErrorBody::new(ErrorCode::Internal, e.to_string()))?;
     let (pid, owner) = (project_id.to_string(), shared.instance_id.clone());
     let status = shared
         .registry(move |r| r.record_release(&pid, &owner, epoch, keep_desired))
@@ -386,11 +443,23 @@ pub async fn release(
     Ok(status)
 }
 
-/// Shutdown: release every guard but keep the intent.
+/// Shutdown: release every guard but keep the intent. Each index is marked
+/// as this service left it, so that the next start takes it back without a
+/// backup when nobody wrote it meanwhile: a restart is not a transfer.
 pub async fn release_all_for_shutdown(shared: &Arc<Shared>) {
-    for (pid, guard) in shared.owners.take_all() {
+    // A run that outlived the drain budget - an in-process restore, backup
+    // or check on the blocking pool, which the runtime waits for at exit -
+    // may still write the index: its lock is kept (INV-01) and the OS drops
+    // it with this process. Recorded as owned, as after a crash: the next
+    // start never trusts it, and without a release mark backs the index up.
+    let (idle, busy) = shared.owners.take_all_when_idle(SHUTDOWN_RUN_WAIT).await;
+    for pid in &busy {
+        warn!("ownership_kept_for_running_work", {"projectId": pid});
+    }
+    for (pid, guard) in idle {
         let epoch = guard.info().epoch;
-        let _ = tokio::task::spawn_blocking(move || guard.release()).await;
+        let me = release_owner_key(shared);
+        let _ = tokio::task::spawn_blocking(move || release_marked(guard, &me)).await;
         let (p, owner) = (pid.clone(), shared.instance_id.clone());
         if let Err(e) = shared
             .registry(move |r| r.record_release(&p, &owner, epoch, true))
@@ -399,6 +468,25 @@ pub async fn release_all_for_shutdown(shared: &Arc<Shared>) {
             warn!("ownership_release_not_recorded", {"projectId": pid, "error": e.to_string()});
         }
     }
+}
+
+/// How long shutdown waits for runs still in flight after the drain budget.
+const SHUTDOWN_RUN_WAIT: Duration = Duration::from_secs(5);
+
+/// Who releases an index, for [`wrongindex_storage::backup::mark_released`]:
+/// this service's data root (owner epochs are counted per registry), not the
+/// instance, which a restart changes.
+fn release_owner_key(shared: &Shared) -> String {
+    shared.data_root.to_string_lossy().to_lowercase()
+}
+
+/// Release the guard and mark the files as this service left them. The mark
+/// is written while the lock is still held, so no other writer can come in
+/// between.
+fn release_marked(guard: wrongindex_storage::owner_lock::OwnerGuard, owner: &str) {
+    let (dir, epoch) = (guard.index_dir().to_path_buf(), guard.info().epoch);
+    wrongindex_storage::backup::mark_released(&dir, owner, epoch);
+    guard.release();
 }
 
 /// Startup: re-acquire projects whose ownership is still desired. Failures
@@ -446,5 +534,53 @@ mod tests {
         assert!(owners.take_if_idle("p").is_err(), "write still running");
         drop(write);
         assert!(matches!(owners.take_if_idle("p"), Ok(Some(_))));
+    }
+
+    fn guard(dir: &std::path::Path) -> OwnerGuard {
+        OwnerGuard::acquire(
+            dir,
+            OwnerInfo {
+                owner: "test".into(),
+                instance_id: "i".into(),
+                pid: std::process::id(),
+                epoch: 1,
+                profile_id: BASELINE_PROFILE_ID.into(),
+                acquired_at_ms: 0,
+            },
+        )
+        .unwrap()
+    }
+
+    /// Shutdown releases the locks of idle projects only: a write still in
+    /// flight keeps its project's lock (INV-01) until it ends or the process
+    /// exits. It used to release every lock.
+    #[tokio::test]
+    async fn shutdown_keeps_the_lock_of_a_run_in_flight() {
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let owners = Owners::default();
+        owners.insert("idle", guard(a.path()));
+        owners.insert("busy", guard(b.path()));
+        let run = owners.begin_run("busy").unwrap();
+        let started = std::time::Instant::now();
+        let (taken, kept) = owners.take_all_when_idle(Duration::from_millis(300)).await;
+        assert!(
+            started.elapsed() >= Duration::from_millis(300),
+            "waited for the run"
+        );
+        assert_eq!(
+            taken.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+            ["idle"]
+        );
+        assert_eq!(kept, ["busy"]);
+        assert!(owners.holds("busy"), "the busy lock is still held");
+        assert!(
+            wrongindex_storage::owner_lock::is_held(b.path()),
+            "nobody else can take the index"
+        );
+        // Once the run ends, the next pass takes it at once.
+        drop(run);
+        let (taken, kept) = owners.take_all_when_idle(Duration::from_secs(5)).await;
+        assert_eq!(taken.len(), 1);
+        assert!(kept.is_empty());
     }
 }

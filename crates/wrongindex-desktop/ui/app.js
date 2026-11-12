@@ -771,9 +771,14 @@ function nextAction(message) {
 function filesAndErrors(d, id) {
   const jobs = d.jobs ?? [];
   const lastWrite = jobs.find((j) => ['full', 'incremental', 'reconcile', 'rebuild'].includes(j.kind));
-  const oversized = jobs
-    .map((j) => j.result?.native?.oversizedFiles ?? [])
+  const latest = (field) => jobs
+    .map((j) => j.result?.native?.[field] ?? [])
     .find((l) => l.length) ?? [];
+  const oversized = latest('oversizedFiles');
+  // Only what the newest write job reports: these come back by themselves.
+  const unreadable = lastWrite?.result?.native?.unreadableFiles ?? [];
+  const unparsed = lastWrite?.result?.native?.unparsedFiles ?? [];
+  const degraded = lastWrite?.result?.native?.degraded ?? [];
   const failed = jobs.filter((j) => (j.state === 'failed' || j.state === 'canceled') && ['full', 'incremental', 'reconcile'].includes(j.kind));
   // Identical failures count once.
   const groups = new Map();
@@ -787,13 +792,28 @@ function filesAndErrors(d, id) {
   const rows = [...groups.values()];
   return el('div', {},
     el('h2', {}, 'Files and errors'),
-    !rows.length && !oversized.length
+    !rows.length && !oversized.length && !unreadable.length && !unparsed.length && !degraded.length
       ? el('div', { class: 'empty' }, 'No file or job errors in the recent jobs.')
       : null,
     oversized.length
       ? el('div', {},
         el('p', {}, `${oversized.length} file(s) over the 5 MiB read limit were left out (as WrongStack does). Shrinking or splitting them brings them back on the next run.`),
         el('ul', { class: 'mono' }, oversized.slice(0, 50).map((f) => el('li', {}, f))))
+      : null,
+    unreadable.length
+      ? el('div', {},
+        el('p', {}, `${unreadable.length} file(s) could not be read in the last run (in use by another program, or access denied). What was indexed for them before is kept; the next change or reconciliation reads them again.`),
+        el('ul', { class: 'mono' }, unreadable.slice(0, 50).map((f) => el('li', {}, f))))
+      : null,
+    unparsed.length
+      ? el('div', {},
+        el('p', {}, `${unparsed.length} TypeScript/JavaScript file(s) need Bun or Node.js to be parsed and were left as they were.`),
+        el('ul', { class: 'mono' }, unparsed.slice(0, 50).map((f) => el('li', {}, f))))
+      : null,
+    degraded.length
+      ? el('div', {},
+        el('p', {}, 'The last run indexed some languages with the simpler regex extractor because a helper was missing or failed. Install it, restart the service and rebuild the index for full detail.'),
+        el('ul', {}, degraded.slice(0, 20).map((n) => el('li', {}, n))))
       : null,
     rows.length
       ? el('table', {},

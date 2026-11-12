@@ -27,8 +27,12 @@
 //! (`reconcile_found_changes`, `missedChanges` in the metrics).
 //!
 //! Both wait while background indexing is paused and while the project has
-//! work pending or running, and at most one of each is admitted per round,
-//! so many projects are spread out rather than served at once.
+//! work pending or running. Checks are admitted one per round. Periodic
+//! reconciliations are admitted longest-overdue first, as many per round as
+//! it takes for every watched project to get its turn within one period
+//! ([`per_round`]: one while the projects fit in the rounds of a period), so
+//! many projects are spread out rather than served at once and none is
+//! passed over.
 
 use std::time::Duration;
 
@@ -139,6 +143,22 @@ pub fn done_at(j: &JobRecord) -> i64 {
     j.completed_at_ms.unwrap_or(j.admitted_at_ms)
 }
 
+/// How many periodic jobs one round admits so that `projects` of them all
+/// get their turn within one period: one while there are no more projects
+/// than rounds in a period, and proportionally more beyond that.
+pub fn per_round(s: Schedule, projects: usize) -> usize {
+    let rounds = (s.every_ms / (s.round().as_millis() as i64).max(1)).max(1) as usize;
+    projects.div_ceil(rounds).max(1)
+}
+
+/// The due projects to admit this round: longest overdue first (never done
+/// before any), then by id so the order is stable; at most `limit`.
+/// `due` holds each due project with when its work was last done.
+pub fn pick_overdue(mut due: Vec<(String, Option<i64>)>, limit: usize) -> Vec<String> {
+    due.sort_by(|a, b| (a.1.unwrap_or(i64::MIN), &a.0).cmp(&(b.1.unwrap_or(i64::MIN), &b.0)));
+    due.into_iter().take(limit).map(|(id, _)| id).collect()
+}
+
 /// The later of two jobs (by [`done_at`]).
 pub fn later<'a>(a: Option<&'a JobRecord>, b: Option<&'a JobRecord>) -> Option<&'a JobRecord> {
     match (a, b) {
@@ -189,6 +209,70 @@ mod tests {
 
     fn check(state: JobState, done: Option<i64>) -> JobRecord {
         job(JobKind::Check, state, done)
+    }
+
+    /// With more projects than rounds in a period, admitting the first due
+    /// project in registration order served only the first ones for ever.
+    #[test]
+    fn every_project_gets_its_periodic_turn() {
+        let s = Schedule {
+            every_ms: 15 * 60_000,
+            after_start_ms: 0,
+        };
+        assert_eq!(per_round(s, 0), 1);
+        assert_eq!(per_round(s, 15), 1);
+        assert_eq!(per_round(s, 16), 2);
+        assert_eq!(per_round(s, 100), 7);
+
+        // 40 projects, all reconciled at their attach; simulate four hours
+        // of one-minute rounds.
+        let n = 40usize;
+        let ids: Vec<String> = (0..n).map(|i| format!("p{i:02}")).collect();
+        let mut last: Vec<i64> = vec![0; n];
+        let mut runs = vec![0u32; n];
+        let mut worst_gap = 0i64;
+        for minute in 1..=240i64 {
+            let now = minute * 60_000;
+            let due: Vec<(String, Option<i64>)> = (0..n)
+                .filter(|&i| now - last[i] >= s.every_ms + s.jitter_ms(&ids[i]))
+                .map(|i| (ids[i].clone(), Some(last[i])))
+                .collect();
+            for id in pick_overdue(due, per_round(s, n)) {
+                let i = ids.iter().position(|x| *x == id).unwrap();
+                worst_gap = worst_gap.max(now - last[i]);
+                last[i] = now;
+                runs[i] += 1;
+            }
+        }
+        assert!(runs.iter().all(|&r| r >= 10), "{runs:?}");
+        // Projects attached together come due together and are then spread
+        // over the rounds of one period: nobody waits two periods.
+        assert!(worst_gap < 2 * s.every_ms + s.every_ms / 10, "{worst_gap}");
+
+        // The old rule (first due in registration order, one per round)
+        // never reaches the later projects.
+        let mut last: Vec<i64> = vec![0; n];
+        let mut runs = vec![0u32; n];
+        for minute in 1..=240i64 {
+            let now = minute * 60_000;
+            if let Some(i) = (0..n).find(|&i| now - last[i] >= s.every_ms + s.jitter_ms(&ids[i])) {
+                last[i] = now;
+                runs[i] += 1;
+            }
+        }
+        assert!(runs.contains(&0), "{runs:?}");
+
+        // Longest overdue first, never-done before any, stable by id.
+        let picked = pick_overdue(
+            vec![
+                ("b".into(), Some(50)),
+                ("a".into(), Some(50)),
+                ("c".into(), None),
+                ("d".into(), Some(10)),
+            ],
+            3,
+        );
+        assert_eq!(picked, ["c", "d", "a"]);
     }
 
     #[test]

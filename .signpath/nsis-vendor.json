@@ -1,0 +1,18 @@
+{
+  "tauriUtilsSha256": "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
+  "nsisArchiveUrl": "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
+  "tauriCli": "2.12.4",
+  "tauriBundler": "2.10.4",
+  "nsisVersion": "3.13",
+  "policy": "Preserve exact upstream bytes without signing them as WrongIndex",
+  "schema": "wrongindex.nsis-vendor/1",
+  "tauriUtilsUrl": "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
+  "files": {
+    "nsDialogs.dll": "9c76f4d53ceee2a471c936e0899688405e1009ce962d140e9acb49ed68d114cb",
+    "nsis_tauri_utils.dll": "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
+    "System.dll": "afe032f942e2ed0bf7494ec08ba813f5739fb522c640bde81d30ecaf9f894432",
+    "NSISdl.dll": "d3e61c4df837625ac0503cea5b6765a04d37fc35399899a5503b53a3108bfbf6",
+    "StartMenu.dll": "39870682e7d1c026cd2b33ca25591db28250dde17de7eb1feec404222d534ffc"
+  },
+  "nsisArchiveSha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8"
+}

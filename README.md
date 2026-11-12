@@ -2,7 +2,7 @@
 
 A local, persistent codebase indexing service for [WrongStack](https://github.com/WrongStack/WrongStack): one Rust daemon per OS user manages every registered project, each checkout keeps its existing WrongStack-compatible `index.db`, and WrongStack's CLI, WebUI, desktop, and MCP surfaces connect as clients. A separate desktop GUI shows real daemon state.
 
-> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects with a native writer whose output is logically identical to WrongStack's own indexer, in place and incrementally. WrongStack uses it through its adapter (`indexing.service`), merged into WrongStack `main` on 2026-11-03 (WrongStack/WrongStack#430); the first WrongStack release after v1.4.0 will carry it. Builds are not code-signed. [docs/status.md](docs/status.md) lists exactly what is implemented and verified, and what is not; [docs/certification.md](docs/certification.md) defines the certified profile, its gates, the known differences from WrongStack and the latest run.
+> **Status: preview (pre-1.0, unsigned builds).** The service indexes, watches and serves registered projects, with native in-place and incremental writes for the [documented WrongStack profile and known differences](docs/certification.md). WrongStack's original adapter (`indexing.service`) was merged into `main` on 2026-11-03 ([PR #430](https://github.com/WrongStack/WrongStack/pull/430)). The current verified-bridge, freshness and supervised-worker hardening requires matching WrongIndex and WrongStack source builds; it is not an assertion about every published client. Builds are not code-signed. [Current status](docs/status.md) separates source checks, local candidates, hosted artifacts and remaining release acceptance.
 
 ## What works today
 
@@ -21,7 +21,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - fresh builds, in-place incremental runs and no-ops behave as WrongStack's own runs (differential tests on synthetic projects and on cloned real ones);
   - watcher and edit jobs run as WrongStack's targeted runs over the changed paths only: a single-file edit on a 5,600-file project takes 0.25-0.45 s (a whole-project pass about 0.85 s);
   - TS/JS, Rust, JSON/YAML/TOML and the regex-extracted languages are parsed in-process;
-  - Python, Go, the ten tree-sitter languages, and TS/JS the in-process parser refuses run WrongStack's own extraction programs (they need `python`, `go`, and Bun or Node.js). These programs only parse; the project's code is never run or built.
+  - Python, Go, the ten tree-sitter languages, and TS/JS the in-process parser refuses run WrongStack's own extraction programs (`python`, `go`, and Bun or Node.js). These programs only parse; the project's code is never run or built. Without one of them the files still get indexed, by the regex extractor, and the job result says so (`degraded`).
 - Reads: every index read operation is served natively and read-only (search, context, graphs with WrongStack's SAGE memory and WrongTrace health decoration, call hierarchies, stats).
 - Compatibility worker (`--engine <WrongStack dir>`): runs WrongStack's own indexer for indexes the native writer leaves alone.
 - `wrongindex` CLI, with these commands:
@@ -39,6 +39,7 @@ A local, persistent codebase indexing service for [WrongStack](https://github.co
   - project detail with the running phase, files and errors (retry), backups (restore), search inspector and jobs;
   - activity, diagnostics export, settings, and a tray with pause/resume.
   - Closing or quitting it never stops the service.
+- `wrongindex-gpui`: native GPUI Windows client in preview. It shows actual service, project, publication and job state; supports read-only add-project preview, registration, indexing, reconciliation, integrity checks, watch policy and pause/resume. IPC and inspection run off the UI thread. The candidate installer includes it beside Tauri with a separate Native (Preview) shortcut. Published installers still use Tauri until this candidate is qualified; GPUI tray, search, updates and accessibility/DPI acceptance remain separate work.
 - A strictly read-only profile inspector for WrongStack `index.db` files (schema v5).
 
 ## Install (Windows)
@@ -85,7 +86,20 @@ cargo build --release
 
 Without `--index-dir`, the project is registered with the index location WrongStack itself uses (`~/.wrongstack/projects/<slug>/codebase-index`, linked-worktree aware); `wrongindex resolve-index-dir <root>` prints it. Registering a project never modifies the source tree or the index. Use `--data-root <dir>` (or `WRONGINDEX_HOME`) for an isolated instance.
 
+Run the native GUI from source (Windows):
+
+```powershell
+cargo build --release -p wrongindexd -p wrongindex-cli -p wrongindex-gpui --locked
+.\target\release\wrongindex-gpui.exe
+# Isolated instance, optionally selecting the daemon executable:
+.\target\release\wrongindex-gpui.exe --data-root C:\temp\wrongindex-preview --daemon .\target\release\wrongindexd.exe
+```
+
+The current hardened WrongStack JS adapter requires the matching source-built daemon's verified Windows byte bridge; deploy them together. It refuses older discovery metadata rather than sending credentials to an unverified pipe. A guarded compatibility-worker engine also needs the scoped write-delegation API described in [the hardening decisions](docs/plan/hardening-decisions.md). The native engine remains the default.
+
 ## Building the installer
+
+The current unreleased candidate failed clean-Windows installation, including an identical guest-local installer copy. A fresh offline Sandbox diagnostic matched enforced block events to the exact hashes of the installer, CLI, daemon and GPUI executable; the Microsoft-signed neighbouring control passed. The blocking policy is `VerifiedAndReputableDesktop`, which Microsoft identifies as [Smart App Control](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/operations/inbox-appcontrol-policies). Installation and GPUI window startup were not reached. This remains a release blocker; the historical unsigned-build waiver is not startup acceptance. Signing infrastructure is not configured; all executable components, including the generated uninstaller, need acceptance against the final signed package. See [current evidence](docs/status.md).
 
 ```powershell
 cargo install tauri-cli --version "=2.12.4" --locked   # once
@@ -96,11 +110,13 @@ pwsh scripts/release/package-windows.ps1
 
 This builds a per-user NSIS installer (`target/release/bundle/nsis/WrongIndex_<version>_x64-setup.exe`) with `SHA256SUMS.txt`, `RELEASE-MANIFEST.json` (commit, supported index profile, toolchain, SQLite, hashes and signature status of every binary) and `THIRD-PARTY-LICENSES.txt` (also installed next to the binaries). It installs the desktop app with the service (`wrongindexd.exe`) and the CLI (`wrongindex.exe`) next to it, adds a Start menu entry and an uninstall entry; no administrator rights are needed. The data root (`~/.wrongindex`) and every project index are outside the install directory and are kept on uninstall. Upgrades and uninstalls stop the service first; the installer puts the install directory on the user PATH and the uninstaller takes it off again.
 
-Runtime requirements for native indexing of every language: Python (Python files) and Go (Go files) - without them those files fall back to the regex extractor, as in WrongStack - and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses).
+Helpers for the most precise index of every language: Python (Python files), Go (Go files) and Bun or Node.js (C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell, Elixir, and TS/JS files the in-process parser refuses). None is required: without a helper, or when one fails, its files fall back to the regex extractor, as in WrongStack, and the job result names it under `degraded`. Only TS/JS files the in-process parser refuses have no fallback; without Bun or Node.js they keep their previous rows and are listed as `unparsedFiles`. `wrongindex doctor` shows which helpers were found.
 
 ## Operating it
 
 Data root layout, settings, ownership, backups and restore, WrongStack integration, metrics, logs and troubleshooting are covered in [docs/operations.md](docs/operations.md).
+
+The [2026-11-11 system review](docs/system-review-2026-11-11.md) maps the implementation and both integration routes, separates current tests from historical certification, and prioritizes compatibility drift, freshness propagation, IPC hardening and measured performance.
 
 ## Repository layout
 
@@ -113,6 +129,7 @@ Data root layout, settings, ownership, backups and restore, WrongStack integrati
 | `crates/wrongindexd` | Daemon entry point, dispatch, job worker |
 | `crates/wrongindex-cli` | `wrongindex` CLI |
 | `crates/wrongindex-desktop` | Desktop app (Tauri 2; static UI in `ui/`, Rust bridge over the IPC client) |
+| `crates/wrongindex-gpui` | Native GPUI preview client using authenticated Rust IPC |
 | `packages/legacy-worker` | Compatibility worker running WrongStack's indexer (preview backend) |
 | `contracts/baseline` | Captured WrongStack source baseline (commit + per-file hashes) |
 | `contracts/profiles` | Storage profile manifest and DDL generated from the oracle |
@@ -138,6 +155,10 @@ bun run oracle:build --wrongstack D:\path\to\WrongStack
 ```
 
 Toolchains: Rust pinned in `rust-toolchain.toml`; Bun pinned in `.bun-version`.
+
+## Code signing policy
+
+SignPath Foundation preparation is pending; no provided signing or enrollment is claimed. Existing releases are unsigned. See the [code signing policy](docs/code-signing-policy.md), [application and CI preparation](docs/signpath-application.md), and [current acceptance status](docs/status.md).
 
 ## License
 

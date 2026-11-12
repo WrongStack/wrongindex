@@ -12,6 +12,9 @@ use wrongindex_contracts::{
 };
 
 use crate::endpoint::{DataRoot, Discovery};
+
+/// Longest wait for a service to answer a new connection's handshake.
+pub const HANDSHAKE_DEADLINE: Duration = Duration::from_secs(20);
 use crate::frame::{FrameError, read_frame, write_frame};
 
 #[derive(Debug, thiserror::Error)]
@@ -65,6 +68,30 @@ impl Client {
         token: &str,
         client_name: &str,
     ) -> Result<Self, CallError> {
+        Self::connect_within(endpoint, token, client_name, HANDSHAKE_DEADLINE).await
+    }
+
+    /// [`Self::connect_with`], the whole handshake bounded by `deadline`. A
+    /// service holds its endpoint from the moment it starts, before it
+    /// accepts its first client (it takes back its indexes first), and a
+    /// wedged one may never answer: without a bound every caller - the CLI's
+    /// `--wait-seconds`, the desktop's Start - waited as long as that took.
+    pub async fn connect_within(
+        endpoint: &str,
+        token: &str,
+        client_name: &str,
+        deadline: Duration,
+    ) -> Result<Self, CallError> {
+        match tokio::time::timeout(deadline, Self::handshake(endpoint, token, client_name)).await {
+            Ok(result) => result,
+            Err(_) => Err(CallError::Unavailable(format!(
+                "{endpoint} did not answer the handshake within {} s (the service may still be starting)",
+                deadline.as_secs()
+            ))),
+        }
+    }
+
+    async fn handshake(endpoint: &str, token: &str, client_name: &str) -> Result<Self, CallError> {
         let mut stream = open(endpoint).await?;
         let auth = AuthRequest {
             protocol_major: PROTOCOL_MAJOR,
@@ -196,4 +223,38 @@ async fn open(endpoint: &str) -> Result<Stream, CallError> {
     tokio::net::UnixStream::connect(endpoint)
         .await
         .map_err(|e| CallError::Unavailable(format!("cannot open {endpoint}: {e}")))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    /// A peer that takes the connection and never answers is given up on
+    /// within the deadline, as unavailable, and nothing is left waiting.
+    #[tokio::test]
+    async fn a_service_that_never_answers_the_handshake_is_given_up_on() {
+        let name = format!(r"\\.\pipe\wrongindex-test-handshake-{}", std::process::id());
+        let server = ServerOptions::new()
+            .first_pipe_instance(true)
+            .create(&name)
+            .unwrap();
+        let peer = tokio::spawn(async move {
+            server.connect().await.unwrap();
+            // Holds the connection; reads nothing, writes nothing.
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            drop(server);
+        });
+        let started = std::time::Instant::now();
+        let result =
+            Client::connect_within(&name, "synthetic-token", "t", Duration::from_millis(500)).await;
+        let waited = started.elapsed();
+        peer.abort();
+        match result {
+            Err(CallError::Unavailable(why)) => assert!(why.contains("handshake"), "{why}"),
+            Err(e) => panic!("expected unavailable, got {e}"),
+            Ok(_) => panic!("a peer that never answered was accepted"),
+        }
+        assert!(waited < Duration::from_secs(5), "waited {waited:?}");
+    }
 }

@@ -25,9 +25,10 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use super::{
-    FileRow, GitTrust, MAX_INDEX_FILE_BYTES, NativeError, ParsedSymbol, Report, Scan, Source,
-    assign_refs, batch_width, get_meta, insert_fts, insert_refs, insert_symbols, module_owner,
-    needs_module_owner, now_ms, parse_scan, rows, set_meta, timing,
+    FileRow, GitTrust, MAX_INDEX_FILE_BYTES, NativeError, NoRows, NoRowsLists, ParsedSymbol,
+    Report, Scan, Source, assign_refs, batch_width, get_meta, insert_fts, insert_refs,
+    insert_symbols, is_missing, module_owner, needs_module_owner, now_ms, parse_scan, rows,
+    set_meta, timing,
 };
 use crate::binding::{chunked_rows, in_list_chunks, pad_to_bucket, placeholders};
 use crate::relations::Changes;
@@ -696,14 +697,6 @@ fn targeted_files(
         .collect())
 }
 
-/// `isMissingPathError`: ENOENT or ENOTDIR.
-fn is_missing(e: &std::io::Error) -> bool {
-    matches!(
-        e.kind(),
-        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
-    )
-}
-
 /// `readBatchFiles` for one file of a targeted run.
 fn stat_target(path: String, containment: &Containment) -> Result<Entry, NativeError> {
     // Before the stat and the read: both follow links.
@@ -711,7 +704,13 @@ fn stat_target(path: String, containment: &Containment) -> Result<Entry, NativeE
     let meta = match std::fs::metadata(&path) {
         Ok(m) => m,
         Err(e) if is_missing(&e) => return Ok(Entry::Missing(path)),
-        Err(_) => return Ok(Entry::Source(failed_source(path, "other"))),
+        Err(_) => {
+            return Ok(Entry::Source(Source::without_rows(
+                path,
+                "other",
+                NoRows::Unreadable,
+            )));
+        }
     };
     if !meta.is_file() {
         return Ok(Entry::Ignored);
@@ -725,24 +724,17 @@ fn stat_target(path: String, containment: &Containment) -> Result<Entry, NativeE
         )));
     }
     if meta.len() > MAX_INDEX_FILE_BYTES {
-        return Ok(Entry::Source(failed_source(path, lang)));
+        return Ok(Entry::Source(Source::without_rows(
+            path,
+            lang,
+            NoRows::Oversized,
+        )));
     }
     // A read failure is per file and keeps the previous rows.
     Ok(Entry::Source(
-        Source::load(path.clone(), lang).unwrap_or_else(|_| failed_source(path, lang)),
+        Source::load(path.clone(), lang)
+            .unwrap_or_else(|_| Source::without_rows(path, lang, NoRows::Unreadable)),
     ))
-}
-
-fn failed_source(path: String, lang: &'static str) -> Source {
-    Source {
-        path,
-        lang,
-        mtime_ms: 0,
-        content_hash: String::new(),
-        failed: true,
-        text: String::new(),
-        unread: false,
-    }
 }
 
 /// `store.search('', { file })`: every symbol (the module owner excluded)
@@ -865,10 +857,10 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     } else {
         Vec::new()
     };
-    let failed: HashSet<String> = entries
+    let mut failed: HashMap<String, NoRows> = entries
         .iter()
         .filter_map(|e| match e {
-            Entry::Source(f) if f.failed => Some(f.path.clone()),
+            Entry::Source(f) if f.failed => Some((f.path.clone(), f.why)),
             _ => None,
         })
         .collect();
@@ -902,7 +894,10 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     // The scan trusted a stamp this transaction no longer holds.
     for e in &mut candidates {
         if let Entry::Source(f) = e {
-            f.read()?;
+            f.read();
+            if f.failed {
+                failed.insert(f.path.clone(), f.why);
+            }
         }
     }
 
@@ -937,7 +932,7 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
             }
         }
     }
-    let (parsed_rows, _) = parse_scan(Scan {
+    let (parsed_rows, _, degraded) = parse_scan(Scan {
         files: to_parse,
         git: None,
     })?;
@@ -946,7 +941,16 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     let items: Vec<Item> = pre
         .into_iter()
         .map(|i| match i {
-            Item::Parse => Item::Parsed(parsed_iter.next().expect("parsed row")),
+            Item::Parse => {
+                let row = parsed_iter.next().expect("parsed row");
+                if row.failed {
+                    // Nothing could parse it: previous rows kept.
+                    failed.insert(row.path.clone(), row.why);
+                    Item::Nothing
+                } else {
+                    Item::Parsed(row)
+                }
+            }
             other => other,
         })
         .collect();
@@ -1134,10 +1138,10 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
     if let Some(g) = &git
         && g.snapshot_key.is_some()
     {
-        let mut updates: Vec<(String, String)> = Vec::new();
+        let mut updates: Vec<(String, String, String)> = Vec::new();
         let mut blesses = false;
         for file in &discovered {
-            if failed.contains(file) {
+            if failed.contains_key(file) {
                 continue;
             }
             let was_rewritten = rewritten_hashes.contains_key(file);
@@ -1163,16 +1167,25 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
             if !desired.is_empty() {
                 blesses = true;
             }
-            updates.push((file.clone(), desired));
+            updates.push((file.clone(), desired, current));
         }
         if blesses {
-            let now = wrongindex_discovery::discover(project_root, &[]);
-            if now.snapshot_key != g.snapshot_key || now.files != discovered {
-                return Err(NativeError::SourceChanged);
-            }
+            let now = wrongindex_discovery::git::current_clean_blobs(project_root);
+            updates.retain_mut(|(file, desired, current)| {
+                if desired.is_empty()
+                    || now.as_ref().and_then(|m| m.get(file)) == g.clean_blobs.get(file)
+                {
+                    return true;
+                }
+                if current.is_empty() {
+                    return false;
+                }
+                desired.clear();
+                true
+            });
         }
         let mut up = tx.prepare_cached("UPDATE files SET git_blob = ? WHERE file = ?")?;
-        for (file, blob) in &updates {
+        for (file, blob, _) in &updates {
             up.execute([blob, file])?;
         }
     }
@@ -1215,17 +1228,17 @@ fn run(project_root: &Path, db: &Path, input: Input) -> Result<Outcome, NativeEr
         timing("incremental: SAGE anchors", t);
     }
     timing("incremental", t_all);
+    let no_rows = NoRowsLists::of(failed.iter().map(|(f, why)| (f.as_str(), *why)));
     Ok(Outcome {
         report: Report {
             files_indexed,
             files_empty,
             symbols_indexed: symbols_indexed as usize,
             graph_stamp,
-            oversized_files: {
-                let mut v: Vec<String> = failed.into_iter().collect();
-                v.sort();
-                v
-            },
+            oversized_files: no_rows.oversized,
+            unreadable_files: no_rows.unreadable,
+            unparsed_files: no_rows.unparsed,
+            degraded,
             sage_healed,
         },
         changed_files,

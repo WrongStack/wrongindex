@@ -840,6 +840,11 @@ impl DaemonSettings {
 #[serde(rename_all = "camelCase")]
 pub struct EndpointInfo {
     pub endpoint: String,
+    /// Native stdio bridge which verifies the connected Windows pipe peer.
+    /// Older discovery files deserialize without it; hardened JS clients
+    /// require an upgraded daemon rather than sending a token unverified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_bridge: Option<String>,
     pub daemon_instance_id: String,
     pub daemon_version: String,
     pub pid: u32,

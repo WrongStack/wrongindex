@@ -30,7 +30,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -79,6 +79,25 @@ const archiveSha256 = sha256(readFileSync(tarPath));
 // Relative paths: GNU tar treats a drive-letter prefix (`C:`) as a remote host.
 run(['tar', '-xf', `../wrongstack-${commit.slice(0, 12)}.tar`], out);
 rmSync(tarPath);
+
+// An implementation under review can be tested without pretending a dirty
+// checkout is an immutable oracle. Apply only recorded, checksummed files to
+// a NEW archive; retain the original commit-only oracle beside it.
+const overlayPath = arg('--overlay-manifest');
+let overlay: { manifestSha256: string; files: { path: string; sha256: string }[] } | undefined;
+if (overlayPath) {
+  const bytes = readFileSync(overlayPath);
+  const input = JSON.parse(bytes.toString()) as { baseCommit: string; files: { path: string; sha256: string; source: string }[] };
+  if (input.baseCommit !== commit) throw new Error('overlay base commit does not match archive');
+  for (const file of input.files) {
+    if (isAbsolute(file.path) || file.path.includes('\\') || file.path.split('/').some((p) => p === '..' || p === '.') || !file.path.startsWith('packages/tools/src/codebase-index/')) throw new Error(`invalid overlay destination: ${file.path}`);
+    const content = readFileSync(resolve(dirname(resolve(overlayPath)), file.source));
+    if (sha256(content) !== file.sha256) throw new Error(`overlay hash mismatch: ${file.path}`);
+    mkdirSync(dirname(join(out, file.path)), { recursive: true });
+    writeFileSync(join(out, file.path), content);
+  }
+  overlay = { manifestSha256: sha256(bytes), files: input.files.map(({ path, sha256 }) => ({ path, sha256 })) };
+}
 
 // 2. node_modules: third-party entries junctioned, @wrongstack/* -> archive.
 function junction(target: string, path: string) {
@@ -139,6 +158,7 @@ const provenance = {
   schema: 'wrongindex.clean-oracle/1',
   commit,
   archiveSha256,
+  ...(overlay ? { sourceState: 'immutable-archive-with-recorded-overlay', overlay } : {}),
   archivedPaths: [...rootFiles, 'scripts', ...PACKAGES.map((p) => `packages/${p}`)],
   bunLockSha256: existsSync(join(out, 'bun.lock')) ? sha256(readFileSync(join(out, 'bun.lock'))) : null,
   thirdPartyNodeModules: 'junctioned from the source checkout; pinned by bun.lock',

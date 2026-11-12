@@ -80,9 +80,16 @@ impl DataRoot {
 
     /// Endpoint name: unique per OS user and per data root, so test and
     /// portable roots never collide with the normal daemon.
+    ///
+    /// The name is the singleton guard, so it must be one per directory, not
+    /// one per spelling: a trailing separator, an 8.3 short name, a junction
+    /// or a `subst` drive used to give another name - and with it a second
+    /// service on the same registry. The root is therefore named by what the
+    /// file system resolves it to ([`one_spelling`]); for an ordinary path
+    /// that is the path itself, so the name is the one earlier versions used.
     pub fn endpoint_name(&self) -> io::Result<String> {
         let user = user_identity()?;
-        let mut key = self.root.to_string_lossy().into_owned();
+        let mut key = one_spelling(&self.root).to_string_lossy().into_owned();
         if cfg!(windows) {
             key = key.replace('/', "\\").to_lowercase();
         }
@@ -96,6 +103,77 @@ impl DataRoot {
                 .to_string_lossy()
                 .into_owned()
         })
+    }
+}
+
+impl DataRoot {
+    /// Where a service of this root that could not start leaves the reason:
+    /// in the user's temporary folder, not in the data root (which may be
+    /// what failed, and whose log is opened only after it is ready), named
+    /// after the root's endpoint. A detached service has no console.
+    pub fn start_error_file(&self) -> io::Result<PathBuf> {
+        let name = self.endpoint_name()?;
+        let short = name.rsplit('-').next().unwrap_or("x").to_string();
+        Ok(std::env::temp_dir().join(format!("wrongindexd-start-error-{short}.txt")))
+    }
+
+    /// Record why a service of this root could not start (best effort).
+    pub fn record_start_error(&self, reason: &str) {
+        if let Ok(path) = self.start_error_file() {
+            let _ = std::fs::write(path, reason);
+        }
+    }
+
+    /// The reason the last start failed, if one is recorded; removed with it.
+    pub fn take_start_error(&self) -> Option<String> {
+        let path = self.start_error_file().ok()?;
+        let reason = std::fs::read_to_string(&path).ok();
+        let _ = std::fs::remove_file(&path);
+        reason
+            .map(|r| r.trim().to_string())
+            .filter(|r| !r.is_empty())
+    }
+}
+
+/// `path` (absolute) as the file system spells it: its deepest existing
+/// ancestor resolved (links, 8.3 short names, `subst` drives), the rest as
+/// written, without `.` components or a trailing separator. A data root that
+/// does not exist yet is named through its parent.
+fn one_spelling(path: &Path) -> PathBuf {
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    let mut cur = path.to_path_buf();
+    loop {
+        if let Ok(real) = std::fs::canonicalize(&cur) {
+            let mut out = strip_verbatim(&real);
+            for part in rest.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        match (
+            cur.file_name().map(|n| n.to_os_string()),
+            cur.parent().map(Path::to_path_buf),
+        ) {
+            (Some(name), Some(parent)) => {
+                rest.push(name);
+                cur = parent;
+            }
+            // Nothing of it exists (or it ends in `..`): the components as
+            // written, which at least drops `.` and a trailing separator.
+            _ => return path.components().collect(),
+        }
+    }
+}
+
+/// `\\?\C:\x` as `C:\x` and `\\?\UNC\server\share` as `\\server\share`.
+fn strip_verbatim(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{unc}"))
+    } else if let Some(plain) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(plain)
+    } else {
+        path.to_path_buf()
     }
 }
 
@@ -284,6 +362,7 @@ mod tests {
     fn info(id: &str) -> EndpointInfo {
         EndpointInfo {
             endpoint: "e".into(),
+            client_bridge: None,
             daemon_instance_id: id.into(),
             daemon_version: "0".into(),
             pid: 1,
@@ -299,6 +378,91 @@ mod tests {
         let b = DataRoot::resolve(Some(Path::new("C:/x/b"))).unwrap();
         assert_ne!(a.endpoint_name().unwrap(), b.endpoint_name().unwrap());
         assert_eq!(a.endpoint_name().unwrap(), a.endpoint_name().unwrap());
+    }
+
+    /// The 8.3 spelling of `p` (`None` when the call fails).
+    #[cfg(windows)]
+    fn short_path(p: &Path) -> Option<PathBuf> {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let wide: Vec<u16> = p.as_os_str().encode_wide().chain(Some(0)).collect();
+        let mut buf = vec![0u16; 1024];
+        // SAFETY: `wide` is NUL-terminated and `buf` is `buf.len()` units long.
+        let n = unsafe {
+            windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(
+                wide.as_ptr(),
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+            )
+        } as usize;
+        (n > 0 && n < buf.len()).then(|| PathBuf::from(std::ffi::OsString::from_wide(&buf[..n])))
+    }
+
+    /// Every spelling of one data root names one endpoint: the endpoint is
+    /// the singleton guard, and a second name meant a second service.
+    #[test]
+    fn one_directory_has_one_endpoint_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("Home Root");
+        std::fs::create_dir(&home).unwrap();
+        let name = |p: &Path| DataRoot::resolve(Some(p)).unwrap().endpoint_name().unwrap();
+        let plain = name(&home);
+        let s = home.to_string_lossy().into_owned();
+        let sep = std::path::MAIN_SEPARATOR;
+        for spelling in [
+            format!("{s}{sep}"),
+            format!("{s}{sep}."),
+            format!("{s}{sep}sub{sep}.."),
+        ] {
+            assert_eq!(name(Path::new(&spelling)), plain, "{spelling}");
+        }
+        #[cfg(windows)]
+        {
+            assert_eq!(name(Path::new(&s.to_uppercase())), plain);
+            assert_eq!(name(Path::new(&s.replace('\\', "/"))), plain);
+            // A junction to the root is the same directory.
+            let link = tmp.path().join("link");
+            let made = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(&link)
+                .arg(&home)
+                .output()
+                .unwrap();
+            assert!(made.status.success(), "{made:?}");
+            assert_eq!(name(&link), plain);
+            // The 8.3 short name, where the volume has them.
+            if let Some(short) = short_path(&home)
+                && short != home
+            {
+                assert_eq!(name(&short), plain, "{}", short.display());
+            }
+        }
+        // A root that does not exist yet is named through its parent.
+        let later = home.join("later");
+        let before = name(&later);
+        assert_eq!(
+            name(Path::new(&format!("{}{sep}", later.display()))),
+            before
+        );
+        std::fs::create_dir(&later).unwrap();
+        assert_eq!(name(&later), before, "creating the root keeps its name");
+        assert_ne!(before, plain);
+    }
+
+    #[test]
+    fn a_start_error_is_kept_outside_the_root_until_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        // A root that cannot be a directory: the service would fail there.
+        let file = tmp.path().join("not-a-dir");
+        std::fs::write(&file, b"x").unwrap();
+        let root = DataRoot::resolve(Some(&file)).unwrap();
+        assert!(!root.start_error_file().unwrap().starts_with(&file));
+        let _ = root.take_start_error();
+        root.record_start_error("creating data root: it is a file");
+        assert_eq!(
+            root.take_start_error().as_deref(),
+            Some("creating data root: it is a file")
+        );
+        assert_eq!(root.take_start_error(), None, "read once");
     }
 
     #[test]

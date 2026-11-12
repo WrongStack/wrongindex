@@ -17,10 +17,13 @@
 //   WRONGINDEX_INSTALLER      installer (default: target/release/bundle/nsis/*-setup.exe)
 //
 // Writes certification.json, certification.md and one log per gate to the
-// output directory (default target/certification/<commit>-<time>). Exits
-// non-zero when a gate fails. Logs hold command output only (no tokens:
+// output directory (default target/certification/<commit>-<time>). A focused
+// selection fails on FAIL or NOT RUN. A full run also requires a clean source
+// tree and current manual evidence; historical acceptance is not this build's
+// release approval. Logs hold command output only (no tokens:
 // the live scripts never print theirs).
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,13 +56,14 @@ const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const outDir = path.resolve(opt('--out') ?? path.join(repo, 'target', 'certification', `${commit.slice(0, 12)}-${stamp}`));
 fs.mkdirSync(outDir, { recursive: true });
 const release = path.join(env.CARGO_TARGET_DIR ?? path.join(repo, 'target'), 'release');
+const candidateVersion = fs.readFileSync(path.join(repo, 'Cargo.toml'), 'utf8').match(/\[workspace\.package\][\s\S]*?version\s*=\s*"([^"]+)"/)?.[1];
 const engine = env.WRONGINDEX_TEST_ENGINE;
 const wsCheckout = env.WRONGSTACK_CHECKOUT;
 const installer =
   env.WRONGINDEX_INSTALLER ??
   (() => {
     const d = path.join(release, 'bundle', 'nsis');
-    const f = fs.existsSync(d) ? fs.readdirSync(d).find((n) => n.endsWith('-setup.exe')) : undefined;
+    const f = fs.existsSync(d) ? fs.readdirSync(d).find((n) => candidateVersion && n.startsWith(`WrongIndex_${candidateVersion}_`) && n.endsWith('-setup.exe')) : undefined;
     return f ? path.join(d, f) : undefined;
   })();
 
@@ -91,25 +95,27 @@ const gates = [
   { id: 'G02', name: 'Clippy, warnings denied', req: 'AGENTS.md checks', cmd: 'cargo', args: ['clippy', '--workspace', '--all-targets', '--locked', '--', '-D', 'warnings'] },
   { id: 'G03', name: 'Workspace tests (oracle parity, native parity, daemon, registry, IPC, desktop bridge)', req: 'WI-108, WI-502..511, WI-601, WI-603', ...cargoTest(['--workspace']) },
   { id: 'G04', name: 'Daemon IPC/lifecycle tests, five consecutive runs', req: 'AGENTS.md (IPC/lifecycle)', repeat: 5, ...cargoTest(['-p', 'wrongindexd', '--tests']) },
-  { id: 'G05', name: 'Release build (service, CLI, desktop)', req: 'WI-700', cmd: 'cargo', args: ['build', '--release', '--locked', '-p', 'wrongindexd', '-p', 'wrongindex-cli', '-p', 'wrongindex-desktop'] },
+  { id: 'G05', name: 'Release build (service, CLI, Tauri and GPUI)', req: 'WI-700', cmd: 'cargo', args: ['build', '--release', '--locked', '-p', 'wrongindexd', '-p', 'wrongindex-cli', '-p', 'wrongindex-desktop', '-p', 'wrongindex-gpui'] },
   { id: 'G06', name: 'Native writer vs WrongStack: generated projects, every language, incremental, targeted, enrichment, SAGE, graph decoration', req: 'WI-503..512, WI-515', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun'), tool('python'), tool('go', ['version'])), ...cargoTest(['--release', '-p', 'wrongindex-engine', '--test', 'differential', '--', '--ignored'], engineEnv) },
   { id: 'G07', name: 'Native writer vs WrongStack on real projects (full and incremental)', req: 'WI-514', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), envVar('WRONGINDEX_DIFF_PROJECTS')), ...cargoTest(['--release', '-p', 'wrongindex-engine', '--test', 'differential', '--', '--ignored', 'on_listed_projects', '--nocapture'], engineEnv) },
   { id: 'G08', name: 'Query differential through the daemon (671 recorded operations)', req: 'WI-302, WI-511', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun')), ...cargoTest(['-p', 'wrongindexd', '--test', 'query_diff', '--', '--ignored'], engineEnv) },
   { id: 'G09', name: 'Compatibility worker paths (engine, watch, backend switch)', req: 'WI-300..302, WI-600', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun')), ...cargoTest(['-p', 'wrongindexd', '--test', 'engine', '--test', 'watch', '--test', 'backend_switch', '--', '--ignored'], engineEnv) },
   { id: 'G10', name: 'Large-run publication benchmark', req: 'WI-513', needs: () => envVar('WRONGINDEX_BENCH_PROJECT'), ...cargoTest(['--release', '-p', 'wrongindexd', '--test', 'publication_bench', '--', '--ignored', '--nocapture']) },
-  { id: 'G11', name: 'Multi-project soak', req: 'WI-602', needs: () => envVar('WRONGINDEX_SOAK_SECS'), ...cargoTest(['--release', '-p', 'wrongindexd', '--test', 'soak', '--', '--ignored', '--nocapture']) },
+  { id: 'G11', name: 'Multi-project soak (24-hour qualification)', req: 'WI-602', needs: () => need(Number(env.WRONGINDEX_SOAK_SECS) >= 86400 ? null : 'WRONGINDEX_SOAK_SECS must be at least 86400 for release qualification', file(path.join(release, 'wrongindexd.exe'), 'release service')), ...cargoTest(['--release', '-p', 'wrongindexd', '--test', 'soak', '--', '--ignored', '--nocapture'], { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') }) },
   { id: 'G12', name: 'Parser corpus known answers', req: 'WI-501', needs: () => envVar('WRONGINDEX_PARSER_CORPUS'), ...cargoTest(['--release', '-p', 'wrongindex-engine', '--lib', '--', '--ignored', 'parser_ports_match_a_real_world_corpus']) },
   { id: 'G13', name: 'Git containment vet on real checkouts', req: 'WI-604', needs: () => envVar('WRONGINDEX_VET_DIRS'), ...cargoTest(['-p', 'wrongindex-storage', '--lib', '--', '--ignored', 'real_checkouts_pass']) },
   { id: 'G14', name: 'Discovery differential (1680-case matrix, fixtures)', req: 'WI-205', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun'), file(path.join(release, 'wrongindex.exe'), 'release CLI')), cmd: 'bun', args: ['scripts/oracle/discovery-diff.ts', '--wrongstack', engine ?? '', '--cli', path.join(release, 'wrongindex.exe')] },
-  { id: 'G15', name: 'WrongStack adapter tests incl. end to end through the service and the wire contract', req: 'WI-102, WI-303..309', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'npx', args: ['vitest', 'run', 'tests/wrongindex-adapter.test.ts', 'tests/wrongindex-wire-contract.test.ts'], cwd: wsCheckout ? path.join(wsCheckout, 'packages', 'tools') : undefined, env: { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') }, shell: true },
+  { id: 'G15', name: 'WrongStack adapter, wire, lifecycle, publication and delegation tests', req: 'WI-102, WI-303..309', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), tool('bun'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'bun', args: ['--bun', 'run', 'vitest', 'run', ...['adapter', 'wire-contract', 'client-lifecycle', 'publication', 'delegation'].map((name) => `packages/tools/tests/wrongindex-${name}.test.ts`)], cwd: wsCheckout, env: { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') } },
   { id: 'G16', name: 'Live WrongStack MCP proof', req: 'WI-704', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'node', args: ['scripts/release/wrongstack-live.mjs', path.join(release, 'wrongindexd.exe'), path.join(release, 'wrongindex.exe'), wsCheckout ?? ''] },
   { id: 'G17', name: 'Live WrongStack CLI + WebUI proof', req: 'WI-704', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'node', args: ['scripts/release/wrongstack-live-webui.mjs', path.join(release, 'wrongindexd.exe'), path.join(release, 'wrongindex.exe'), wsCheckout ?? ''] },
   { id: 'G18', name: 'Desktop reconnect smoke (missed events, no false success)', req: 'WI-404', needs: () => need(envVar('PLAYWRIGHT_CORE'), file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop')), cmd: 'node', args: ['scripts/release/smoke-reconnect.mjs', env.PLAYWRIGHT_CORE ?? '', release] },
   { id: 'G19', name: 'Installed package smoke (install, service, CLI, GUI, uninstall)', req: 'WI-408, WI-700, WI-701', needs: () => need(envVar('PLAYWRIGHT_CORE'), tool('pwsh', ['-NoProfile', '-Command', 'exit 0']), file(installer, 'installer (scripts/release/package-windows.ps1)')), cmd: 'pwsh', args: ['-NoProfile', '-File', 'scripts/release/smoke-installed.ps1', '-PlaywrightCore', env.PLAYWRIGHT_CORE ?? '', ...(installer ? ['-Installer', installer] : [])] },
   { id: 'G20', name: 'Third-party license inventory (every shipped crate and bundled asset)', req: 'WI-009, WI-703', cmd: 'node', args: ['scripts/release/manifest.mjs', 'licenses', '--out', path.join(outDir, 'THIRD-PARTY-LICENSES.txt')] },
-  { id: 'G21', name: 'Release manifest (commit, profile, toolchain, hashes, Authenticode status)', req: 'WI-703', needs: () => need(file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop'), file(installer, 'installer')), cmd: 'node', args: ['scripts/release/manifest.mjs', 'manifest', '--bin', release, '--bundle', installer ? path.dirname(installer) : '', '--out', path.join(outDir, 'RELEASE-MANIFEST.json')] },
+  { id: 'G21', name: 'Release manifest (commit, profile, toolchain, hashes, Authenticode status)', req: 'WI-703', needs: () => need(file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop'), file(installer, 'installer')), cmd: 'node', args: ['scripts/release/manifest.mjs', 'manifest', '--bin', release, '--bundle', installer ? path.dirname(installer) : '', '--installer', installer ? path.basename(installer) : '', '--out', path.join(outDir, 'RELEASE-MANIFEST.json')] },
   { id: 'G22', name: 'Disk full on a real volume (write rolled back, DISK_FULL, refused before running)', req: 'WI-603', needs: () => envVar('WRONGINDEX_TEST_SMALL_VOLUME'), ...cargoTest(['-p', 'wrongindexd', '--test', 'real_disk_full', '--', '--ignored']) },
 ];
+gates.push({ id: 'G23', name: 'Native GPUI actor lifecycle and offline errors', req: 'WI-GPUI-01', needs: () => file(path.join(release, 'wrongindexd.exe'), 'release service'), ...cargoTest(['--release', '-p', 'wrongindex-gpui', '--', '--ignored'], { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') }) });
+if (only && (!only.length || only.some((id) => !gates.some((g) => g.id === id)))) throw new Error('Unknown or empty certification gate selection');
 
 const results = [];
 for (const g of gates) {
@@ -164,8 +170,22 @@ const manual = [
   { id: 'M02', name: 'Native per-monitor DPI pass on a mixed-DPI setup', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs mixed-DPI hardware' },
   { id: 'M03', name: 'Code signing of the installer and binaries', req: 'WI-703', status: 'WAIVED', reason: 'owner decision 2026-11-03: releases ship unsigned; SHA-256 and build provenance are checked' },
   { id: 'M04', name: 'Real sleep/resume cycle with watched projects', req: 'WI-207', status: 'NOT RUN', reason: 'manual; needs a machine that is put to sleep (the resume path is unit-tested)' },
-  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'PASS', reason: 'recorded 2026-11-03 in Windows Sandbox for a build with the static C runtime (docs/status.md, row M05); the published v0.1.0 fails it. Repeat for each release' },
+  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'NOT RUN', reason: 'Repeat for this build, including GPUI/D3D startup. Historical 2026-11-03 acceptance is in docs/status.md and does not certify new artifacts.' },
 ];
+// A person may supply current manual evidence for this exact source/artifact.
+// Never copy historical PASS rows into a new build's acceptance automatically.
+const manualEvidence = opt('--manual-evidence');
+if (manualEvidence) {
+  const evidence = JSON.parse(fs.readFileSync(manualEvidence, 'utf8'));
+  const installerSha256 = installer && fs.existsSync(installer) ? createHash('sha256').update(fs.readFileSync(installer)).digest('hex') : null;
+  if (dirty || evidence.commit !== commit || !installerSha256 || evidence.installerSha256 !== installerSha256) throw new Error('Manual evidence must match a clean commit and the exact installer SHA-256');
+  for (const item of evidence.items ?? []) {
+    const row = manual.find((m) => m.id === item.id);
+    if (!row || row.status === 'WAIVED' || item.status !== 'PASS' || typeof item.evidence !== 'string' || !item.evidence.trim()) throw new Error('Manual evidence requires a known non-waived item, PASS and an evidence reference');
+    row.status = 'PASS';
+    row.reason = item.evidence;
+  }
+}
 const summary = {
   generatedAt: new Date().toISOString(),
   versions,
@@ -173,6 +193,7 @@ const summary = {
   manual,
   counts: Object.fromEntries(['PASS', 'FAIL', 'NOT RUN'].map((s) => [s, results.filter((r) => r.status === s).length])),
 };
+summary.releaseReady = !only && !dirty && results.every((r) => r.status === 'PASS') && manual.every((m) => m.status === 'PASS' || m.status === 'WAIVED');
 fs.writeFileSync(path.join(outDir, 'certification.json'), `${JSON.stringify(summary, null, 2)}\n`);
 const md = [
   `# WrongIndex certification run`,
@@ -193,4 +214,4 @@ const md = [
 ].join('\n');
 fs.writeFileSync(path.join(outDir, 'certification.md'), md);
 console.log(outDir);
-process.exit(summary.counts.FAIL > 0 ? 1 : 0);
+process.exit(only ? (summary.counts.FAIL + summary.counts['NOT RUN'] > 0 ? 1 : 0) : (summary.releaseReady ? 0 : 1));

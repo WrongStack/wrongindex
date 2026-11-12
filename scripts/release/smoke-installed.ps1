@@ -16,7 +16,10 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 if (-not $Installer) {
   $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $root 'target' }
-  $Installer = Get-ChildItem (Join-Path $target 'release\bundle\nsis') -Filter *-setup.exe | Select-Object -First 1 -ExpandProperty FullName
+  $version = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages | Where-Object name -eq 'wrongindexd').version
+  $candidates = @(Get-ChildItem (Join-Path $target 'release\bundle\nsis') -Filter "WrongIndex_${version}_*-setup.exe")
+  if ($candidates.Count -ne 1) { throw "expected one installer for $version, found $($candidates.Count)" }
+  $Installer = $candidates[0].FullName
 }
 $existing = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
   ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' }
@@ -41,6 +44,8 @@ try {
   $result.install = $p.ExitCode
   # The license inventory ships next to the binaries (WI-703).
   $result.licensesInstalled = Test-Path (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+  $result.nativeGuiInstalled = Test-Path (Join-Path $dir 'wrongindex-gpui.exe')
+  if (-not $result.nativeGuiInstalled) { throw 'Native GPUI client missing from installer' }
   # The install directory goes on the user's PATH (and comes off on uninstall).
   $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   $result.onUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0

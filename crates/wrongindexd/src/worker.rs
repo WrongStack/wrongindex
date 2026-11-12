@@ -63,7 +63,12 @@ pub async fn run(shared: Arc<Shared>, mut shutdown: watch::Receiver<bool>) {
             break;
         }
         let mut started = false;
-        let parallel = shared.settings.get().parallel_jobs.max(1);
+        let settings = shared.settings.get();
+        let parallel = crate::confine::parallel_jobs(
+            settings.parallel_jobs,
+            settings.native_memory_mb,
+            settings.worker_memory_mb,
+        );
         if running.len() < parallel {
             let queued = match shared.registry(|r| r.queued_jobs()).await {
                 Ok(q) => q,
@@ -148,7 +153,25 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
         );
     }
     let started = std::time::Instant::now();
-    let outcome = execute(&shared, &job.project_id, job.kind, job.params.clone()).await;
+    // In a task of its own: a panic in a job ends that job, with an error on
+    // record, instead of leaving it `running` (and its project unschedulable)
+    // until the service restarts.
+    let (s2, pid, kind, params) = (
+        shared.clone(),
+        job.project_id.clone(),
+        job.kind,
+        job.params.clone(),
+    );
+    let outcome = match tokio::spawn(async move { execute(&s2, &pid, kind, params).await }).await {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            warn!("job_panicked", {"jobId": job_id, "projectId": job.project_id, "error": e.to_string()});
+            Err(ErrorBody::new(
+                ErrorCode::Internal,
+                format!("the job ended unexpectedly: {e}"),
+            ))
+        }
+    };
     shared.metrics.job_finished(
         job.kind.as_str(),
         if outcome.is_ok() {
@@ -170,8 +193,23 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
     {
         warn!("index_corrupt", {"projectId": job.project_id, "jobId": job_id, "error": e.message});
     }
-    let id = job_id.clone();
-    match shared.registry(move |r| r.complete_job(&id, outcome)).await {
+    // The registry may be busy or its volume briefly full: try again
+    // before giving up, since nothing else ends a job that ran.
+    let mut recorded = Err(ErrorBody::new(ErrorCode::Internal, "not recorded"));
+    for wait_ms in [0u64, 200, 500, 1_000, 2_000, 4_000] {
+        if wait_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+        }
+        let (id, outcome) = (job_id.clone(), outcome.clone());
+        recorded = shared.registry(move |r| r.complete_job(&id, outcome)).await;
+        match &recorded {
+            Ok(_) => break,
+            Err(e) => {
+                warn!("job_completion_retry", {"jobId": job_id, "error": e.to_string()})
+            }
+        }
+    }
+    match recorded {
         Ok(done) => {
             prune_now_and_then(&shared).await;
             info!("job_completed", {
@@ -203,6 +241,20 @@ async fn run_job(shared: Arc<Shared>, job: JobRecord, _busy: Busy) {
                 shared
                     .watch
                     .note_job_succeeded(&done.project_id, &done.job_id);
+                // Files it could not read or parse keep the project degraded
+                // until a run indexes them (INV-05).
+                let targets: Vec<String> = done
+                    .params
+                    .as_ref()
+                    .and_then(|p| serde_json::from_value(p["paths"].clone()).ok())
+                    .unwrap_or_default();
+                let whole = done.kind != JobKind::Incremental || targets.is_empty();
+                shared.watch.note_write_result(
+                    &done.project_id,
+                    whole,
+                    &targets,
+                    done.result.as_ref(),
+                );
             }
         }
         Err(e) => {
@@ -573,8 +625,12 @@ async fn execute(
                 .then(|| serde_json::from_value::<Vec<String>>(params["paths"].clone()).ok())
                 .flatten()
                 .filter(|p| !p.is_empty());
+            // WrongStack's own engine takes what the native writer refuses:
+            // the native run then refuses rather than degrades (see
+            // `wrongindex_engine::parse::strict`).
+            let delegable = !replace && backend == Backend::Auto && shared.engine.configured();
             if backend != Backend::Legacy {
-                match run_native(shared, &project, replace, targets.as_deref()).await {
+                match run_native(shared, &project, replace, targets.as_deref(), delegable).await {
                     Ok((stamp, detail)) => {
                         // The index is now a baseline index the native writer
                         // wrote or accepted.
@@ -589,9 +645,7 @@ async fn execute(
                             "generation": generation,
                         }));
                     }
-                    Err(NativeOutcome::Unsupported(why))
-                        if !replace && backend == Backend::Auto && shared.engine.configured() =>
-                    {
+                    Err(NativeOutcome::Unsupported(why)) if delegable => {
                         native_skipped = Some(why);
                     }
                     Err(NativeOutcome::Unsupported(why)) => {
@@ -654,6 +708,11 @@ async fn execute(
             let mut args = json!({
                 "projectRoot": project.checkout_root,
                 "indexDir": project.index_dir,
+                "writeDelegation": {
+                    "instanceId": shared.instance_id,
+                    "pid": std::process::id(),
+                    "epoch": fence.owner_epoch,
+                },
             });
             if kind == JobKind::Incremental {
                 args["files"] = params["paths"].clone();
@@ -750,6 +809,7 @@ async fn run_native(
     project: &wrongindex_contracts::ProjectRecord,
     replace: bool,
     targets: Option<&[String]>,
+    strict: bool,
 ) -> Result<(Option<String>, serde_json::Value), NativeOutcome> {
     // The compatibility worker may hold a pooled handle on this index; close
     // it so the native swap is not refused for our own reader.
@@ -758,7 +818,18 @@ async fn run_native(
         .release_store(&project.checkout_root, &project.index_dir)
         .await;
     let started = std::time::Instant::now();
-    let memory_mb = shared.settings.get().native_memory_mb;
+    let settings = shared.settings.get();
+    let memory_mb = settings.native_memory_mb;
+    let parallel = crate::confine::parallel_jobs(
+        settings.parallel_jobs,
+        settings.native_memory_mb,
+        settings.worker_memory_mb,
+    );
+    let parser_slots = (std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .saturating_sub(1)
+        / parallel)
+        .clamp(1, 16);
     let (s2, pid) = (shared.clone(), project.project_id.clone());
     let on_progress = move |mut step: serde_json::Value| {
         let job_id = s2
@@ -784,7 +855,11 @@ async fn run_native(
         &project.index_dir,
         replace,
         targets,
-        memory_mb,
+        ChildLimits {
+            memory_mb,
+            parser_slots,
+            strict,
+        },
         on_progress,
     )
     .await;
@@ -803,6 +878,16 @@ async fn run_native(
     }
 }
 
+/// What the service grants one native run.
+struct ChildLimits {
+    /// Memory cap of the child's process tree, in MiB (0: none).
+    memory_mb: u64,
+    /// Parsers (in-process threads and helper programs) at a time.
+    parser_slots: usize,
+    /// Refuse rather than degrade (see `wrongindex_engine::parse::strict`).
+    strict: bool,
+}
+
 /// Deadline for one isolated native run.
 const NATIVE_RUN_DEADLINE: Duration = Duration::from_secs(30 * 60);
 
@@ -819,9 +904,14 @@ async fn rebuild_in_child(
     index_dir: &str,
     replace: bool,
     targets: Option<&[String]>,
-    memory_mb: u64,
+    limits: ChildLimits,
     on_progress: impl Fn(serde_json::Value) + Send + 'static,
 ) -> Result<serde_json::Value, NativeOutcome> {
+    let ChildLimits {
+        memory_mb,
+        parser_slots,
+        strict,
+    } = limits;
     let exe = std::env::current_exe()
         .map_err(|e| NativeOutcome::Failed(ErrorBody::new(ErrorCode::Internal, e.to_string())))?;
     let mut cmd = tokio::process::Command::new(exe);
@@ -842,9 +932,15 @@ async fn rebuild_in_child(
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::piped())
     .env("WRONGINDEX_NATIVE_PROGRESS", "1")
+    .env("WRONGINDEX_NATIVE_PARSER_SLOTS", parser_slots.to_string())
     .kill_on_drop(true);
     if memory_mb > 0 {
         cmd.env("WRONGINDEX_NATIVE_MEMORY_MB", memory_mb.to_string());
+    }
+    if strict {
+        cmd.env("WRONGINDEX_NATIVE_STRICT", "1");
+    } else {
+        cmd.env_remove("WRONGINDEX_NATIVE_STRICT");
     }
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW

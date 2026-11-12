@@ -9,11 +9,51 @@ permissions:
   contents: read
 
 jobs:
+  signing-preparation:
+    # These regressions need no provider account, secret or signing request.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Record observer runtime
+        shell: pwsh
+        run: |
+          node --version
+          if ($LASTEXITCODE) { throw 'Node runtime is required' }
+          $PSVersionTable.PSVersion.ToString()
+      - name: Signing content, courier and promotion regressions
+        shell: pwsh
+        run: scripts/release/signpath/check.ps1
+  wrongstack-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          repository: WrongStack/WrongStack
+          ref: main
+          path: target/wrongstack-source
+          persist-credentials: false
+      - name: Drift gate behavior
+        run: bun run test:baseline
+      - name: Certification cannot pass unexecuted requirements
+        run: bun run test:certification
+      - name: Oracle fixture writer stays within disposable unowned fixtures
+        run: bun test ./scripts/oracle/index-fixture.test.ts
+      - name: Current WrongStack source matches the reviewed contract
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-9ec93ad7f306.json --out target/wrongstack-drift.json
   windows:
     # Named pipes, pipe DACLs, and path semantics require Windows (validation §8).
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Install pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - name: Format
@@ -22,6 +62,12 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+      - name: Native client actor lifecycle against the debug daemon
+        shell: pwsh
+        run: |
+          $env:WRONGINDEX_TEST_DAEMON = (Resolve-Path 'target/debug/wrongindexd.exe').Path
+          cargo test -p wrongindex-gpui --locked -- --ignored
+          if ($LASTEXITCODE) { throw 'Native client actor lifecycle acceptance failed' }
       # A real full disk (architecture §9): a 64 MB volume the runner can
       # attach because it runs elevated. The test is ignored elsewhere.
       - name: Attach a small volume

@@ -50,15 +50,18 @@ try {
     [ordered]@{
       wrongindexd = (& (Join-Path $target 'release\wrongindexd.exe') --build-info | ConvertFrom-Json).version
       wrongindex  = ((& (Join-Path $target 'release\wrongindex.exe') --version) -split ' ')[-1]
+      # PowerShell does not capture a Windows-subsystem application's
+      # output reliably. A piped native child also waits for its exit.
+      'wrongindex-gpui' = ((node -e 'process.stdout.write(require("node:child_process").execFileSync(process.argv[1], ["--version"], {windowsHide:true}));' (Join-Path $target 'release\wrongindex-gpui.exe')) -split ' ')[-1]
     }
   }
-  cargo build --release --locked -p wrongindexd -p wrongindex-cli
+  cargo build --release --locked -p wrongindexd -p wrongindex-cli -p wrongindex-gpui
   if ($LASTEXITCODE) { throw 'cargo build failed' }
   $built = Get-BuiltVersions
   if (@($built.Values | Where-Object { $_ -ne $version }).Count) {
     Write-Host "stale binaries ($(($built.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ')) for version $version; rebuilding them"
-    cargo clean --release -p wrongindexd -p wrongindex-cli -p wrongindex-desktop
-    cargo build --release --locked -p wrongindexd -p wrongindex-cli
+    cargo clean --release -p wrongindexd -p wrongindex-cli -p wrongindex-desktop -p wrongindex-gpui
+    cargo build --release --locked -p wrongindexd -p wrongindex-cli -p wrongindex-gpui
     if ($LASTEXITCODE) { throw 'cargo build failed' }
     $built = Get-BuiltVersions
     if (@($built.Values | Where-Object { $_ -ne $version }).Count) { throw "built binaries are not version ${version}: $($built | ConvertTo-Json -Compress)" }
@@ -69,7 +72,7 @@ try {
   # desktop looks for the service and the CLI.
   $bin = Join-Path $root 'crates\wrongindex-desktop\binaries'
   New-Item -ItemType Directory -Force $bin | Out-Null
-  foreach ($name in 'wrongindexd', 'wrongindex') {
+  foreach ($name in 'wrongindexd', 'wrongindex', 'wrongindex-gpui') {
     Copy-Item (Join-Path $target "release\$name.exe") (Join-Path $bin "$name-$triple.exe") -Force
   }
 
@@ -86,7 +89,7 @@ try {
     Pop-Location
   }
   # The mapping took effect: no shipped binary names this machine's paths.
-  foreach ($name in 'wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe') {
+  foreach ($name in 'wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe', 'wrongindex-gpui.exe') {
     $text = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes((Join-Path $target "release\$name")))
     foreach ($local in $root.Path, $cargoHome) {
       if ($text.IndexOf($local, [StringComparison]::OrdinalIgnoreCase) -ge 0) { throw "$name contains the build path $local; the path mapping did not apply" }
@@ -96,14 +99,19 @@ try {
   if ($desktopVersion -ne $version) { throw "wrongindex-desktop.exe is version $desktopVersion, expected $version" }
 
   $out = Join-Path $target 'release\bundle\nsis'
-  $manifest = Get-ChildItem $out -Filter *.exe | ForEach-Object {
+  # Old local installers may coexist in this directory. Certify only the
+  # artifact just built, never an older version or a mixture of releases.
+  $installers = @(Get-ChildItem $out -Filter "WrongIndex_${version}_*-setup.exe")
+  if ($installers.Count -ne 1) { throw "expected one installer for $version, found $($installers.Count)" }
+  $manifest = $installers | ForEach-Object {
     "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
   }
   # LF line endings: `sha256sum -c SHA256SUMS.txt` must work on any system.
   [IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), (($manifest -join "`n") + "`n"))
   Copy-Item (Join-Path $bin 'THIRD-PARTY-LICENSES.txt') $out -Force
-  node (Join-Path $root 'scripts\release\manifest.mjs') manifest --bin (Join-Path $target 'release') --bundle $out --out (Join-Path $out 'RELEASE-MANIFEST.json') --shipped-out (Join-Path $target 'release\bundle\shipped')
+  node (Join-Path $root 'scripts\release\manifest.mjs') manifest --bin (Join-Path $target 'release') --bundle $out --installer $installers[0].Name --out (Join-Path $out 'RELEASE-MANIFEST.json') --shipped-out (Join-Path $target 'release\bundle\shipped')
   if ($LASTEXITCODE) { throw 'release manifest failed' }
+  & (Join-Path $root 'scripts/release/check-pe-metadata.ps1') -Directory (Join-Path $target 'release/bundle/shipped') -Version $version
   $manifest
 } finally {
   [Environment]::SetEnvironmentVariable($flagsVar, $null)

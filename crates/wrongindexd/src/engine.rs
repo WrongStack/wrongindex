@@ -95,6 +95,10 @@ pub struct Engine {
     memory_mb: AtomicU64,
     /// The running worker's job, to change its cap live and report it.
     job: std::sync::Mutex<Weak<crate::confine::Job>>,
+    /// The running worker's `hello`, readable while a request holds the
+    /// worker (an indexing run can take minutes; `daemon.health` reports
+    /// this and must not wait for it).
+    hello: std::sync::Mutex<Option<Value>>,
 }
 
 impl Engine {
@@ -108,6 +112,13 @@ impl Engine {
             memory_cap_hits: AtomicU64::new(0),
             memory_mb: AtomicU64::new(0),
             job: std::sync::Mutex::new(Weak::new()),
+            hello: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn set_hello(&self, hello: Option<Value>) {
+        if let Ok(mut h) = self.hello.lock() {
+            *h = hello;
         }
     }
 
@@ -282,7 +293,9 @@ impl Engine {
         })?;
         let mut guard = self.worker.lock().await;
         if guard.is_none() {
-            *guard = Some(self.spawn(cfg).await?);
+            let w = self.spawn(cfg).await?;
+            self.set_hello(Some(w.hello.clone()));
+            *guard = Some(w);
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let w = guard.as_mut().ok_or_else(|| internal("worker missing"))?;
@@ -299,6 +312,7 @@ impl Engine {
         {
             self.failures.fetch_add(1, Ordering::Relaxed);
             warn!("engine_restart", {"op": op, "error": e.to_string(), "memoryCap": capped});
+            self.set_hello(None);
             if let Some(mut dead) = guard.take() {
                 let _ = dead.child.kill().await;
             }
@@ -316,6 +330,7 @@ impl Engine {
         let args = json!({"projectRoot": project_root, "indexDir": index_dir});
         if let Err(e) = Self::exchange(w, id, "release", args, Duration::from_secs(10)).await {
             warn!("engine_release_failed", {"error": e.to_string()});
+            self.set_hello(None);
             if let Some(mut dead) = guard.take() {
                 let _ = dead.child.kill().await;
                 let _ = dead.child.wait().await;
@@ -323,12 +338,16 @@ impl Engine {
         }
     }
 
-    pub async fn hello(&self) -> Option<Value> {
-        self.worker.lock().await.as_ref().map(|w| w.hello.clone())
+    /// The running worker's `hello`, without waiting for a request in
+    /// flight.
+    pub fn hello(&self) -> Option<Value> {
+        self.hello.lock().ok().and_then(|h| h.clone())
     }
 
     pub async fn shutdown(&self) {
-        if let Some(mut w) = self.worker.lock().await.take() {
+        let worker = self.worker.lock().await.take();
+        self.set_hello(None);
+        if let Some(mut w) = worker {
             drop(w.stdin);
             if tokio::time::timeout(Duration::from_secs(5), w.child.wait())
                 .await
@@ -401,6 +420,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const reply = (result) => say({ id, ok: true, result });
   if (op === 'hello') return reply({ engine: { kind: 'fake' } });
   if (op === 'ping') return reply({ pid: process.pid });
+  if (op === 'sleep') return setTimeout(() => reply({ slept: args.ms }), args.ms);
   if (op === 'spawn') {
     const c = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore', detached: true });
     c.unref();
@@ -458,6 +478,34 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
             CloseHandle(h);
             ended
         }
+    }
+
+    /// `daemon.health` reports the worker's `hello`; it used to wait for
+    /// the worker's lock, held for the whole of a request (an indexing run
+    /// of a large project: minutes), so the service looked hung to every
+    /// client asking for its health.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_hello_is_read_without_waiting_for_a_request_in_flight() {
+        let tmp = tempfile::tempdir().unwrap();
+        let e = Arc::new(fake_engine(tmp.path()));
+        assert!(e.hello().is_none(), "no worker yet");
+        pid(&e).await;
+        assert_eq!(e.hello().unwrap()["engine"]["kind"], "fake");
+        let e2 = e.clone();
+        let slow = tokio::spawn(async move { e2.call("sleep", json!({"ms": 5000}), T).await });
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let t0 = std::time::Instant::now();
+        let hello = e.hello();
+        assert!(
+            t0.elapsed() < Duration::from_millis(100),
+            "{:?}",
+            t0.elapsed()
+        );
+        assert_eq!(hello.unwrap()["engine"]["kind"], "fake");
+        assert!(!slow.is_finished(), "the request is still in flight");
+        assert_eq!(slow.await.unwrap().unwrap()["slept"], 5000);
+        e.shutdown().await;
+        assert!(e.hello().is_none(), "no worker after shutdown");
     }
 
     #[tokio::test(flavor = "multi_thread")]

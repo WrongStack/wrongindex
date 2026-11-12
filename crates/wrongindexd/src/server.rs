@@ -83,6 +83,7 @@ pub struct Shared {
     pub wake_worker: Notify,
     pub owners: crate::ownership::Owners,
     connections: AtomicUsize,
+    query_slots: Arc<tokio::sync::Semaphore>,
     sqlite_version: String,
     pub engine: crate::engine::Engine,
     pub watch: crate::watch::Supervisor,
@@ -264,10 +265,12 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         data_root: cfg.root.path().to_path_buf(),
         disk: crate::disk::Monitor::default(),
         wal: crate::wal::Care::default(),
+        query_slots: Arc::new(tokio::sync::Semaphore::new(4)),
     });
     shared.apply_settings();
     let info = EndpointInfo {
         endpoint: endpoint.clone(),
+        client_bridge: Some(std::env::current_exe()?.to_string_lossy().into_owned()),
         daemon_instance_id: instance_id.clone(),
         daemon_version: env!("CARGO_PKG_VERSION").to_string(),
         pid: std::process::id(),
@@ -276,6 +279,38 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         started_at_ms,
     };
     Discovery::publish(&cfg.root, &info, &shared.token)?;
+    // A reason left by an earlier failed start no longer applies.
+    let _ = cfg.root.take_start_error();
+    // Clients find the service only through its discovery files. This
+    // process holds the endpoint, so files that are gone (a cleanup) or name
+    // another instance are stale: publish again, or a live service would be
+    // unreachable until it is killed by hand.
+    let discovery_keeper = tokio::spawn({
+        let (root, info, token) = (cfg.root.clone(), info.clone(), shared.token.clone());
+        async move {
+            let mut tick = tokio::time::interval(DISCOVERY_CHECK);
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let (r, i, t) = (root.clone(), info.clone(), token.clone());
+                let republished = tokio::task::spawn_blocking(move || {
+                    let ours = Discovery::load(&r).is_ok_and(|d| {
+                        d.info.daemon_instance_id == i.daemon_instance_id && d.token == t
+                    });
+                    if ours {
+                        return Ok(false);
+                    }
+                    Discovery::publish(&r, &i, &t).map(|_| true)
+                })
+                .await;
+                match republished {
+                    Ok(Ok(true)) => warn!("discovery_republished", {}),
+                    Ok(Err(e)) => warn!("discovery_republish_failed", {"error": e.to_string()}),
+                    _ => {}
+                }
+            }
+        }
+    });
     info!("ready", {
         "instanceId": instance_id,
         "endpoint": endpoint,
@@ -299,7 +334,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
 
     // 4. Accept loop.
     #[cfg(windows)]
-    {
+    let late_accept = {
         let mut server = first;
         loop {
             tokio::select! {
@@ -320,7 +355,30 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
                 }
             }
         }
-    }
+        // The endpoint stays this process's until its work is done: a pipe
+        // instance is the singleton guard, and with none left a second
+        // service could start beside this one while it is still draining,
+        // fail the jobs it is finishing and fight it for every index. So the
+        // accept loop goes on through the drain (connections are answered;
+        // mutating work is refused as draining).
+        let shared = shared.clone();
+        tokio::spawn(async move {
+            loop {
+                let accepted = server.connect().await;
+                let conn = server;
+                server = match listener.next() {
+                    Ok(next) => next,
+                    Err(e) => {
+                        warn!("accept_failed", {"error": e.to_string()});
+                        return;
+                    }
+                };
+                if accepted.is_ok() {
+                    tokio::spawn(handle_connection(shared.clone(), conn));
+                }
+            }
+        })
+    };
 
     // 5. Drain: refuse new mutating work, let the worker finish its current
     //    job within the budget, then retract only our own discovery metadata.
@@ -331,10 +389,23 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     let _ = tokio::time::timeout(Duration::from_secs(5), watcher).await;
     shared.engine.shutdown().await;
     crate::ownership::release_all_for_shutdown(&shared).await;
+    // Discovery goes while the endpoint is still held (no other service can
+    // have published in between), and the endpoint right after it: whoever
+    // waited for the discovery files to go can start the next service.
+    discovery_keeper.abort();
+    let _ = discovery_keeper.await;
     let retracted = Discovery::retract(&cfg.root, &instance_id).unwrap_or(false);
+    #[cfg(windows)]
+    {
+        late_accept.abort();
+        let _ = late_accept.await;
+    }
     info!("stopped", {"instanceId": instance_id, "discoveryRetracted": retracted});
     Ok(())
 }
+
+/// How often the service checks that its discovery files are still there.
+const DISCOVERY_CHECK: Duration = Duration::from_secs(5);
 
 struct ConnectionGuard(Arc<Shared>);
 
@@ -394,6 +465,23 @@ where
             &mut conn,
             &AuthResponse::Error {
                 error: ErrorBody::new(ErrorCode::Unauthenticated, "invalid credential"),
+            },
+            MAX_FRAME_BYTES,
+        )
+        .await;
+        return;
+    }
+    // A service on its way out holds its endpoint until its work is done
+    // (the singleton guard) but takes no new session: a client must not take
+    // it for a running service, start nothing, and be left with none.
+    if shared.draining.load(Ordering::SeqCst) {
+        let _ = write_frame(
+            &mut conn,
+            &AuthResponse::Error {
+                error: ErrorBody::new(
+                    ErrorCode::ShuttingDown,
+                    "the service is shutting down; it stops once its running job is done",
+                ),
             },
             MAX_FRAME_BYTES,
         )
@@ -865,7 +953,7 @@ async fn dispatch_inner(
                         "queries": wrongindex_engine::query::NATIVE_OPS,
                     })
                     .to_string(),
-                    json!({"engineHello": shared.engine.hello().await}).to_string(),
+                    json!({"engineHello": shared.engine.hello()}).to_string(),
                 ],
                 paused: shared.settings.get().paused,
                 settings_revision: shared.settings.snapshot()["revision"].as_u64().unwrap_or(0),
@@ -928,6 +1016,13 @@ async fn dispatch_inner(
         }
         method::PROJECT_DETACH => {
             let pid = require_project(&req)?;
+            // Refused while a job is queued or running: say so before giving
+            // up ownership, or the project would stay registered, watched
+            // and unowned.
+            let p0 = pid.clone();
+            shared
+                .registry(move |r| r.ensure_detachable(&p0).map(|_| ()))
+                .await?;
             // Never leave a guard or an "owned" record behind a removed project.
             if shared.owners.holds(&pid) {
                 crate::ownership::release(shared, &pid, false).await?;
@@ -1056,6 +1151,14 @@ async fn dispatch_inner(
             })
         }
         method::INDEX_QUERY => {
+            let query_permit = Arc::new(shared.query_slots.clone().try_acquire_owned().map_err(
+                |_| {
+                    ErrorBody::new(
+                        ErrorCode::QueueSaturated,
+                        "native query slots are full; retry later",
+                    )
+                },
+            )?);
             let pid = require_project(&req)?;
             #[derive(Deserialize)]
             struct QueryParams {
@@ -1106,7 +1209,9 @@ async fn dispatch_inner(
                     q.op.clone(),
                     args.clone(),
                 );
+                let slot = query_permit.clone();
                 let r = tokio::task::spawn_blocking(move || {
+                    let _slot = slot;
                     wrongindex_engine::query::Reader::open(&dir)?.call_snapshot(&op, &a2)
                 })
                 .await
@@ -1130,6 +1235,14 @@ async fn dispatch_inner(
                     }
                     Err(QueryError::InvalidArgs(m)) => {
                         return Err(ErrorBody::new(ErrorCode::InvalidRequest, m));
+                    }
+                    Err(QueryError::Sqlite(rusqlite::Error::SqliteFailure(e, _)))
+                        if e.code == rusqlite::ErrorCode::OperationInterrupted =>
+                    {
+                        return Err(ErrorBody::new(
+                            ErrorCode::DeadlineExceeded,
+                            "native SQLite query exceeded its execution budget",
+                        ));
                     }
                     Err(QueryError::Sqlite(e)) if wrongindex_storage::integrity::is_corrupt(&e) => {
                         let e = crate::damage::corrupt(&format!("the index is damaged ({e})"));
@@ -1198,11 +1311,19 @@ async fn dispatch_inner(
                     }
                 }
             }
+            let watch_status = shared.watch.status(&pid);
+            let last_error = watch_status
+                .last_error
+                .as_deref()
+                .or(publication.last_error.as_deref());
             let mut out = json!({
                 "projectId": pid,
                 "daemonInstanceId": shared.instance_id,
                 "generation": publication.generation,
                 "graphStamp": publication.graph_stamp,
+                "indexing": job_running(),
+                "freshness": crate::watch::Supervisor::freshness(&watch_status, last_error),
+                "lastError": last_error,
                 "observedAt": now_ms(),
                 "backend": backend,
                 "result": result,
@@ -1271,6 +1392,11 @@ async fn dispatch_inner(
                 "maxLogBytes": crate::log::MAX_LOG_BYTES,
                 "maxIndexFileBytes": wrongindex_engine::native::MAX_INDEX_FILE_BYTES,
                 "parallelJobs": settings.parallel_jobs,
+                "effectiveParallelJobs": crate::confine::parallel_jobs(settings.parallel_jobs, settings.native_memory_mb, settings.worker_memory_mb),
+                "maxConcurrentQueries": 4,
+                "queryBudgetMs": 30_000,
+                "nativeMemoryCapBytes": crate::confine::cap_bytes(settings.native_memory_mb),
+                "workerMemoryCapBytes": crate::confine::cap_bytes(settings.worker_memory_mb),
                 "nativeMemoryMb": settings.native_memory_mb,
                 "workerMemoryMb": settings.worker_memory_mb,
                 "backupKeep": settings.backup_keep,

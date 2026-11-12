@@ -123,48 +123,76 @@ fn answers_version(p: &Path) -> bool {
 /// Parse every file as `parseFilesContent` does for `py`: batches through the
 /// interpreter, each result through `withRelations`. Without an interpreter,
 /// `parseGeneric` + `withRelations`. A chunk the interpreter could not
-/// complete (crash, timeout) is an error: WrongStack would then re-parse its
-/// files one by one, which is not reproduced here.
-pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
-    let Some(py) = python() else {
-        return Ok(files
-            .iter()
-            .map(|f| {
-                let content = utf16(f.text);
-                with_relations(generic::parse(f.file, "py", &content), &content, "py")
-            })
-            .collect());
+/// complete (crash, timeout) goes to the regex extractor too, and the run
+/// says so (WrongStack would re-parse its files one by one; that retry is
+/// not reproduced). In strict mode such a chunk is the run's error.
+pub fn parse_all(files: &[SourceFile<'_>]) -> Result<super::Batch, String> {
+    parse_with(python(), files, super::strict())
+}
+
+fn regex_fallback(f: &SourceFile<'_>) -> Parsed {
+    let content = utf16(f.text);
+    with_relations(generic::parse(f.file, "py", &content), &content, "py")
+}
+
+pub(super) fn parse_with(
+    py: Option<&Path>,
+    files: &[SourceFile<'_>],
+    strict: bool,
+) -> Result<super::Batch, String> {
+    let Some(py) = py else {
+        let mut batch = super::Batch::of(files.iter().map(regex_fallback).collect());
+        batch
+            .notes
+            .push("python: the regex extractor ran (no Python interpreter on PATH)".into());
+        return Ok(batch);
     };
-    let (_dir, script) = private_script("wi-py-parse-", "batch.py", PY_BATCH_SCRIPT)?;
-    par_chunks(files, |chunk| {
-        let mut out = Vec::with_capacity(chunk.len());
-        let mut cmd = Command::new(py);
-        cmd.arg("-I").arg(&script);
-        let stdout = run_chunk(cmd, &script, chunk)?
-            .ok_or_else(|| "python parser failed on a chunk".to_string())?;
-        let results = decode_batch(&stdout, "py")?;
-        for f in chunk {
-            let content = utf16(f.text);
-            // `collectBatch` keeps the last entry without an error.
-            let ok = results
-                .iter()
-                .rev()
-                .find(|r| r.file == f.file && r.error.is_none());
-            let parsed = match ok {
-                Some(r) => Parsed {
-                    symbols: r.symbols.clone(),
-                    refs: r.refs.clone(),
-                    unsupported: None,
-                },
-                // A per-file failure inside the batch (a syntax error): the
-                // single-file program fails the same way and yields no
-                // symbols and no refs.
-                None if results.iter().any(|r| r.file == f.file) => Parsed::default(),
-                None => return Err(format!("python parser returned no result for {}", f.file)),
+    let degrade = super::Degrade::new(strict);
+    let script = degrade.run(
+        || private_script("wi-py-parse-", "batch.py", PY_BATCH_SCRIPT).map(Some),
+        || None,
+    )?;
+    let parsed = par_chunks(files, |chunk| {
+        let helper = || {
+            let Some((_dir, script)) = &script else {
+                return Err("no parser directory".to_string());
             };
-            out.push(with_relations(parsed, &content, "py"));
-        }
-        Ok(out)
+            let mut out = Vec::with_capacity(chunk.len());
+            let mut cmd = Command::new(py);
+            cmd.arg("-I").arg(script);
+            let stdout = run_chunk(cmd, script, chunk)?
+                .ok_or_else(|| "python parser failed on a chunk".to_string())?;
+            let results = decode_batch(&stdout, "py")?;
+            for f in chunk {
+                let content = utf16(f.text);
+                // `collectBatch` keeps the last entry without an error.
+                let ok = results
+                    .iter()
+                    .rev()
+                    .find(|r| r.file == f.file && r.error.is_none());
+                let parsed = match ok {
+                    Some(r) => Parsed {
+                        symbols: r.symbols.clone(),
+                        refs: r.refs.clone(),
+                        unsupported: None,
+                    },
+                    // A per-file failure inside the batch (a syntax error):
+                    // the single-file program fails the same way and yields
+                    // no symbols and no refs.
+                    None if results.iter().any(|r| r.file == f.file) => Parsed::default(),
+                    None => {
+                        return Err(format!("python parser returned no result for {}", f.file));
+                    }
+                };
+                out.push(with_relations(parsed, &content, "py"));
+            }
+            Ok(out)
+        };
+        degrade.run(helper, || chunk.iter().map(regex_fallback).collect())
+    })?;
+    Ok(super::Batch {
+        parsed: parsed.into_iter().map(Some).collect(),
+        notes: degrade.notes("python: the regex extractor ran where the interpreter failed"),
     })
 }
 
@@ -209,7 +237,13 @@ where
                 .iter()
                 .map(|&i| {
                     let (f, c) = (&f, cs[i]);
-                    (i, s.spawn(move || f(c)))
+                    (
+                        i,
+                        s.spawn(move || {
+                            let _permit = crate::parse_budget::acquire();
+                            f(c)
+                        }),
+                    )
                 })
                 .collect();
             for (i, h) in handles {
@@ -482,6 +516,34 @@ mod tests {
             lang: "py",
         }];
         assert_eq!(chunks(&one).len(), 1);
+    }
+
+    /// A program that is not a Python interpreter stands in for a broken
+    /// installation: it exits non-zero on the batch.
+    fn not_python() -> PathBuf {
+        std::env::current_exe().unwrap()
+    }
+
+    #[test]
+    fn a_failing_interpreter_degrades_to_the_regex_extractor() {
+        let files = [SourceFile {
+            file: "a.py",
+            text: "def alpha(a):\n    return a\n",
+            lang: "py",
+        }];
+        let regex = parse_with(None, &files, false).unwrap();
+        assert_eq!(regex.notes.len(), 1, "{:?}", regex.notes);
+        let expected = regex.parsed[0].clone().unwrap();
+        assert!(expected.symbols.iter().any(|s| s.name == "alpha"));
+
+        let exe = not_python();
+        let degraded = parse_with(Some(&exe), &files, false).unwrap();
+        assert_eq!(degraded.parsed[0].as_ref(), Some(&expected));
+        assert_eq!(degraded.notes.len(), 1, "{:?}", degraded.notes);
+        assert!(degraded.notes[0].starts_with("python: the regex extractor ran where"));
+
+        // Strict: the failure is the run's, as before.
+        assert!(parse_with(Some(&exe), &files, true).is_err());
     }
 
     #[test]
