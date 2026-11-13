@@ -26,6 +26,9 @@ jobs:
       - name: Signing content, courier and promotion regressions
         shell: pwsh
         run: scripts/release/signpath/check.ps1
+      - name: Temporary installs restore the remembered install location
+        shell: pwsh
+        run: scripts/release/install-location.test.ps1
   wrongstack-contract:
     runs-on: windows-latest
     steps:
@@ -46,7 +49,7 @@ jobs:
       - name: Oracle fixture writer stays within disposable unowned fixtures
         run: bun test ./scripts/oracle/index-fixture.test.ts
       - name: Current WrongStack source matches the reviewed contract
-        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-9ec93ad7f306.json --out target/wrongstack-drift.json
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-626bd1be1886.json --out target/wrongstack-drift.json
   windows:
     # Named pipes, pipe DACLs, and path semantics require Windows (validation §8).
     runs-on: windows-latest

@@ -30,6 +30,8 @@ const BODY_DEADLINE: Duration = Duration::from_secs(10);
 /// Auth frames are tiny; never buffer a large unauthenticated payload.
 const MAX_AUTH_FRAME_BYTES: usize = 16 * 1024;
 const MAX_CONNECTIONS: usize = 64;
+/// How long a search waits for one of the native query slots.
+const QUERY_SLOT_WAIT: Duration = Duration::from_secs(5);
 const MAX_QUEUED_JOBS: usize = 1_000;
 const MAX_PAGE_SIZE: usize = 500;
 
@@ -279,8 +281,12 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         started_at_ms,
     };
     Discovery::publish(&cfg.root, &info, &shared.token)?;
-    // A reason left by an earlier failed start no longer applies.
-    let _ = cfg.root.take_start_error();
+    // A reason left by an earlier failed start or fatal exit no longer
+    // applies, but it is the only trace of how that service ended: keep it
+    // in the log before it goes.
+    if let Some(reason) = cfg.root.take_start_error() {
+        warn!("previous_failure", {"reason": reason});
+    }
     // Clients find the service only through its discovery files. This
     // process holds the endpoint, so files that are gone (a cleanup) or name
     // another instance are stale: publish again, or a live service would be
@@ -323,6 +329,15 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         crate::worker::prune(&shared).await;
         let restored = crate::ownership::restore(&shared, desired_ownership).await;
         info!("ownership_restored", {"results": restored});
+    }
+
+    // Debug-only: end the running service the two ways that used to leave
+    // no trace in its log (a panic, and an error returned from here).
+    #[cfg(debug_assertions)]
+    match std::env::var("WRONGINDEX_DEBUG_EXIT_AFTER_READY").as_deref() {
+        Ok("panic") => panic!("debug exit after ready"),
+        Ok("error") => return Err(anyhow::anyhow!("debug exit after ready").into()),
+        _ => {}
     }
 
     let worker = tokio::spawn(crate::worker::run(shared.clone(), shutdown_rx.clone()));
@@ -421,17 +436,10 @@ where
 {
     let active = shared.connections.fetch_add(1, Ordering::SeqCst) + 1;
     let _guard = ConnectionGuard(shared.clone());
-    if active > MAX_CONNECTIONS {
-        let _ = write_frame(
-            &mut conn,
-            &AuthResponse::Error {
-                error: ErrorBody::new(ErrorCode::QueueSaturated, "too many connections"),
-            },
-            MAX_FRAME_BYTES,
-        )
-        .await;
-        return;
-    }
+    // Turned away below, once its first frame is read: a reply written and
+    // closed before the client wrote that frame left it a broken pipe
+    // ("the pipe is being closed") instead of the reason.
+    let over_limit = active > MAX_CONNECTIONS;
 
     // Authentication precedes every other frame.
     let auth: AuthRequest = match tokio::time::timeout(AUTH_DEADLINE, async {
@@ -481,6 +489,22 @@ where
                 error: ErrorBody::new(
                     ErrorCode::ShuttingDown,
                     "the service is shutting down; it stops once its running job is done",
+                ),
+            },
+            MAX_FRAME_BYTES,
+        )
+        .await;
+        return;
+    }
+    if over_limit {
+        let _ = write_frame(
+            &mut conn,
+            &AuthResponse::Error {
+                error: ErrorBody::new(
+                    ErrorCode::QueueSaturated,
+                    format!(
+                        "too many connections (the service takes {MAX_CONNECTIONS}); retry later"
+                    ),
                 ),
             },
             MAX_FRAME_BYTES,
@@ -1151,14 +1175,33 @@ async fn dispatch_inner(
             })
         }
         method::INDEX_QUERY => {
-            let query_permit = Arc::new(shared.query_slots.clone().try_acquire_owned().map_err(
-                |_| {
-                    ErrorBody::new(
-                        ErrorCode::QueueSaturated,
-                        "native query slots are full; retry later",
-                    )
-                },
-            )?);
+            // A search beyond the slots waits for one: searches take
+            // milliseconds, and one turned away at once failed whenever
+            // another session searched too (clients do not retry it). The
+            // waiters are bounded by the connections.
+            let query_permit = Arc::new(
+                tokio::time::timeout(QUERY_SLOT_WAIT, shared.query_slots.clone().acquire_owned())
+                    .await
+                    .map_err(|_| {
+                        ErrorBody::new(
+                            ErrorCode::QueueSaturated,
+                            format!(
+                                "native query slots stayed full for {} s; retry later",
+                                QUERY_SLOT_WAIT.as_secs()
+                            ),
+                        )
+                    })?
+                    .map_err(|_| ErrorBody::new(ErrorCode::Internal, "query slots closed"))?,
+            );
+            // Test hook, debug builds only: every query holds its slot this
+            // many milliseconds longer, as a query of a large index does.
+            #[cfg(debug_assertions)]
+            if let Some(ms) = std::env::var("WRONGINDEX_DEBUG_SLOW_QUERY_MS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
+                tokio::time::sleep(Duration::from_millis(ms)).await;
+            }
             let pid = require_project(&req)?;
             #[derive(Deserialize)]
             struct QueryParams {

@@ -34,6 +34,10 @@ if (-not $Installer -or -not (Test-Path $Installer)) { throw 'no installer: buil
 $existing = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
   ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' }
 if ($existing) { throw "WrongIndex is installed ($($existing.InstallLocation)); this smoke test would replace its uninstall entry" }
+# The installer remembers its directory; a later real install must not go to
+# this test's deleted temporary directory.
+Import-Module (Join-Path $PSScriptRoot 'InstallLocation.psm1') -Force
+$installLocation = Save-InstallLocation
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('wi-unrun-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $dir = Join-Path $work 'app'
@@ -175,6 +179,8 @@ try {
   # Whatever is left of this throw-away installation goes.
   Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | Stop-Process -Force -ErrorAction SilentlyContinue
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+  try { $result.installLocationRestored = Restore-InstallLocation $installLocation }
+  catch { $result.installLocationRestored = $false; $result.installLocationError = $_.Exception.Message }
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
   Remove-Item Env:WRONGSTACK_HOME -ErrorAction SilentlyContinue
   Remove-Item Env:WRONGINDEX_UPDATE_URL -ErrorAction SilentlyContinue
@@ -200,6 +206,7 @@ if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left: $(
 if (@($result.runningAfter).Count) { $failures += "still running: $($result.runningAfter -join ', ')" }
 if ($result.leftOnUserPath) { $failures += 'install directory left on the user PATH' }
 if ($result.uninstallEntryLeft) { $failures += 'uninstall entry left' }
+if (-not $result.installLocationRestored) { $failures += 'remembered install location not restored' }
 if (-not $result.dataRootKept) { $failures += 'data root removed' }
 if (-not $result.indexKept) { $failures += 'project index removed' }
 $result.failures = $failures

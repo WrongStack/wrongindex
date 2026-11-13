@@ -264,6 +264,7 @@ fn main() -> ExitCode {
             }
         };
     }
+    log::log_panics();
     let start_root = root.clone();
     let config = server::Config {
         root,
@@ -279,6 +280,13 @@ fn main() -> ExitCode {
         }
         Err(server::StartError::Other(e)) => {
             eprintln!("wrongindexd: {e:#}");
+            // Also reached after `ready`, when the running service fails:
+            // the log is then open and is where its operator looks.
+            log::event(
+                "error",
+                "fatal_exit",
+                serde_json::json!({"error": format!("{e:#}")}),
+            );
             // Detached, stderr goes nowhere and the log may not exist yet:
             // leave the reason where `daemon start` looks for it.
             start_root.record_start_error(&format!("{e:#}"));

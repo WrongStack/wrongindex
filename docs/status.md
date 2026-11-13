@@ -1,8 +1,38 @@
 # Implementation status
 
-Last updated: 2026-11-12. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). The current unreleased candidate is not release-qualified: clean-Windows installation fails and additional gates remain open below. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
+Last updated: 2026-11-13. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
+
+## WI-RELEASE-020 — unsigned 0.2.0 by the owner's decision (2026-11-13)
+
+**Decision.** On 2026-11-13 the owner was asked how to publish 0.2.0. The question stated that signing is not ready, that the unsigned build is blocked on clean Windows with Smart App Control enforced, and that the 24-hour soak did not complete. The owner chose "Tüm çalışma ağacı imzasız": publish the whole shared working tree unsigned, built by the release workflow.
+- This is a new decision. The 2026-11-03 waiver did not cover current startup.
+- No gate is turned into a PASS. M05 clean-Windows remains **FAIL**, and the 24-hour soak, signing and graphical acceptance remain **NOT RUN**.
+- Installed acceptance of the published bytes is **NOT RUN**. The owner's machine runs a local build of the same source, with different bytes (WI-INSTALL-01).
+
+**Source gates on the committed tree:**
+- fmt and Clippy: PASS.
+- `cargo test --workspace --locked`: PASS, 359 passed, 0 failed, 35 ignored.
+- Five consecutive `wrongindexd` integration runs: PASS 5/5, 110 passed each.
+- The source hashes were unchanged from these runs to the commit, apart from this documentation and CHANGELOG.
+- Public-source preflight on the change set: no user paths, credentials or agent-session details. The maintainer's public GitHub handle stays intentionally.
+
+**Compatibility with 0.1.9 self-update and `install.ps1`:**
+- Both use the latest release's `*_x64-setup.exe` and a `SHA256SUMS.txt` line for it.
+- `install.ps1` also runs a repository-level `gh attestation verify`.
+- `release.yml` uploads exactly these files, plus `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests the installer and the shipped programs.
+
+**WrongStack drift during the release (reviewed).** While PR #2 ran, WrongStack `main` advanced to `626bd1be1886caa1ad3fda31bcda52fe4ce3cc0f`, and the CI drift gate FAILED: 3 of 282 contract files had changed since `9ec93ad7f306`.
+- Each change was reviewed; none touches the index format or the protocol WrongIndex serves:
+  - `packages/codebase-index-mcp/package.json` changes only the version (1.6.0 → 1.6.2).
+  - `packages/tools/src/codebase-index/wrongindex/client.ts`: a `SHUTTING_DOWN` handshake is now treated as unavailable. This is the adapter change recorded earlier as uncommitted; it matches the service's draining answer.
+  - `packages/core/src/utils/continue-intent-detection.ts` strips politeness words from "continue" prompts. It is unrelated to indexing and lies in scope only through the `packages/core/src/utils/` prefix.
+- `scripts/baseline/export.ts` recorded `contracts/baseline/wrongstack-626bd1be1886.json` from a clean detached copy (282 files, 0 dirty). Its file hashes differ from the 9ec record in exactly those three paths. `check-drift.ts --check` against it: PASS.
+- `ci.yml` and `release.yml` now gate on it. The 9ec record is kept unchanged.
+- Oracle fixtures and their provenance stay from 9ec: this is a drift-gate update, not a fixture regeneration. `signpath-preview.yml` was deliberately left on 9ec, because signing is not set up.
+
+**Publication.** The tag push no longer publishes, because `release.yml` is `workflow_dispatch` only. The release is created by hand from that workflow's attested artifacts, with the notes `main`'s former publish step built from `changelog-section.ps1`. Results are recorded after publication.
 
 ## WI-VERIFY-03 — Source identity and soak observer (2026-11-12)
 
@@ -18,12 +48,21 @@ The first fresh review copy `fc926488...` was superseded by newer shared watcher
 |---|---|
 | Required format / Clippy / workspace commands on frozen source a992 (completed 17:51 UTC) | PASS: 354 passed, zero failed, 35 prerequisite ignores; exact test artifact inventories recorded |
 | Six-project native observer smoke, 120-second edit phase | PASS: every project's last edit searchable; resource plateau checks PASS (handles 202/202, threads 19/19, working set 22.20/22.50 MB). Total run 159 s includes startup/convergence; this is not 24-hour acceptance |
-| Five source- and binary-guarded daemon/GPUI cohorts | RUNNING from 17:51 UTC; results remain separate from the completed workspace check |
-| Provider-independent signing regressions through `scripts/release/signpath/check.ps1` | PASS locally at 17:43 UTC: fresh bounded processes for PE/courier/lease/archive/promotion/configuration cases. Added to ordinary PR CI without signing secrets; hosted result NOT RUN |
+| Five source- and binary-guarded daemon/GPUI cohorts on a992 | PASS 5/5, completed 18:58 UTC: each cohort has 105 daemon tests, five GPUI actor cases and 11 explicit prerequisite ignores |
+| Provider-independent signing regressions through `scripts/release/signpath/check.ps1` | PASS locally at 17:43 UTC and in hosted PR CI: fresh bounded processes for PE/courier/lease/archive/promotion/configuration cases, without signing secrets |
 | Current WrongStack source drift, `b627142818ec12dd73e9978943ac9a9c8a6079e2` vs recorded 9ec baseline | PASS: all 282 recorded files byte-identical, zero additions/removals. Prior live oracle results retain their original commit identity |
+| Later WrongStack revision `b02bf990095c1f59659dafa1c41adf9f4eca210b` / local shutdown adapter recheck | PASS: `check-drift.ts --check` against 9ec again reports 282 files, zero differences; five adapter test files PASS, 37 tests, using explicitly selected Bun 1.4.3 and the frozen a992 daemon. Shared-main adapter changes remain uncommitted and paired publication remains NOT RUN; logs: `wrongstack-b02bf99-drift.json`, `adapter-b02bf99.log` |
 | Proposed public-source preflight | PASS: 107 changed/added source files inspected, zero configured token/private-user-path pattern matches; not a substitute for a security audit |
 
 The cohort counter was also checked against the new sampler's isolated child test: summing both printed libtest summaries counted two tests instead of the one listed outer test. The private runner now uses the last stdout summary of each directly invoked test executable, still checks its exit status and exact `--list` inventory, and keeps all source/binary guards. The reproduced old count and corrected count are retained in `cohort-counter-proof.json`; no test assertion or fixture was relaxed. Later CI-only checker/workflow and application-documentation edits are outside source a992 and have independent validation; they do not change its Rust/runtime inputs.
+
+Public review: [draft PR #1](https://github.com/WrongStack/wrongindex/pull/1), head `334965a972d30e4215f38bd12b4a21180a725623`. [Hosted PR CI](https://github.com/WrongStack/wrongindex/actions/runs/43278002388) PASS for all three jobs, including actual Windows actor and real-volume disk-full cases. All five local immutable cohorts PASS. [Unsigned engineering build](https://github.com/WrongStack/wrongindex/actions/runs/43280578149) PASS; the downloaded installer and four shipped programs have matching checksums and exact-source/workflow attestations. All four extracted PE metadata checks PASS. Temporary installed-core acceptance PASS: indexing/search, four shipped-daemon GPUI actor cases and uninstall; zero files or uninstall entries remain, and PATH value/type, shortcuts and autostart were restored. Authenticode acceptance remains NOT ESTABLISHED, and graphical/clean-machine acceptance remains NOT RUN. Evidence: `target/release-review-20261112/hosted-334965a/{verified/result.json,installed-core.json}`.
+
+A new six-project native 24-hour engineering run is RUNNING from **2026-11-12 19:08:56 UTC**, using the downloaded daemon SHA-256 `7bced27f6a441884cda944ee5f58c32c57643c748184d1fb441e31f0f9e605e2`. It excludes GPUI rendering, helper-language and final signed/installed-product qualification. The process-scoped SystemRequired request is active; no persistent power-plan change was made. Completion cannot be accepted before 2026-11-13 19:08:56 UTC plus final convergence. The guarded follower retains `releaseReady: false`; it cannot merge, tag, publish or permanently install. Status: `target/release-review-20261112/hosted-334965a/{status.json,awake-24h/native/status.json}`. **Update 2026-11-13:** this run ended **NOT RUN** at 01:29:39 UTC. Its workload stopped at 23:57:46 UTC, after 17,330 s, at the moment the owner's service also stopped (see WI-INSTALL-01, "Unexplained stop").
+
+The subsequent shared-source IPC changes are **outside** public commit 334 and the running engineering soak: native queries now wait at most five seconds for a query slot, and excess connections receive a framed saturation response after their first frame rather than an early broken pipe. The permanent `many_clients.rs` regression contains two cases. A separate 353-file frozen source, `3f2dbeccd57ae8bf0980ae0bc7197b0a7e8521ea6eb9913bd4110fa163f45a6a`, started qualification at 19:14 UTC: format/Clippy PASS; workspace and five immutable lifecycle/actor cohorts RUNNING/NOT RUN respectively at this checkpoint. Evidence: `target/release-review-20261112/3f2dbecc/`. Older PASS results do not qualify this delta; the shared original checkout and staging index remain preserved.
+
+The commit's 352 source files were compared with the proposed working-tree snapshot. Nine ordinary text files have only CRLF/LF differences under the existing Git attributes; all contract fixtures remain byte-exact. These differences are retained as DIFFERENCE plus `normalizationOnly: true`, not silently removed from evidence. The shared original `main` checkout and index are unchanged by the private-clone commit/push. The SignPath application is still unsubmitted; the owner has been asked for the actual form's profile/account, personal-data and Foundation-terms consents, with optional marketing left unchecked.
 
 ## WI-SIGN-01 — SignPath preparation (2026-11-12)
 
@@ -111,6 +150,150 @@ The separate empty-project comparison is **DIFFERENCE**: the native writer adds 
 
 The WrongStack shutdown-auth mapping and its lifecycle regression remain local, uncommitted changes on `9ec93ad7f306` in the existing shared main checkout. Their five focused cohorts PASS (37 tests each); tools-source typecheck PASS. A two-file review patch is retained as `gpui-start-20261112/wrongstack-shutdown-adapter.patch` (SHA-256 `9c0beb79bde1a5ee2bd6e5ddd09fbcaae7f0ed752594f02aee1671cfaa1d6fbf`). No unrelated WrongStack edit was staged or committed. The paired daemon/adapter rollout in WI-ADR-016/022 is still NOT RUN; local tests and the existing built-host smoke do not publish this mapping.
 
+## WI-INSTALL-01 — owner's machine runs a local working-tree build (2026-11-12)
+
+At the owner's request, the shared working tree (HEAD `425aa2f` plus uncommitted changes, including WI-SCAN-01) was packaged locally and installed on the development PC. **No commit, tag, GitHub release or signing occurred**; this is not the 0.2.0 release and does not qualify PR #1 or any artifact. The 108 changed/untracked source files hashed identically before and after packaging.
+
+| Step | Result |
+|---|---|
+| `scripts/release/package-windows.ps1` (private `CARGO_TARGET_DIR`, below-normal priority) | PASS: unsigned `WrongIndex_0.2.0_x64-setup.exe` SHA-256 `d0ddc72d39b87f7c433d6a126f689966514f4dc553aa5c273cfb905e1ca981fc`; four PE metadata checks PASS |
+| Per-user install to `%LOCALAPPDATA%\WrongIndex` | PASS: all four installed programs match the bundle's shipped copies; PATH entry added |
+| Installed service on the default data root (`~/.wrongindex`, backed up first) | PASS: `daemon start`; status 0.2.0, native backend |
+| Disposable pinned project (index under `.temp_files`), five languages | PASS: py/ts/go/rs/js symbols found by exact name; a watched edit was indexed by a targeted job, which itself took 0.9 s (`durationMs` 872; this is not edit-to-searchable latency); an absent symbol returns zero results; the registration was removed afterwards. Evidence: `smoke-search.txt` and the inspected `project status` output. The script's own `RESULT` line is invalid (it counted the wrong field) |
+| Desktop / native GPUI launch, autostart at sign-in | NOT RUN: Start Menu shortcuts `WrongIndex` and `WrongIndex Native (Preview)` exist; no `Run` entry, so after a reboot the service starts only when the app opens or `wrongindex daemon start` runs |
+| Owner's real projects registered | NOT RUN, which is the owner's choice: registering a project claims its WrongStack index |
+
+**FAIL (found): a temporary installed-core test leaves the install location behind.** The first silent install (`/S` without `/D`) went into another session's deleted temporary directory `%TEMP%\wi-native-package-…\app`. The cause is NSIS's remembered install directory `HKCU\Software\WrongStack\WrongIndex` (default value). The uninstaller does not remove it, and the temporary install/uninstall proof does not restore it. That install was uninstalled cleanly: the other session's sibling files were unchanged, and the PATH and uninstall entries were removed. The program was then reinstalled with `/D=%LOCALAPPDATA%\WrongIndex`, which also rewrote the key.
+
+**Fix (test harness only; installer behaviour unchanged).** Upstream keeps the key on purpose: the `tauri-bundler` 2.10.4 template (`installer.nsi` lines 915–918, built by tauri-cli 2.12.4) deletes `${MANUPRODUCTKEY}` only when "delete application data" is chosen, and `installer-hooks.nsh` does not touch it. `scripts/release/InstallLocation.psm1` saves the key and whether its parent exists before a temporary install. After the uninstall it restores both exactly, including value kinds; it removes a key or parent the test created, refuses to delete a subkey it did not see, and returns success only if the key reads back exactly as saved. `smoke-installed-core.ps1`, `smoke-installed.ps1` and `smoke-uninstall-running.ps1` use it and FAIL with `installLocationRestored: false`. `docs/operations.md` now states that uninstalling keeps the remembered directory.
+
+| Check | Result |
+|---|---|
+| `pwsh scripts/release/install-location.test.ps1` (disposable `HKCU:\Software\WrongIndexTest-<guid>`; added to the CI `signing-preparation` job) | PASS: 13 checks over four cases (absent key, owner's key with String/DWord/ExpandString values, shared parent, unknown subkey); no test key left behind |
+| Same test with a no-op restore (red control, `.temp_files/install-20261112/red/`) | FAIL as expected: 7 checks |
+| PowerShell parse of the five changed/new scripts | PASS |
+| The three smoke scripts end to end | NOT RUN on this PC: with the owner's installation present they refuse before touching anything, which was verified (key unchanged, no result written). Consequently **temporary installed-core acceptance can no longer run on this PC** while WrongIndex is installed here; run it in CI, Windows Sandbox or after uninstalling |
+
+**Owner's WrongStack handed over to the installed service (2026-11-13).** The owner registered `D:\Codebox\PROJECTS\WrongStack` (pinned) from the native client. Ownership was refused correctly with `OWNER_CONFLICT`, because WrongStack's own index server (two Bun processes) had the index open. The owner then stopped the service from the desktop; that path needs a confirmation dialog, so this was a deliberate stop, not a defect. The `unsupported` backend shown at that point means only that WrongIndex had not yet written the index (`registry` sets it at registration). The index itself inspected `compatible`, schema 5, integrity ok. At the owner's choice, WrongStack now delegates indexing to WrongIndex:
+
+| Step | Result |
+|---|---|
+| `indexing.service: wrongindex` in `~/.wrongstack/profiles/default/config.json` | DONE. The root `config.json` is bootstrap-only and would have been ignored. Edited with a JSON round trip that verified only `indexing.service` changed (null → `wrongindex`). Backup next to it as `config.json.pre-wrongindex.<ms>.bak`; the file holds credentials, so no copy was made in the repository |
+| Sign-in start: `HKCU\…\Run\WrongIndex` = `"…\wrongindex-desktop.exe" --start-service`, the same value as the desktop's Startup switch | PASS: the exact command started the service and exited 0 without a window |
+| Pinned claim of the WrongStack index once the Bun holders had exited | PASS: ownership `owned`, transfer backup `.wrongindex-backups/index-…-e1.db` (213 MB), native reconcile updated 3 changed files in 6.2 s (121,879 symbols), `watchHealth: native`, freshness `current` |
+| Searches through the service on the real index | PASS: `setIndexServiceMode`, `resolveIndexRoute` and `WrongIndexClient` found at their source lines |
+| WrongStack's own adapter (`packages/tools` source, Bun 1.4.4) in `wrongindex` mode, read-only `stats` and `search` | PASS: route `wrongindex`; stats in 0.6 s (14,728 files, 121,879 symbols); search in 86 ms; the registration was recognized (`created: false`) and the pinned policy kept |
+| WrongStack TUI/WebUI session started after the change, and the other 83 WrongStack indexes on this PC | NOT RUN. Each project is registered and claimed when a WrongStack session opens it. Sessions started before the change keep their own index server until they end |
+
+Rollback: set `indexing.service` to `local` (or restore the backup), then run `wrongindex project release <id>` or `project remove <id>`.
+
+Live proof with the installed binaries: `node scripts/release/wrongstack-live.mjs <installed wrongindexd.exe> <installed wrongindex.exe> D:\Codebox\PROJECTS\WrongStack`, with `WRONGSTACK_HOME` pointed at a throw-away folder. The script starts its own service on a throw-away data root, so the owner's service was not touched. It drove WrongStack's codebase-index MCP server (checkout build 1.6.1, `dist` from 2026-11-13 00:24) and **PASSED all 12 checks**:
+- the project was registered by WrongStack, owned by the service and written by the native writer;
+- the owner lock was held;
+- search, stats and per-call publication metadata went through WrongStack;
+- with the service gone, WrongStack's own engine took over on the same index.
+
+No process was left behind. Log: `.temp_files/install-20261112/live/live.log`.
+
+Open consequence for this PC: each WrongStack process opens up to three service connections, one per adapter lane, each through its own `wrongindexd --ipc-bridge` child. The service accepts 64 connections. About 21 WrongStack processes at once would therefore receive `QUEUE_SATURATED` at the handshake. The adapter reports that as an error, without retrying or falling back. Not observed here, since two WrongStack processes were running.
+- **Not raised, deliberately.** Raising the limit needs the full IPC gates and a reinstall over the owner's running service. It also lifts the bound of 64 query-slot waiters that the 5 s wait analysis relies on. At that scale the heavier cost is the one bridge process per connection, not the pipe.
+- **Options left to the owner:**
+  - (a) a higher daemon limit, plus a test that loops to the constant;
+  - (b) backoff on a `QUEUE_SATURATED` handshake in the WrongStack adapter (WrongStack repository);
+  - (c) leave it.
+- **Observability gap:** `metrics.connections` reports only the current count (1 at this check), there is no peak, and a refused connection is not logged. Hitting the limit is therefore visible only to the refused client.
+
+Disk cost of the handover: the 84 WrongStack indexes on this PC total 1.1 GB, 17 of them with a missing checkout. Each first claim writes one `VACUUM INTO` backup, and `backupKeep` 3 caps the worst case near 3.3 GB. C: has 639 GB free.
+
+### Unexplained stop of the owner's service (2026-11-12 23:57:44 UTC)
+
+The installed service, pid 156644, stopped at 23:57:44 UTC. Its last log line is a `session_expired`.
+
+Evidence it did not stop normally:
+- There is no `shutdown_requested` or `stopped` line.
+- `runtime/endpoint.json` was not retracted.
+- There is no WER or Application Error event for it. The 1000/1005 events in that window are `adb.exe`.
+- There is no sleep, power or resource-exhaustion event at that time. The only sleep that night was at 00:32:59 UTC.
+
+At the same moment the other session's 24-hour soak lost its workload. Its subject is also named `wrongindexd.exe`, pid 121300. The last sample was at 23:57:46 UTC, followed by "3390 s without a tick". The soak ended **NOT RUN** at 01:29:39 UTC (`target/release-review-20261112/hosted-334965a/awake-24h/{guard.json,native/status.json}`). WI-VERIFY-03 above still says RUNNING. That section belongs to the other session and is left to it.
+
+A process with a different image name, `subject-wrongindexd.exe`, survived. These facts fit an external stop by image name, but they do not prove it.
+
+`%TEMP%` holds no `wrongindexd-start-error-*.txt` file. A self-exit through `server::run`'s error path would have left one for the soak subject: its data root differs, so the 00:00:59 restart could not have deleted it. Its absence is evidence against that path for the subject. The subject's own `wrongindexd.log` was not found; its temporary data root is gone.
+
+Ruled out, within the stated limits:
+- **The investigating agent session.** It made no tool calls after 22:44 UTC.
+- **Recorded commands of the other agent sessions on this PC at 23:54–23:59 UTC.** None stops a process. A WrongStack desktop build finished at 23:57:27 UTC, and its installer ran after 00:00 UTC.
+  - This does not cover background jobs started earlier.
+  - Repository scripts were searched for kills by image name (WrongIndex `scripts`, `.temp_files`, `target/release-*`; WrongStack sources outside tests). The only hits filter by install directory (`smoke-uninstall-running.ps1`). The WrongIndex installer hooks do not stop the service.
+  - No file under `target/release-review-20261112` or `target/release-continuation-20261111` was written at 23:55–23:59 UTC apart from the soak's `stderr.log`.
+- **The starting agent restarting.** Its process has run since 2026-11-12.
+- **The service being tied to its starter's job.** The starter's job has `BREAKAWAY_OK` and no kill-on-close.
+- **WrongStack's `native-smoke.mjs` taskkill, the `wrongindex-adapter.test.ts` end-to-end daemon, and `wrongstack-live.mjs`.** Each stops only processes it started itself, under its own data root.
+
+**Cause: NOT ESTABLISHED.**
+
+Recovery: the service was restarted at 00:00:59 UTC with `wrongindex-desktop.exe --start-service`, pid 100644.
+- The first claim was refused (`OWNER_CONFLICT`). WrongStack's own detached project server, `bun … project-server.js --project-root <WrongStack checkout>` (pid 151072), held the index.
+- That server had started at 23:54:49 UTC, while the service was still running. Its parent had already exited. A WrongStack Core test run ended at about that time. Which process started the server is not established.
+- **Open ownership question:** from 23:54:49 to 23:57:44 UTC this local server held the index open while the service owned it. Whether it opened the index read-only or as a writer is not established. A later whole-project verification passed, so no damage is known, but the boundary is not shown to hold.
+- The server exited by itself. The service acquired ownership at 00:02:11 UTC (epoch 2) without manual action.
+- At 08:42 UTC the project was owned, current, natively watched and pinned, with 0 pending paths, and search answered.
+
+Observability gaps found while investigating (not fixed; IPC/lifecycle changes need the full gates and the shared tree is under qualification):
+- The service is launched with `stderr` set to null (`wrongindex-ipc/src/launch.rs:101`), and `wrongindexd` installs no panic hook. A panic on the runtime thread therefore leaves no trace.
+- An error from `listener.next()?` in the accept loop (`server.rs:346`, `server.rs:350`) returns from `server::run`. The service then exits without logging `stopped` and without retracting discovery. Its only trace is the start-error file, which the next service's start deletes (`server.rs:285`). That happened here at 00:00:59 UTC, so whether this path ran is unknown.
+- **Fixed in the working tree (2026-11-13; uncommitted, not in the installed build or PR #1):**
+  - `log::log_panics` logs every panic of the service as `panic`: the message cut at 1000 characters, the location and the thread. Native parser children never install it.
+    - A panic waits up to 200 ms for another thread's line. A panic on the thread that holds the lock gives up after that wait instead of deadlocking.
+    - A poisoned log lock no longer silences later lines.
+    - Unit test `log::tests::a_panic_line_waits_briefly_for_another_writer_and_survives_poisoning` covers all three cases.
+  - An error returned from `server::run` is logged as `fatal_exit` before the start-error file is written.
+  - The next start logs that file's reason as `previous_failure` before deleting it.
+  - The debug-only `WRONGINDEX_DEBUG_EXIT_AFTER_READY=panic|error` hook ends a ready service either way.
+  - New `crates/wrongindexd/tests/fatal_exit.rs` (2 tests): PASS.
+    - Red control with the three logging points disabled and the hook kept: both tests FAIL, and the log ends at `ready`, exactly the symptom observed.
+    - A second red control disabled only `previous_failure`: that test FAILS on its own.
+  - The release scripts and workflows keep no list of debug hooks. The new hook is gated by `#[cfg(debug_assertions)]`, like the existing ones.
+  - `docs/operations.md` explains how to read the end of the log.
+  - Gates on the shared working tree, with a private `CARGO_TARGET_DIR`:
+    - `cargo fmt --all -- --check`: PASS.
+    - `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS.
+    - First revision, before the lock change:
+      - `cargo test --workspace --locked`: PASS, 358 passed, 0 failed, 35 ignored.
+      - `cargo test -p wrongindexd --tests --locked` five consecutive runs: PASS 5/5, 109 passed each.
+      - Logs: `.temp_files/fatal-exit-20261113/rev1/`.
+    - Final revision:
+      - fmt PASS, Clippy PASS.
+      - `cargo test --workspace --locked`: PASS, 359 passed, 0 failed, 35 ignored.
+      - Five consecutive `cargo test -p wrongindexd --tests --locked` runs: PASS 5/5, 110 passed each.
+      - Logs: `.temp_files/fatal-exit-20261113/{workspace.log,five-runs.txt,run-1..5.log}`.
+  - This lifecycle delta is outside public commit `334965a` and the `3f2dbecc` frozen source. Neither qualification covers it.
+
+**Reinstalled with the logging fix (2026-11-13 13:49 UTC; offered to the owner, who replied "devam et").** The same `package-windows.ps1` procedure was used, with the private `CARGO_TARGET_DIR` and below-normal priority. Evidence: `.temp_files/install-20261113/`.
+
+| Step | Result |
+|---|---|
+| Packaging | PASS: unsigned installer SHA-256 `b67ef921382fbea32bc1ec530a0639c80b11b4e9f0c8084d53f6ca78b36c0b76`; PE metadata PASS. The 89 changed or untracked source files hashed identically before and after packaging |
+| Shipped `wrongindexd.exe` | Contains `fatal_exit` and `previous_failure`; the string `WRONGINDEX_DEBUG_EXIT_AFTER_READY` is absent |
+| `/S /D=%LOCALAPPDATA%\WrongIndex` over the running install | PASS: exit 0. All four installed programs match the shipped copies. The `Run` value and the remembered install directory are unchanged |
+| Upgrade hook | PASS: the old service (pid 100644) logged `shutdown_requested` (client `wrongindex-cli`) then `stopped`, with discovery retracted. The new service (pid 61304) was `ready` 8 s later and restored three projects' ownership |
+| WrongStack project `p_94b35b20…` | NOT OWNED, see below |
+
+**Found: a planned service restart leaves the index with a running WrongStack session.**
+- During the 8-second gap, the owner lock was free and the service unreachable. An installed WrongStack CLI session (pid 140424, started 10:02 UTC, `wrongindex` mode) therefore fell back to its local engine (`background-indexer.ts:654-657`).
+- The new service then refused the claim with `OWNER_CONFLICT` (open by Bun pid 140424). It was still unowned after 3 minutes of polling.
+- It was not handed back within 3 minutes of polling. WrongStack's hand-back logic was not inspected.
+- The service retries the claim about every 62 s (`ownership_refused_open` / `watch_attach_failed` pairs), so it should take the index once pid 140424 lets go.
+- While this lasts, WrongStack's own code says its service calls fail rather than fall back:
+  - `index-worker-rpc.ts:167-171` and `background-indexer.ts:654-657` fall back to the local engine only on `WrongIndexUnavailableError`.
+  - A reachable service that does not own the project answers `OWNER_CONFLICT`, which is rethrown.
+  - Wrongindex-mode sessions other than the holder should therefore get errors from code search on this project. This was not observed directly.
+- No data risk: only one writer at a time.
+- Not forced, because pid 140424 is the owner's open session.
+- Fix candidates: in WrongStack, re-check the service and hand over on a later operation; in WrongIndex, upgrades keep the owner lock across the restart. Both are NOT RUN.
+  - This does **not** explain the 23:57 stop; it only makes the next one diagnosable.
+
 ## WI-SCAN-01 — system scan: one service, many projects, every language (2026-11-12)
 
 User request: scan the whole system and make it run without problems; one WrongIndex service on a machine indexes many projects, in every language. Decisions: [WI-ADR-021 and WI-ADR-022](plan/hardening-decisions.md). Source: working tree on top of `05f2f58835289666f751e60b571b54ac7c05a68b` (the 0.2.0 candidate); **not committed, pushed, tagged or installed** - another session is qualifying that candidate from the same checkout and records these edits as concurrent changes. The candidate's own evidence (sections below) does not cover this source, and nothing here qualifies a release.
@@ -158,7 +341,16 @@ Gate run after the slow-root fix (`final7-*.log`): fmt and Clippy PASS; workspac
 
 **Attaching a watcher on a slow root held back every project.** Even with root checks off the supervisor, attaching (file-system probe, the watcher's directory handle and change request, `.gitignore`) ran on it. A second debug-only hook (`WRONGINDEX_DEBUG_SLOW_ATTACH`) makes one attach take 20 s: `single_instance.rs::a_slow_watcher_attach_does_not_hold_back_the_other_projects` (a project registered while another is being edited; each edit must be indexed within 8 s, and the slow project must be watched and current afterwards) FAILED before ("an edit of the fast project waited for the slow attach", `slow-attach-before.log`). Attaches now run on a thread of their own; both slow-root tests PASS (`slow-attach-after.log`).
 
-An independent review of these two changes found that **the first version left every project past the sixteenth unwatched**: root checks were capped at 16 in flight, and the cap was spent in registration order every round, so the later roots were never checked and their projects never attached. `watch::root_probe_tests::every_root_is_checked_whatever_the_number_of_projects` (40 roots, two rounds) FAILED on it (`p16: left None`, `probe-cap-before.log`) and passes with the cap removed (one check per project remains the bound). The `final8` gate run was on that source and was stopped; it is not a result. The same review noted that taking ownership for watching (which may back the index up) still ran on the supervisor; it now runs in the attach task, two claims at a time. No hook slows a claim, so that move has no dedicated failing test.
+An independent review of these two changes found that **the first version left every project past the sixteenth unwatched**: root checks were capped at 16 in flight, and the cap was spent in registration order every round, so the later roots were never checked and their projects never attached. `watch::root_probe_tests::every_root_is_checked_whatever_the_number_of_projects` (40 roots, two rounds) FAILED on it (`p16: left None`, `probe-cap-before.log`) and passes with the cap removed (one check per project remains the bound). The `final8` gate run was on that source and was stopped; it is not a result. The same review noted that taking ownership for watching (which may back the index up) still ran on the supervisor; it now runs in the attach task, two claims at a time. No hook slows a claim, so that move has no dedicated failing test. An attach that has not ended after 10 s now sets the project's `lastError` ("the checkout root has not opened for watching"); the slow-attach test checks it.
+
+**Sixty projects again, on the source with these changes** (release daemon SHA-256 `64333a5e...`, `run60b/run60b.log`): one instance from 12 concurrent starts, a second service refused (exit 3), 60 projects registered at once and all `current` in 330 s, every corpus file in every index, identical extraction, no cross-project hit, an edit round of modify/add/delete seen in all 60 and every project `current` again: PASS. All 60 were watched (`native`), the last-registered included. Two results needed a closer look:
+
+- The edit round took up to 492 s (21 s in the earlier run). The incremental native runs took p50 4.5 s / p95 16 s, so 120 of them over the job slots account for it. An A/B on one small project, alternating the build of `f7fd91a1...` (before today's watcher changes) and this one three times each, gave run p50 1,774 / 2,261 ms and p95 7,130 / 4,409 ms, each round tracking the machine's CPU load (23 % to 87 %, other work): no regression. Not a defect of this change; the latency depends on this machine's load.
+- **The harness's 1,200 concurrent searches FAILED** (647 without their hit in a repeat; the first-issued ~620 all ended at the same moment, ~18 min later, with exit 0 and no output). That is this machine, not the service: 60 concurrent `wrongindex --version` take 53 s and 60 concurrent `System32\where.exe` 58 s, every one released at the same instant (one alone: 0.7 s and 1.6 s), so process creation is held by something on this host. Why a held CLI then exits 0 without output was not established; the CLI cannot do it itself (every failure maps to exit 2 to 70 with a message on stderr, `ExitCode::from` sees no value outside 0 to 255, and a successful search always prints its JSON), so something on this host ended those processes. Load from one process instead (`ipcload`, a throwaway tool in `.temp_files`, no workspace change) measured the service itself and found two defects: **a search beyond the four query slots failed at once** with `QUEUE_SATURATED` (7 of 20 concurrent searches, 46 of 100), and **a client turned away at the 64-connection limit got `os error 232`** ("the pipe is being closed"; 565 of 1,200) instead of the reason. `many_clients.rs::{searches_beyond_the_query_slots_wait_for_one, a_client_turned_away_for_too_many_connections_is_told_so}` FAILED before ("8 of 12 failed", "write: ... os error 232", `many-clients-before.log`) and pass now ([WI-ADR-022](plan/hardening-decisions.md)). Release daemon `b6016913...` on the same 60 projects: 20 and 64 concurrent sessions all answered (357 ms, 1,066 ms); 300 and 1,200 sessions: every session within 64 answered, the rest got `QUEUE_SATURATED: too many connections (the service takes 64); retry later`. The CLI harness at 1,200 processes remains FAIL on this machine for the reason above; it is not a service result.
+
+`final8` (stopped) had also failed one workspace test outside this work: `wrongindex-cli/tests/self_update.rs::what_else_runs_from_the_install_directory_is_ended_and_named` (`started.elapsed() < 25 s`), on this machine where starting processes is held as described. It passed in the next run.
+
+**Latest checkpoint of this work** (every change above, `final9-*.log`): fmt and Clippy PASS; workspace 356 passed / zero failed / 35 ignored (the self-update test above included, PASS); daemon suites 5 of 5 at 107 passed / zero failed / 11 ignored. Supersedes the `final5`-`final7` checkpoints for this source.
 
 Changed from the code reviews without a separate reproduction (covered by the suites, not by a dedicated failing test): the overflow flag of a dropped change notification is swept every second; a batch admitted before a detach no longer settles against the next attach; a failed admission backs off instead of retrying on every tick; a panicking job is recorded as failed and the recording of a job's end is retried; `latest_job` is an index seek.
 

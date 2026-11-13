@@ -80,6 +80,10 @@ pub fn init(logs_dir: &Path) {
 }
 
 pub fn event(level: &str, msg: &str, fields: Value) {
+    emit(level, msg, fields, true);
+}
+
+fn emit(level: &str, msg: &str, fields: Value, wait_for_sink: bool) {
     let line = json!({
         "ts": wrongindex_registry::now_ms(),
         "level": level,
@@ -89,12 +93,78 @@ pub fn event(level: &str, msg: &str, fields: Value) {
     })
     .to_string();
     eprintln!("{line}");
-    if let Some(sink) = SINK.get()
-        && let Ok(mut guard) = sink.lock()
+    let Some(sink) = SINK.get() else { return };
+    // A panic while the lock was held must not silence every later line.
+    let guard = if wait_for_sink {
+        Some(sink.lock().unwrap_or_else(|e| e.into_inner()))
+    } else {
+        lock_within(sink, PANIC_LOCK_WAIT)
+    };
+    if let Some(mut guard) = guard
         && let Some(s) = guard.as_mut()
     {
         s.write_line(&line);
     }
+}
+
+/// How long a panic waits for another thread's log line to finish. A
+/// panic on the thread that holds the lock gives up after this instead of
+/// deadlocking.
+const PANIC_LOCK_WAIT: std::time::Duration = std::time::Duration::from_millis(200);
+
+fn lock_within<T>(m: &Mutex<T>, wait: std::time::Duration) -> Option<std::sync::MutexGuard<'_, T>> {
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        match m.try_lock() {
+            Ok(g) => return Some(g),
+            Err(std::sync::TryLockError::Poisoned(e)) => return Some(e.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                if std::time::Instant::now() >= deadline {
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    }
+}
+
+/// Longest panic message kept in the log: enough for an `expect` text and
+/// its error, short enough that a panic quoting data stays a fragment.
+const MAX_PANIC_MESSAGE: usize = 1000;
+
+/// Log every panic before the default hook runs. The service is started
+/// detached with stderr discarded, so a panic that ends it would otherwise
+/// leave no trace. The sink lock is awaited only briefly: a panic raised
+/// while this thread writes a line must not wait for its own lock.
+pub fn log_panics() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = info.payload();
+        let mut message = payload
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "non-string panic payload".into());
+        if message.len() > MAX_PANIC_MESSAGE {
+            let mut end = MAX_PANIC_MESSAGE;
+            while !message.is_char_boundary(end) {
+                end -= 1;
+            }
+            message.truncate(end);
+            message.push_str("...");
+        }
+        emit(
+            "error",
+            "panic",
+            json!({
+                "message": message,
+                "location": info.location().map(|l| format!("{}:{}", l.file(), l.line())),
+                "thread": std::thread::current().name().unwrap_or("unnamed"),
+            }),
+            false,
+        );
+        previous(info);
+    }));
 }
 
 #[macro_export]
@@ -112,6 +182,42 @@ macro_rules! warn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_panic_line_waits_briefly_for_another_writer_and_survives_poisoning() {
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+
+        // Another thread is mid-line: the panic line waits for it.
+        let m = Arc::new(Mutex::new(0u32));
+        let held = Arc::clone(&m);
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            let _g = held.lock().unwrap();
+            locked_tx.send(()).unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        });
+        locked_rx.recv().unwrap();
+        assert!(lock_within(&m, Duration::from_secs(5)).is_some());
+        writer.join().unwrap();
+
+        // Held for good (this thread's own lock): it gives up, no deadlock.
+        let g = m.lock().unwrap();
+        let started = Instant::now();
+        assert!(lock_within(&m, Duration::from_millis(50)).is_none());
+        assert!(started.elapsed() < Duration::from_secs(5));
+        drop(g);
+
+        // A panic while holding the lock does not silence later lines.
+        let poison = Arc::clone(&m);
+        let _ = std::thread::spawn(move || {
+            let _g = poison.lock().unwrap();
+            panic!("poison the log lock");
+        })
+        .join();
+        assert!(m.is_poisoned());
+        assert!(lock_within(&m, Duration::from_millis(50)).is_some());
+    }
 
     #[test]
     fn the_file_is_rotated_while_running() {

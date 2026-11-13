@@ -29,6 +29,10 @@ $shortcutBefore=Test-Path -LiteralPath $nativeShortcut
 if($shortcutBefore){throw 'An existing native shortcut must not be replaced by a fixture test'}
 $desktopLinks=@((Join-Path ([Environment]::GetFolderPath('Programs')) 'WrongIndex.lnk'),(Join-Path ([Environment]::GetFolderPath('Desktop')) 'WrongIndex.lnk'))
 if(@($desktopLinks|Where-Object{Test-Path -LiteralPath $_}).Count){throw 'An existing desktop shortcut must not be replaced by a fixture test'}
+# The installer remembers its directory; a later real install must not go to
+# this test's deleted temporary directory.
+Import-Module (Join-Path $PSScriptRoot 'InstallLocation.psm1') -Force
+$installLocation=Save-InstallLocation
 $expected=Get-Content -LiteralPath $Manifest -Raw|ConvertFrom-Json
 $report=[ordered]@{status='RUNNING';work=$work;installer=$Installer;boundary='Temporary install/core/actor/hash/uninstall proof; graphical window, clean-machine, DPI and screen-reader acceptance NOT RUN'}
 $cli=Join-Path $app 'wrongindex.exe'
@@ -117,7 +121,8 @@ try {
   $report.autostartRestored=(-not $runKey -or $runKey.GetValueNames() -notcontains 'WrongIndex')
   $report.nativeShortcutRestored=((Test-Path -LiteralPath $nativeShortcut) -eq $shortcutBefore)
   $report.uninstallEntryLeft=@(Get-ChildItem HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall|ForEach-Object{Get-ItemProperty $_.PSPath}|Where-Object{$_.DisplayName -like 'WrongIndex*'}).Count
-  if($report.filesLeft -ne 0 -or -not $report.pathRestored -or -not $report.pathKindRestored -or -not $report.desktopShortcutsRestored -or -not $report.autostartRestored -or -not $report.nativeShortcutRestored -or $report.uninstallEntryLeft -ne 0 -or $report.uninstall -ne 0){$report.status='FAIL'}
+  try{$report.installLocationRestored=Restore-InstallLocation $installLocation}catch{$report.installLocationRestored=$false;$report.installLocationError=$_.Exception.Message}
+  if($report.filesLeft -ne 0 -or -not $report.pathRestored -or -not $report.pathKindRestored -or -not $report.desktopShortcutsRestored -or -not $report.autostartRestored -or -not $report.nativeShortcutRestored -or -not $report.installLocationRestored -or $report.uninstallEntryLeft -ne 0 -or $report.uninstall -ne 0){$report.status='FAIL'}
   [Environment]::SetEnvironmentVariable('WRONGINDEX_HOME',$oldWi,'Process')
   [Environment]::SetEnvironmentVariable('WRONGSTACK_HOME',$oldWs,'Process')
   [Environment]::SetEnvironmentVariable('WRONGINDEX_TEST_DAEMON',$oldTestDaemon,'Process')

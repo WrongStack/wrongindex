@@ -7,11 +7,18 @@ and how, is in [docs/status.md](docs/status.md).
 
 ## 0.2.0
 
-Unreleased preview candidate. Publication requires final source/artifact qualification; the unsigned clean-Windows failure and remaining acceptance gates are recorded in `docs/status.md`.
+Released 2026-11-13 as an unsigned preview, by the owner's decision; what is and is not verified is in `docs/status.md`.
+
+### Known limits
+
+- Not code-signed. On a Windows installation where Smart App Control is enforced (typically a fresh install), the installer and programs are blocked. Machines where it is off, or in evaluation mode, are not affected.
+- The 24-hour soak of this candidate did not complete: it was interrupted from outside after 6.3 hours, without a defect. An earlier attempt ran 9 h 40 min.
+- The native GPUI client is a preview.
+- During a service upgrade or restart, a running WrongStack session in `wrongindex` mode can fall back to its own engine. It then keeps the index until it ends, and the service reports `OWNER_CONFLICT` for that project.
 
 ### Added
 
-- Native GPUI Windows preview client beside the existing desktop: real service/project state, read-only registration preview, indexing, reconciliation, integrity checks, policy, pause/resume and activity. Candidate packaging includes a separate Native (Preview) shortcut and covers the executable in integrity/license manifests. This candidate has not been published or installed as a release.
+- Native GPUI Windows preview client beside the existing desktop: real service/project state, read-only registration preview, indexing, reconciliation, integrity checks, policy, pause/resume and activity. Packaging includes a separate Native (Preview) shortcut and covers the executable in integrity/license manifests.
 - Immutable current WrongStack contract snapshot and CI drift refusal. A recorded overlay can test pending compatibility changes without changing the commit-only oracle.
 - Windows product/version resources for the CLI, daemon and GPUI client, with extracted-program metadata validation during packaging. SignPath preparation does not mean the preview is signed or published.
 
@@ -33,6 +40,10 @@ Unreleased preview candidate. Publication requires final source/artifact qualifi
 - A change notification dropped at the full event queue is reconciled within a second, not at that project's next event.
 - A project whose checkout root is slow to answer or to open for watching (a network share that stopped responding) no longer delays the edits of every other project by its whole delay each second; a root that does not answer within 10 s is reported unavailable.
 - `daemon.health` answers at once while a project indexes on the compatibility worker, instead of waiting for that run to end.
+- Searches from several sessions at once wait a moment for a free query slot instead of failing with `QUEUE_SATURATED` (7 of 20 concurrent searches failed before).
+- A client turned away because the service's 64 connections are taken is told so (`QUEUE_SATURATED`, retryable) instead of getting "the pipe is being closed".
+- A project whose checkout root does not open for watching says so after 10 s.
+- A service that panics or fails while running now says why in its log (`panic`, `fatal_exit`), and the next service logs the previous reason (`previous_failure`) before clearing it. Before, the log just ended.
 - A detached project's watcher is removed; a refused detach no longer releases ownership; a job whose execution panics is recorded as failed instead of staying `running`.
 - The native GPUI pause/resume action sends the daemon's required settings envelope; a real-IPC regression verifies acknowledgements, persisted state and preservation of unrelated settings.
 - An unrelated Git edit no longer discards an otherwise usable generation; each clean-file trust stamp is revalidated independently.

@@ -24,6 +24,10 @@ if (-not $Installer) {
 $existing = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
   ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' }
 if ($existing) { throw "WrongIndex is already installed ($($existing.InstallLocation)); not touching it" }
+# The installer remembers its directory; a later real install must not go to
+# this test's deleted temporary directory.
+Import-Module (Join-Path $PSScriptRoot 'InstallLocation.psm1') -Force
+$installLocation = Save-InstallLocation
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ("wi-smoke-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $dir = Join-Path $work 'app'
@@ -94,6 +98,8 @@ try {
   $result.filesLeft = if (Test-Path $dir) { (Get-ChildItem $dir -Recurse -File | Measure-Object).Count } else { 0 }
   $result.uninstallEntryLeft = [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
+  try { $result.installLocationRestored = Restore-InstallLocation $installLocation }
+  catch { $result.installLocationRestored = $false; $result.installLocationError = $_.Exception.Message }
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
   Remove-Item Env:WRONGSTACK_HOME -ErrorAction SilentlyContinue
 }
@@ -110,6 +116,7 @@ if ($result.parallelJobsAfterGui -ne 2) { $failures += 'refused setting was appl
 if ($result.uninstall -ne 0) { $failures += "uninstall exit $($result.uninstall)" }
 if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left after uninstall" }
 if ($result.uninstallEntryLeft) { $failures += 'uninstall entry left' }
+if (-not $result.installLocationRestored) { $failures += 'remembered install location not restored' }
 $result.failures = $failures
 $result | ConvertTo-Json -Depth 6
 if ($failures.Count) { exit 1 }
