@@ -49,7 +49,7 @@ jobs:
       - name: Oracle fixture writer stays within disposable unowned fixtures
         run: bun test ./scripts/oracle/index-fixture.test.ts
       - name: Current WrongStack source matches the reviewed contract
-        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-626bd1be1886.json --out target/wrongstack-drift.json
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-d4dc097e74b2.json --out target/wrongstack-drift.json
   windows:
     # Named pipes, pipe DACLs, and path semantics require Windows (validation §8).
     runs-on: windows-latest

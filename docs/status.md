@@ -30,6 +30,13 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
   - `packages/core/src/utils/continue-intent-detection.ts` strips politeness words from "continue" prompts. It is unrelated to indexing and lies in scope only through the `packages/core/src/utils/` prefix.
 - `scripts/baseline/export.ts` recorded `contracts/baseline/wrongstack-626bd1be1886.json` from a clean detached copy (282 files, 0 dirty). Its file hashes differ from the 9ec record in exactly those three paths. `check-drift.ts --check` against it: PASS.
 - `ci.yml` and `release.yml` now gate on it. The 9ec record is kept unchanged.
+- WrongStack `main` advanced again to `d4dc097e74b2cb756485b6c573cffb85891b906c` (commit `c01e2ab00`) before the release workflow ran. That run (`43496298951`, tag at `5650bf0`) FAILED the same gate, with 3 changed adapter files:
+  - `client.ts` invalidates the stream only for a call already dispatched.
+  - `publication.ts` and `service.ts` canonicalize the project and publication keys, harden session acquisition and report the daemon instance per call.
+  - The IPC methods and parameter shapes are unchanged: `session.acquire`, `session.heartbeat`, `session.release`, `project.get`, `project.register`, `ownership.acquire`, `index.request`, `job.get`, `job.cancel`.
+  - Recorded as `contracts/baseline/wrongstack-d4dc097e74b2.json` the same way: 282 files, 0 dirty, exactly these 3 paths differ from 626, PASS.
+  - A live run of this adapter revision against the 0.2.0 service is **NOT RUN**.
+  - The unpublished `v0.2.0` tag was moved to the commit carrying this record.
 - Oracle fixtures and their provenance stay from 9ec: this is a drift-gate update, not a fixture regeneration. `signpath-preview.yml` was deliberately left on 9ec, because signing is not set up.
 
 **Publication.** The tag push no longer publishes, because `release.yml` is `workflow_dispatch` only. The release is created by hand from that workflow's attested artifacts, with the notes `main`'s former publish step built from `changelog-section.ps1`. Results are recorded after publication.
