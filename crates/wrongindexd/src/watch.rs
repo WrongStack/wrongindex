@@ -19,7 +19,7 @@
 //! fenced jobs (incremental with paths, or full for reconciliation); a
 //! finished job settles only the revisions it covered.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -106,6 +106,37 @@ struct ProjectWatch {
     /// [`Supervisor::note_missed`]): why this project is polled from now on,
     /// for as long as this service runs.
     silent: Option<String>,
+    /// Files the last runs left without new rows because they could not be
+    /// read or parsed (see [`Supervisor::note_write_result`]).
+    incomplete: Option<Incomplete>,
+}
+
+/// Files whose index rows are older than the files (INV-05): the project is
+/// degraded, not current, until a run indexes them.
+#[derive(Debug)]
+struct Incomplete {
+    /// Absolute paths, as the run reported them.
+    files: std::collections::BTreeSet<String>,
+    /// Consecutive runs that still left some of them out.
+    tries: u32,
+    /// When the watcher asks for them again.
+    retry_at: Instant,
+}
+
+/// First retry of files a run could not read or parse; doubles per run that
+/// still leaves them out, up to [`crate::dirty::PARK_PROBE`].
+const INCOMPLETE_RETRY: Duration = Duration::from_secs(30);
+
+impl Incomplete {
+    fn describe(&self) -> String {
+        let n = self.files.len();
+        format!(
+            "{n} file{} could not be read or parsed in the last run (in use by another program, access denied, or no parser available); {} previous index rows are kept and {} tried again",
+            if n == 1 { "" } else { "s" },
+            if n == 1 { "its" } else { "their" },
+            if n == 1 { "it is" } else { "they are" },
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -324,7 +355,13 @@ impl Supervisor {
             inflight_job: w.and_then(|w| w.inflight.as_ref().map(|(j, _)| j.clone())),
             sessions,
             overflows: w.map(|w| w.dirty.overflows()).unwrap_or(0),
-            last_error: w.and_then(|w| w.last_error.clone()),
+            // A file without its rows is a degraded index (INV-05), shown as
+            // the project's error until a run indexes it.
+            last_error: w.and_then(|w| {
+                w.last_error
+                    .clone()
+                    .or_else(|| w.incomplete.as_ref().map(Incomplete::describe))
+            }),
             initial_scan_done: w.is_some_and(|w| w.initial_done),
             consecutive_failures: w.map(|w| w.dirty.failures()).unwrap_or(0),
             retry_in_ms: w
@@ -367,6 +404,95 @@ impl Supervisor {
         if w.corrupt.take().is_some() {
             w.last_error = None;
             info!("index_corrupt_cleared", {"projectId": project_id, "jobId": job_id});
+        }
+    }
+
+    /// A write job succeeded with `result`: track the files it could not read
+    /// or parse (`unreadableFiles`, `unparsedFiles`). A whole-project run
+    /// says which files are still without rows; a targeted run settles the
+    /// paths it was given. Returns how many files are still left out.
+    pub fn note_write_result(
+        &self,
+        project_id: &str,
+        whole_project: bool,
+        targets: &[String],
+        result: Option<&serde_json::Value>,
+    ) -> usize {
+        let native = result.map(|r| &r["native"]);
+        let reported: std::collections::BTreeSet<String> = ["unreadableFiles", "unparsedFiles"]
+            .iter()
+            .flat_map(|k| {
+                native
+                    .and_then(|n| n[*k].as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+            })
+            .collect();
+        let Ok(mut g) = self.projects.lock() else {
+            return 0;
+        };
+        if reported.is_empty() && g.get(project_id).is_none_or(|w| w.incomplete.is_none()) {
+            return 0;
+        }
+        let w = g.entry(project_id.to_string()).or_default();
+        let mut files = w
+            .incomplete
+            .take()
+            .map(|i| (i.files, i.tries))
+            .unwrap_or_default();
+        if whole_project {
+            files.0.clear();
+        } else {
+            let done: HashSet<String> = targets.iter().map(|t| t.to_lowercase()).collect();
+            files.0.retain(|f| !done.contains(&f.to_lowercase()));
+        }
+        let grew = reported.iter().any(|f| !files.0.contains(f));
+        files.0.extend(reported);
+        if files.0.is_empty() {
+            info!("incomplete_files_indexed", {"projectId": project_id});
+            return 0;
+        }
+        let tries = if grew { 0 } else { files.1.saturating_add(1) };
+        let delay = INCOMPLETE_RETRY
+            .saturating_mul(1u32 << tries.min(16))
+            .min(crate::dirty::PARK_PROBE);
+        let n = files.0.len();
+        warn!("incomplete_files", {"projectId": project_id, "files": n, "retryInSeconds": delay.as_secs()});
+        w.incomplete = Some(Incomplete {
+            files: files.0,
+            tries,
+            retry_at: Instant::now() + delay,
+        });
+        n
+    }
+
+    /// Ask again for the files a run could not read or parse, once their
+    /// back-off is over and nothing else is pending for the project. A file
+    /// that is readable again may get no change event of its own (a program
+    /// that only held it open): without this it would wait for the periodic
+    /// reconciliation.
+    pub fn retry_incomplete(&self) {
+        let now = Instant::now();
+        let cfg = self.debounce();
+        let Ok(mut g) = self.projects.lock() else {
+            return;
+        };
+        for w in g.values_mut() {
+            if w.watcher.is_none() || w.inflight.is_some() || !w.dirty.is_empty() {
+                continue;
+            }
+            let Some(inc) = w.incomplete.as_mut() else {
+                continue;
+            };
+            if inc.retry_at > now {
+                continue;
+            }
+            for f in &inc.files {
+                w.dirty.mark(f.clone(), now, &cfg);
+            }
+            // The run reports again; until then, no second request.
+            inc.retry_at = now + crate::dirty::PARK_PROBE;
         }
     }
 
@@ -539,6 +665,10 @@ impl Supervisor {
         index_dir: &Path,
         mode: WatchMode,
     ) -> Result<&'static str, String> {
+        // Test hook: opening the root for watching is slow, as on a share
+        // that answers, slowly.
+        #[cfg(debug_assertions)]
+        debug_delay("WRONGINDEX_DEBUG_SLOW_ATTACH", root);
         let overflowed = Arc::new(AtomicBool::new(false));
         let silent = self
             .projects
@@ -673,9 +803,29 @@ impl Supervisor {
         w.watcher = None;
         w.health = "off";
         w.dirty = DirtySet::default();
+        w.inflight = None;
         w.initial_done = false;
         w.disk_wait = None;
         true
+    }
+
+    /// How many projects have a watcher attached.
+    pub fn watched(&self) -> usize {
+        self.projects
+            .lock()
+            .map_or(0, |g| g.values().filter(|w| w.watcher.is_some()).count())
+    }
+
+    /// Drop the watch state of every project that is no longer registered:
+    /// its watcher (and the directory handle or poller behind it), pending
+    /// paths and in-flight batch. Returns how many were dropped.
+    pub fn forget_unregistered(&self, registered: &HashSet<&str>) -> usize {
+        let Ok(mut g) = self.projects.lock() else {
+            return 0;
+        };
+        let before = g.len();
+        g.retain(|pid, _| registered.contains(pid.as_str()));
+        before - g.len()
     }
 
     fn detach(&self, project_id: &str) {
@@ -685,6 +835,10 @@ impl Supervisor {
         {
             w.health = "off";
             w.dirty = DirtySet::default();
+            // The job of a batch in flight runs on, but it settles nothing:
+            // the next attach starts a dirty set whose revisions begin again,
+            // and the old batch would clear its attach reconciliation.
+            w.inflight = None;
             w.initial_done = false;
             w.disk_wait = None;
             info!("watch_detached", {"projectId": project_id});
@@ -744,6 +898,27 @@ impl Supervisor {
         true
     }
 
+    /// A change notification that did not fit the bounded queue set its
+    /// project's flag. The flag is otherwise only looked at when that
+    /// project's next event arrives - which, for the last edit of a burst
+    /// (or a quiet project beside a busy one), may be never: reconcile every
+    /// flagged project now. Returns how many.
+    pub fn sweep_overflowed(&self) -> usize {
+        let now = Instant::now();
+        let Ok(mut p) = self.projects.lock() else {
+            return 0;
+        };
+        let mut n = 0usize;
+        for (pid, w) in p.iter_mut().filter(|(_, w)| w.watcher.is_some()) {
+            if w.overflowed.swap(false, Ordering::SeqCst) {
+                w.dirty.mark_reconcile("event_queue_overflow", now);
+                warn!("watch_event_queue_overflow", {"projectId": pid});
+                n += 1;
+            }
+        }
+        n
+    }
+
     /// Every attached project re-reconciles (e.g. after a suspend).
     pub fn mark_all_reconcile(&self, reason: &str) {
         let now = Instant::now();
@@ -778,6 +953,212 @@ fn events_lost() -> bool {
     std::env::var_os("WRONGINDEX_DEBUG_DROP_EVENTS_FILE").is_some_and(|f| Path::new(&f).exists())
 }
 
+/// Whether a checkout root is a directory now. On a share that went away
+/// this can take seconds (SMB times out).
+fn root_is_dir(root: &Path) -> bool {
+    // Test hook, debug builds only: `WRONGINDEX_DEBUG_SLOW_ROOT=<text>:<ms>`
+    // makes the check of a root containing `<text>` take `<ms>`, as on a
+    // network share that stopped answering.
+    #[cfg(debug_assertions)]
+    debug_delay("WRONGINDEX_DEBUG_SLOW_ROOT", root);
+    root.is_dir()
+}
+
+/// Test hooks, debug builds only: `<var>=<text>:<ms>` makes the operation
+/// on a root containing `<text>` take `<ms>` longer.
+#[cfg(debug_assertions)]
+fn debug_delay(var: &str, root: &Path) {
+    if let Ok(v) = std::env::var(var)
+        && let Some((text, ms)) = v.rsplit_once(':')
+        && let Ok(ms) = ms.parse::<u64>()
+        && root.to_string_lossy().contains(text)
+    {
+        std::thread::sleep(Duration::from_millis(ms));
+    }
+}
+
+/// How long one supervisor round waits for the attaches it started.
+const ATTACH_WAIT: Duration = Duration::from_millis(200);
+
+/// How many projects take ownership for watching at once: a claim may back
+/// the index up (`VACUUM INTO`, seconds for a large index) on the blocking
+/// pool, which the registry needs too.
+const ATTACH_CLAIMS: usize = 2;
+
+/// A watcher being attached off the supervisor: taking ownership (which may
+/// back the index up) and opening the root for watching (the file-system
+/// probe, the watcher's directory handle and change request, `.gitignore`)
+/// take as long as the index and the share, and the supervisor must not
+/// wait for them.
+struct PendingAttach {
+    answer: tokio::sync::oneshot::Receiver<Result<&'static str, String>>,
+    since: Instant,
+    policy: &'static str,
+    mode: &'static str,
+}
+
+/// Attaches in flight, by project.
+struct Attaching {
+    pending: HashMap<String, PendingAttach>,
+    claims: Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for Attaching {
+    fn default() -> Self {
+        Self {
+            pending: HashMap::new(),
+            claims: Arc::new(tokio::sync::Semaphore::new(ATTACH_CLAIMS)),
+        }
+    }
+}
+
+/// Take ownership (watching implies writing), then attach the watcher on a
+/// thread of its own. The error says which step failed.
+async fn claim_and_attach(
+    shared: Arc<Shared>,
+    project_id: String,
+    root: PathBuf,
+    index_dir: PathBuf,
+    mode: WatchMode,
+    claims: Arc<tokio::sync::Semaphore>,
+) -> Result<&'static str, String> {
+    if !shared.owners.holds(&project_id) {
+        let _slot = claims
+            .acquire()
+            .await
+            .map_err(|e| format!("ownership: {e}"))?;
+        if shared.draining.load(Ordering::SeqCst) {
+            return Err("ownership: the service is shutting down".into());
+        }
+        crate::ownership::acquire(&shared, &project_id, false)
+            .await
+            .map_err(|e| format!("ownership: {e}"))?;
+    }
+    let (tx, answer) = tokio::sync::oneshot::channel();
+    let s2 = shared.clone();
+    std::thread::Builder::new()
+        .name("wrongindex-watch-attach".into())
+        .spawn(move || {
+            let _ = tx.send(s2.watch.attach(&project_id, &root, &index_dir, mode));
+        })
+        .map_err(|e| format!("watcher: {e}"))?;
+    answer
+        .await
+        .map_err(|_| "watcher: the attach ended without an answer".to_string())?
+        .map_err(|e| format!("watcher: {e}"))
+}
+
+/// Take the attaches that end within `wait` in all.
+async fn collect_attaches(shared: &Arc<Shared>, attaching: &mut Attaching, wait: Duration) {
+    let deadline = tokio::time::Instant::now() + wait;
+    let mut done = Vec::new();
+    for (pid, a) in attaching.pending.iter_mut() {
+        if let Ok(answer) = tokio::time::timeout_at(deadline, &mut a.answer).await {
+            done.push((pid.clone(), answer));
+        }
+    }
+    for (pid, answer) in done {
+        let Some(a) = attaching.pending.remove(&pid) else {
+            continue;
+        };
+        match answer {
+            Ok(Ok(health)) => info!("watch_attached", {
+                "projectId": pid, "policy": a.policy, "watchHealth": health, "watchMode": a.mode,
+            }),
+            Ok(Err(e)) => set_failure(shared, &pid, e),
+            Err(_) => set_failure(
+                shared,
+                &pid,
+                "watcher: the attach ended without an answer".into(),
+            ),
+        }
+    }
+}
+
+/// How long one supervisor round waits for the root checks it started.
+const ROOT_PROBE_WAIT: Duration = Duration::from_millis(100);
+/// A root whose check has not answered within this long is unavailable.
+const ROOT_PROBE_STALE: Duration = Duration::from_secs(10);
+
+/// Whether each checkout root is there, checked off the supervisor: on a
+/// share that stopped answering one check takes seconds, and a supervisor
+/// that waited for it would hold back the watch of every other project. One
+/// check per project at a time, each on a thread of its own (not the
+/// blocking pool, which SQLite work needs); the supervisor waits for the
+/// checks of one round at most [`ROOT_PROBE_WAIT`] in all and otherwise
+/// goes on with the last answer. There is no cap beyond one check per
+/// project: one spent in registration order left the roots past it
+/// unchecked and their projects unwatched, and the threads are bounded by
+/// the projects anyway.
+#[derive(Default)]
+struct RootProbes {
+    probes: HashMap<String, RootProbe>,
+}
+
+#[derive(Default)]
+struct RootProbe {
+    /// The last answer; `None` before the first.
+    present: Option<bool>,
+    running: Option<(Instant, tokio::sync::oneshot::Receiver<bool>)>,
+}
+
+impl RootProbes {
+    /// Start a check of `root` unless one is still running.
+    fn start(&mut self, project_id: &str, root: &str) {
+        let probe = self.probes.entry(project_id.to_string()).or_default();
+        if probe.running.is_some() {
+            return;
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let root = PathBuf::from(root);
+        let spawned = std::thread::Builder::new()
+            .name("wrongindex-root-check".into())
+            .spawn(move || {
+                let _ = tx.send(root_is_dir(&root));
+            });
+        if spawned.is_ok() {
+            probe.running = Some((Instant::now(), rx));
+        }
+    }
+
+    /// Take the answers that arrive within `wait`; a check that has not
+    /// answered for [`ROOT_PROBE_STALE`] counts as an unavailable root.
+    async fn collect(&mut self, wait: Duration) {
+        let deadline = tokio::time::Instant::now() + wait;
+        for probe in self.probes.values_mut() {
+            let Some((since, rx)) = probe.running.as_mut() else {
+                continue;
+            };
+            match tokio::time::timeout_at(deadline, rx).await {
+                Ok(answer) => {
+                    // An answer that came too late is no better than none
+                    // (else such a root would be watched again and given up
+                    // on in turn, with a full reconciliation each time); a
+                    // check thread that died leaves the answer unknown.
+                    let late = since.elapsed() >= ROOT_PROBE_STALE;
+                    probe.present = match answer {
+                        Ok(_) if late => Some(false),
+                        Ok(present) => Some(present),
+                        Err(_) => probe.present,
+                    };
+                    probe.running = None;
+                }
+                Err(_) if since.elapsed() >= ROOT_PROBE_STALE => probe.present = Some(false),
+                Err(_) => {}
+            }
+        }
+    }
+
+    fn present(&self, project_id: &str) -> Option<bool> {
+        self.probes.get(project_id).and_then(|p| p.present)
+    }
+
+    fn retain(&mut self, registered: &HashSet<&str>) {
+        self.probes
+            .retain(|pid, _| registered.contains(pid.as_str()));
+    }
+}
+
 /// The supervisor checks in about once a second; a wall-clock gap far
 /// beyond that means the machine slept (or the clock jumped).
 const SUSPEND_GAP: Duration = Duration::from_secs(30);
@@ -802,6 +1183,8 @@ pub async fn run(
     let mut last_check_round = Instant::now();
     let mut last_reconcile_round = Instant::now();
     let mut last_wall = std::time::SystemTime::now();
+    let mut roots = RootProbes::default();
+    let mut attaching = Attaching::default();
     loop {
         tokio::select! {
             msg = rx.recv() => match msg {
@@ -819,8 +1202,10 @@ pub async fn run(
                         shared.watch.mark_all_reconcile("resumed");
                     }
                     last_wall = wall;
+                    shared.watch.sweep_overflowed();
+                    shared.watch.retry_incomplete();
                     shared.watch.expire_leases();
-                    let projects = reconcile_desired(&shared).await;
+                    let projects = reconcile_desired(&shared, &mut roots, &mut attaching).await;
                     let monitor_due = last_disk.elapsed() >= DISK_CHECK;
                     if monitor_due {
                         last_disk = Instant::now();
@@ -1055,9 +1440,9 @@ async fn schedule_checks(
     }
 }
 
-/// Admit the periodic reconciliation that is due first, if any (see
-/// `schedule`): one per round, only for a project the watcher believes
-/// current.
+/// Admit the periodic reconciliations that are due (see `schedule`):
+/// longest overdue first, as many per round as lets every project have its
+/// turn within one period, only for projects the watcher believes current.
 async fn schedule_reconciles(
     shared: &Arc<Shared>,
     projects: &[wrongindex_contracts::ProjectRecord],
@@ -1071,6 +1456,8 @@ async fn schedule_reconciles(
         .lock()
         .map(|p| p.keys().cloned().collect())
         .unwrap_or_default();
+    let mut due: Vec<(String, Option<i64>)> = Vec::new();
+    let watched = shared.watch.watched();
     for p in projects {
         let pid = p.project_id.clone();
         if !shared.watch.settled(&pid) || running.contains(&pid) || !shared.owners.holds(&pid) {
@@ -1106,6 +1493,13 @@ async fn schedule_reconciles(
         ) {
             continue;
         }
+        due.push((pid, candidate.last.map(crate::schedule::done_at)));
+    }
+    // Longest overdue first: with more projects than rounds in a period,
+    // taking the first due one in registration order would serve the same
+    // first projects for ever.
+    let limit = crate::schedule::per_round(s, watched);
+    for pid in crate::schedule::pick_overdue(due, limit) {
         let p3 = pid.clone();
         let admitted = shared
             .registry(move |r| {
@@ -1129,16 +1523,41 @@ async fn schedule_reconciles(
                 warn!("periodic_reconcile_not_scheduled", {"projectId": pid, "error": e.message})
             }
         }
-        return;
     }
 }
 
 /// Attach and detach watchers to match the desired state; returns the
 /// registered projects.
-async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::ProjectRecord> {
+async fn reconcile_desired(
+    shared: &Arc<Shared>,
+    roots: &mut RootProbes,
+    attaching: &mut Attaching,
+) -> Vec<wrongindex_contracts::ProjectRecord> {
     let Ok(projects) = shared.registry(|r| r.list_projects()).await else {
         return Vec::new();
     };
+    // A detached project keeps nothing here: its watcher would hold the
+    // checkout open and every later edit would be dispatched to a project
+    // that no longer exists.
+    let registered: HashSet<&str> = projects.iter().map(|p| p.project_id.as_str()).collect();
+    let forgotten = shared.watch.forget_unregistered(&registered);
+    if forgotten > 0 {
+        info!("watch_forgot_detached", {"projects": forgotten});
+    }
+    roots.retain(&registered);
+    // An attach that ends for a project detached meanwhile is dropped by
+    // `forget_unregistered` next round.
+    attaching
+        .pending
+        .retain(|pid, _| registered.contains(pid.as_str()));
+    collect_attaches(shared, attaching, Duration::ZERO).await;
+    let writable = shared.can_write();
+    for p in &projects {
+        if writable && shared.watch.wants(&p.project_id, p.watch_policy) {
+            roots.start(&p.project_id, &p.checkout_root);
+        }
+    }
+    roots.collect(ROOT_PROBE_WAIT).await;
     let now = Instant::now();
     for p in &projects {
         let (attached, retry_at) = {
@@ -1160,7 +1579,10 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
         // not reported by the watcher on Windows; the old watch is dead and
         // the index can no longer be called current. Detach, and attach
         // again once the root is back (the attach reconciliation catches up).
-        let root_present = Path::new(&p.checkout_root).is_dir();
+        // Not known yet (its first check is still running): next round.
+        let Some(root_present) = roots.present(&p.project_id) else {
+            continue;
+        };
         if attached && !root_present {
             shared.watch.detach(&p.project_id);
             root_unavailable(shared, &p.project_id);
@@ -1189,6 +1611,15 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             );
             continue;
         }
+        if let Some(a) = attaching.pending.get(&p.project_id) {
+            // An attach that does not end (a share that holds the open of
+            // its root) cannot be cancelled; the project says why it is not
+            // watched meanwhile.
+            if a.since.elapsed() >= ROOT_PROBE_STALE {
+                attach_waiting(shared, &p.project_id, a.since.elapsed());
+            }
+            continue;
+        }
         if attached || retry_at.is_some_and(|r| now < r) {
             continue;
         }
@@ -1196,26 +1627,30 @@ async fn reconcile_desired(shared: &Arc<Shared>) -> Vec<wrongindex_contracts::Pr
             root_unavailable(shared, &p.project_id);
             continue;
         }
-        // Watching implies writing: take ownership first.
-        if !shared.owners.holds(&p.project_id)
-            && let Err(e) = crate::ownership::acquire(shared, &p.project_id, false).await
-        {
-            set_failure(shared, &p.project_id, format!("ownership: {e}"));
-            continue;
-        }
-        match shared.watch.attach(
-            &p.project_id,
-            Path::new(&p.checkout_root),
-            Path::new(&p.index_dir),
+        let (tx, answer) = tokio::sync::oneshot::channel();
+        let work = claim_and_attach(
+            shared.clone(),
+            p.project_id.clone(),
+            PathBuf::from(&p.checkout_root),
+            PathBuf::from(&p.index_dir),
             p.watch_mode,
-        ) {
-            Ok(health) => info!("watch_attached", {
-                "projectId": p.project_id, "policy": p.watch_policy.as_str(), "watchHealth": health,
-                "watchMode": p.watch_mode.as_str(),
-            }),
-            Err(e) => set_failure(shared, &p.project_id, format!("watcher: {e}")),
-        }
+            attaching.claims.clone(),
+        );
+        tokio::spawn(async move {
+            let _ = tx.send(work.await);
+        });
+        attaching.pending.insert(
+            p.project_id.clone(),
+            PendingAttach {
+                answer,
+                since: Instant::now(),
+                policy: p.watch_policy.as_str(),
+                mode: p.watch_mode.as_str(),
+            },
+        );
     }
+    // An ordinary root is open at once: attached in this round, as before.
+    collect_attaches(shared, attaching, ATTACH_WAIT).await;
     projects
 }
 
@@ -1241,6 +1676,20 @@ fn root_unavailable(shared: &Arc<Shared>, project_id: &str) {
         w.last_error = Some("the checkout root is unavailable".into());
         // Checking for the root is cheap: look again soon.
         w.retry_at = Some(Instant::now() + ROOT_POLL);
+    }
+}
+
+/// A project whose attach has been running for `waited`: its error says so
+/// while no watcher is attached.
+fn attach_waiting(shared: &Arc<Shared>, project_id: &str, waited: Duration) {
+    if let Ok(mut g) = shared.watch.projects.lock() {
+        let w = g.entry(project_id.to_string()).or_default();
+        if w.watcher.is_none() {
+            w.last_error = Some(format!(
+                "watcher: the checkout root has not opened for watching in {} s",
+                waited.as_secs()
+            ));
+        }
     }
 }
 
@@ -1397,7 +1846,26 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
                 }
                 shared.wake_worker.notify_one();
             }
-            Err(e) => set_failure(shared, &pid, format!("admission: {e}")),
+            Err(e) => {
+                if let Ok(mut g) = shared.watch.projects.lock()
+                    && let Some(w) = g.get_mut(&pid)
+                {
+                    let was_parked = w.dirty.parked(&cfg);
+                    w.dirty.settle(&batch, false, Instant::now(), &cfg);
+                    w.last_error = Some(format!("admission: {e}"));
+                    warn!("watch_admission_failed", {
+                        "projectId": pid, "error": e.message,
+                        "consecutiveFailures": w.dirty.failures(),
+                    });
+                    if !was_parked && w.dirty.parked(&cfg) {
+                        warn!("watch_parked", {
+                            "projectId": pid,
+                            "consecutiveFailures": w.dirty.failures(),
+                            "probeEverySeconds": crate::dirty::PARK_PROBE.as_secs(),
+                        });
+                    }
+                }
+            }
         }
     }
 }
@@ -1437,6 +1905,63 @@ mod polling_tests {
         s.pending_paths = 1;
         assert_eq!(Supervisor::freshness(&s, None), Freshness::Pending);
     }
+
+    /// INV-05: a file a run could not read keeps its old rows, and the
+    /// project says so until a run indexes it.
+    #[test]
+    fn files_left_without_rows_keep_the_project_degraded() {
+        let (sup, _rx) = Supervisor::new();
+        let pid = "p1";
+        let unreadable = |files: &[&str]| serde_json::json!({"backend": "native", "native": {"unreadableFiles": files}});
+        // A whole-project run leaves one file out.
+        assert_eq!(
+            sup.note_write_result(pid, true, &[], Some(&unreadable(&["C:/p/a.ts"]))),
+            1
+        );
+        let st = sup.status(pid);
+        assert!(
+            st.last_error
+                .as_deref()
+                .is_some_and(|e| e.contains("1 file")),
+            "{st:?}"
+        );
+        let watching = WatchStatus {
+            watching: true,
+            watch_health: "native".into(),
+            initial_scan_done: true,
+            ..st.clone()
+        };
+        assert_eq!(
+            Supervisor::freshness(&watching, watching.last_error.as_deref()),
+            Freshness::Degraded
+        );
+        // A targeted run of another path changes nothing; of that path, and
+        // without a report, settles it.
+        assert_eq!(
+            sup.note_write_result(pid, false, &["C:/p/b.ts".into()], Some(&unreadable(&[]))),
+            1
+        );
+        assert_eq!(
+            sup.note_write_result(pid, false, &["c:/P/A.ts".into()], Some(&unreadable(&[]))),
+            0
+        );
+        assert_eq!(sup.status(pid).last_error, None);
+        // A whole-project run that reports nothing settles everything.
+        assert_eq!(
+            sup.note_write_result(
+                pid,
+                true,
+                &[],
+                Some(&unreadable(&["C:/p/x.ts", "C:/p/y.ts"]))
+            ),
+            2
+        );
+        assert_eq!(
+            sup.note_write_result(pid, true, &[], Some(&serde_json::json!({}))),
+            0
+        );
+        assert_eq!(sup.status(pid).last_error, None);
+    }
 }
 
 #[cfg(test)]
@@ -1450,5 +1975,39 @@ mod suspend_tests {
         assert!(suspended_between(t, t + Duration::from_secs(45)));
         assert!(suspended_between(t + Duration::from_secs(45), t));
         assert!(!suspended_between(t + Duration::from_secs(1), t));
+    }
+}
+
+#[cfg(test)]
+mod root_probe_tests {
+    use super::*;
+
+    /// Every registered project's root is checked, however many there are.
+    /// A cap on the checks in flight, spent in registration order every
+    /// round, left the roots past the sixteenth unchecked, so those projects
+    /// were never watched.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn every_root_is_checked_whatever_the_number_of_projects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut probes = RootProbes::default();
+        let roots: Vec<(String, String)> = (0..40)
+            .map(|i| {
+                let dir = tmp.path().join(format!("p{i}"));
+                if i != 39 {
+                    std::fs::create_dir(&dir).unwrap();
+                }
+                (format!("p{i}"), dir.display().to_string())
+            })
+            .collect();
+        for _round in 0..2 {
+            for (pid, root) in &roots {
+                probes.start(pid, root);
+            }
+            probes.collect(Duration::from_secs(5)).await;
+        }
+        for (pid, _) in &roots[..39] {
+            assert_eq!(probes.present(pid), Some(true), "{pid}");
+        }
+        assert_eq!(probes.present("p39"), Some(false), "a missing root");
     }
 }

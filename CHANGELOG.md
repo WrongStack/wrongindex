@@ -5,6 +5,54 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## 0.2.0
+
+Released 2026-11-13 as an unsigned preview, by the owner's decision; what is and is not verified is in `docs/status.md`.
+
+### Known limits
+
+- Not code-signed. On a Windows installation where Smart App Control is enforced (typically a fresh install), the installer and programs are blocked. Machines where it is off, or in evaluation mode, are not affected.
+- The 24-hour soak of this candidate did not complete: it was interrupted from outside after 6.3 hours, without a defect. An earlier attempt ran 9 h 40 min.
+- The native GPUI client is a preview.
+- During a service upgrade or restart, a running WrongStack session in `wrongindex` mode can fall back to its own engine. It then keeps the index until it ends, and the service reports `OWNER_CONFLICT` for that project.
+
+### Added
+
+- Native GPUI Windows preview client beside the existing desktop: real service/project state, read-only registration preview, indexing, reconciliation, integrity checks, policy, pause/resume and activity. Packaging includes a separate Native (Preview) shortcut and covers the executable in integrity/license manifests.
+- Immutable current WrongStack contract snapshot and CI drift refusal. A recorded overlay can test pending compatibility changes without changing the commit-only oracle.
+- Windows product/version resources for the CLI, daemon and GPUI client, with extracted-program metadata validation during packaging. SignPath preparation does not mean the preview is signed or published.
+
+### Fixed
+
+- GPUI Start waits for a draining service to finish its jobs and authenticates the successor before acknowledging readiness. Starting an already-running service preserves its instance; startup has a 30-second deadline and reports launch failures.
+- A project no longer fails as a whole for one file or one missing helper (found by a system-wide scan with eight multi-language projects on one service, 2026-11-12):
+  - without Bun or Node.js, C, C++, Java, C#, PHP, Ruby, Swift, Kotlin, shell and Elixir files are indexed by the regex extractor instead of refusing the project (one `build.sh` was enough); a helper that fails on a chunk degrades the same way; the job result says so under `degraded`;
+  - a file another program holds open is skipped for that run, keeps its previous rows and is listed under `unreadableFiles`, instead of failing the run with "os error 32"; the project stays `degraded` and says why until the file is indexed, which the watcher retries by itself;
+  - a project with nothing to index yet gets an empty index instead of failing until its watcher was parked, which left its first file unindexed for up to 15 minutes.
+  With WrongStack's own engine configured, such runs are still refused and that engine writes the index.
+- A second service can no longer start on a data root while the first is still draining its jobs, nor through another spelling of the same root (a trailing `\`, a junction, an 8.3 name). A draining service answers `SHUTTING_DOWN`; `daemon start` waits for it to finish and starts a new one, instead of reporting it as running.
+- A running service publishes its discovery files again when they went missing, instead of staying unreachable.
+- A service shutting down no longer releases an index's lock while a restore, backup or indexing run of that index is still in flight.
+- When the service cannot start, `daemon start` and the desktop say why (for example a data root that is not a folder) instead of pointing to a log that does not exist.
+- The CLI and desktop no longer wait without end for a service that holds its endpoint but does not answer: the handshake gives up after 20 s with the reason.
+- A restart no longer copies every index it owns before accepting clients (8.5 s for ten real projects, now under 2 s), and its own restarts no longer push the backup taken at a real ownership transfer out of the kept ones. An index another program wrote while the service was stopped is still backed up first; the ownership record says why (`backupReason`).
+- Periodic reconciliation reaches every watched project: with more than about sixteen, the later ones were never reconciled.
+- A change notification dropped at the full event queue is reconciled within a second, not at that project's next event.
+- A project whose checkout root is slow to answer or to open for watching (a network share that stopped responding) no longer delays the edits of every other project by its whole delay each second; a root that does not answer within 10 s is reported unavailable.
+- `daemon.health` answers at once while a project indexes on the compatibility worker, instead of waiting for that run to end.
+- Searches from several sessions at once wait a moment for a free query slot instead of failing with `QUEUE_SATURATED` (7 of 20 concurrent searches failed before).
+- A client turned away because the service's 64 connections are taken is told so (`QUEUE_SATURATED`, retryable) instead of getting "the pipe is being closed".
+- A project whose checkout root does not open for watching says so after 10 s.
+- A service that panics or fails while running now says why in its log (`panic`, `fatal_exit`), and the next service logs the previous reason (`previous_failure`) before clearing it. Before, the log just ended.
+- A detached project's watcher is removed; a refused detach no longer releases ownership; a job whose execution panics is recorded as failed instead of staying `running`.
+- The native GPUI pause/resume action sends the daemon's required settings envelope; a real-IPC regression verifies acknowledgements, persisted state and preservation of unrelated settings.
+- An unrelated Git edit no longer discards an otherwise usable generation; each clean-file trust stamp is revalidated independently.
+- The matching WrongStack adapter uses a native Windows bridge that verifies the connected server before forwarding credentials, bounds waits/queues, separates control/read traffic and invalidates expired streams. Older discovery without the bridge is refused by the new adapter.
+- Generation/freshness metadata survives direct and MCP integration, stale publication lineages are rejected, and external publication changes invalidate host caches.
+- Supervised compatibility workers can use an exact path/parent/instance/epoch write scope in matching WrongStack builds while ordinary writers remain blocked. Guarded engines lacking the API fail before mutable initialization.
+- Native SQLite work has an execution budget and bounded query admission; job admission reserves memory and parser families share a slot budget.
+- Certification fails when a selected required check is NOT RUN; focused results cannot qualify a release, historical manual acceptance is not reused for new artifacts, and release soak qualification requires 24 hours.
+
 ## 0.1.9
 
 ### Fixed

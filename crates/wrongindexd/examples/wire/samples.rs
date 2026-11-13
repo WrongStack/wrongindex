@@ -220,6 +220,9 @@ fn native_detail() -> Value {
         symbols_indexed: 4,
         graph_stamp: "1793664963814:1".into(),
         oversized_files: Vec::new(),
+        unreadable_files: Vec::new(),
+        unparsed_files: Vec::new(),
+        degraded: Vec::new(),
         sage_healed: None,
     };
     let mut r = to(&report);
@@ -397,6 +400,7 @@ pub fn samples() -> Value {
         }),
         "EndpointInfo": to(EndpointInfo {
             endpoint: "\\\\.\\pipe\\wrongindex-0123456789abcdef".into(),
+            client_bridge: Some("C:\\Program Files\\WrongIndex\\wrongindexd.exe".into()),
             daemon_instance_id: hello.daemon_instance_id.clone(),
             daemon_version: hello.daemon_version.clone(),
             pid: 4242,

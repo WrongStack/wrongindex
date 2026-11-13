@@ -220,24 +220,23 @@ async fn native_backend_indexes_updates_and_watches_without_an_engine() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    // 5. Unsupported project (no indexable files): refused with the
-    // reason, nothing written.
+    // 5. A project with nothing to index yet (just created): an empty
+    // index, not a failing project - its watcher would be parked and its
+    // first file would wait for the next probe. The first file is then one
+    // more run.
     let go = base.join("empty");
     std::fs::create_dir_all(&go).unwrap();
     std::fs::write(go.join("blob.bin"), b"\x00\x01").unwrap();
     let go_index = base.join("go-index");
     let go_pid = register(&mut c, &go, &go_index).await;
     let job = run_job(&mut c, &go_pid, json!({"kind": "full"})).await;
-    assert_eq!(job["state"], "failed");
-    assert_eq!(job["error"]["code"], "NOT_IMPLEMENTED", "{job}");
-    assert!(
-        job["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("no indexable files"),
-        "{job}"
-    );
-    assert!(!go_index.join("index.db").exists());
+    assert_eq!(job["state"], "succeeded", "{job}");
+    assert_eq!(job["result"]["native"]["filesIndexed"], 0, "{job}");
+    assert!(go_index.join("index.db").exists());
+    std::fs::write(go.join("first.json"), "{\"first\": 1}").unwrap();
+    let job = run_job(&mut c, &go_pid, json!({"kind": "full"})).await;
+    assert_eq!(job["state"], "succeeded", "{job}");
+    assert_eq!(job["result"]["native"]["filesIndexed"], 1, "{job}");
 
     // 6. A hostile source that overflows a recursive parser (a unary chain
     //    escapes any bracket pre-scan) only ends the isolated child: the job

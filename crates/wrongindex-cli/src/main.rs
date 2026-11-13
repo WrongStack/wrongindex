@@ -682,12 +682,23 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
             Ok(exit_code::SUCCESS)
         }
         DaemonAction::Start { wait_seconds } => {
-            if let Ok(c) = Client::connect(root, CLIENT_NAME).await {
-                report_started(c.hello().daemon_instance_id.as_str(), true, json);
-                return Ok(exit_code::SUCCESS);
-            }
-            let mut child = spawn_daemon(root)?;
             let deadline = Instant::now() + Duration::from_secs(wait_seconds);
+            match Client::connect(root, CLIENT_NAME).await {
+                Ok(c) => {
+                    report_started(c.hello().daemon_instance_id.as_str(), true, json);
+                    return Ok(exit_code::SUCCESS);
+                }
+                // A service on its way out: wait for it to go, then start.
+                Err(e) if e.code() == Some(ErrorCode::ShuttingDown) => {
+                    wait_until_gone(root, deadline, "the running service is still shutting down")
+                        .await?;
+                }
+                Err(_) => {}
+            }
+            // Not a reason for this attempt.
+            let _ = root.take_start_error();
+            let mut child = spawn_daemon(root)?;
+            let mut last_spawn = Instant::now();
             loop {
                 if let Ok(c) = Client::connect(root, CLIENT_NAME).await {
                     report_started(c.hello().daemon_instance_id.as_str(), false, json);
@@ -698,11 +709,25 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
                     if code != 3 {
                         return Err(fail(
                             exit_code::SERVICE_UNAVAILABLE,
-                            format!(
-                                "wrongindexd exited with code {code}; see {}",
-                                root.logs_dir().join("wrongindexd.log").display()
-                            ),
+                            match root.take_start_error() {
+                                Some(reason) => format!(
+                                    "wrongindexd could not start (exit code {code}): {reason}"
+                                ),
+                                None => format!(
+                                    "wrongindexd exited with code {code}; see {}",
+                                    root.logs_dir().join("wrongindexd.log").display()
+                                ),
+                            },
                         ));
+                    }
+                    // The winner may have been a service on its way out (it
+                    // holds the endpoint until its last job is done, after
+                    // which nothing is running): start again.
+                    if last_spawn.elapsed() >= Duration::from_millis(500)
+                        && Discovery::load(root).is_err()
+                    {
+                        child = spawn_daemon(root)?;
+                        last_spawn = Instant::now();
                     }
                 }
                 if Instant::now() >= deadline {
@@ -722,6 +747,22 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
                         print_json(&json!({"stopped": false, "running": false}));
                     } else {
                         println!("not running");
+                    }
+                    return Ok(exit_code::SUCCESS);
+                }
+                // Already stopping (another client asked): wait for it.
+                Err(e) if e.code() == Some(ErrorCode::ShuttingDown) => {
+                    let deadline = Instant::now() + Duration::from_secs(wait_seconds);
+                    wait_until_gone(
+                        root,
+                        deadline,
+                        "service did not stop within the wait budget",
+                    )
+                    .await?;
+                    if json {
+                        print_json(&json!({"stopped": true}));
+                    } else {
+                        println!("stopped");
                     }
                     return Ok(exit_code::SUCCESS);
                 }
@@ -754,6 +795,20 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
             Ok(exit_code::SUCCESS)
         }
     }
+}
+
+/// Wait until no service of `root` is published (its discovery files are
+/// retracted, after which its endpoint is released at once).
+async fn wait_until_gone(root: &DataRoot, deadline: Instant, timeout: &str) -> Result<(), Failure> {
+    while Discovery::load(root).is_ok() {
+        if Instant::now() >= deadline {
+            return Err(fail(exit_code::TIMEOUT, timeout));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    // The endpoint goes right after the discovery files.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    Ok(())
 }
 
 fn report_started(instance: &str, already: bool, json: bool) {

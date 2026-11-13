@@ -27,6 +27,9 @@ hex.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
+[target.'cfg(windows)'.build-dependencies]
+tauri-winres.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 sha2.workspace = true

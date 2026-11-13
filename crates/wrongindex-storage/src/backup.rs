@@ -39,6 +39,83 @@ fn now_ms() -> i64 {
         .map_or(0, |d| d.as_millis() as i64)
 }
 
+/// Written next to the index when a service releases it (see
+/// [`mark_released`]).
+pub const RELEASED_FILE: &str = ".wrongindex-released.json";
+
+/// What the files of an index look like on disk: `index.db` and its `-wal`,
+/// each absent or with its length and modification time. Any write through
+/// SQLite changes one of them. An empty `-wal` is the same as none: a reader
+/// leaves one behind (the admission check opens the index read-only), and a
+/// WAL holds no change before its 32-byte header is written.
+fn fingerprint(index_dir: &Path) -> serde_json::Value {
+    let one = |name: &str| match std::fs::metadata(index_dir.join(name)) {
+        Ok(m) if m.len() == 0 && name.ends_with("-wal") => serde_json::Value::Null,
+        Ok(m) => serde_json::json!({
+            "len": m.len(),
+            "modifiedNs": m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_nanos().to_string()),
+        }),
+        Err(_) => serde_json::Value::Null,
+    };
+    serde_json::json!({"db": one("index.db"), "wal": one("index.db-wal")})
+}
+
+/// A service with the registry `owner` releases `index_dir`, which it held at
+/// `epoch`: remember how the index files look now, so that the same service
+/// can take the index back without a backup if nobody wrote it meanwhile
+/// ([`unchanged_since_release`]). Best effort: without the mark the next
+/// claim takes a backup, as before.
+pub fn mark_released(index_dir: &Path, owner: &str, epoch: i64) {
+    let mark = serde_json::json!({
+        "owner": owner,
+        "epoch": epoch,
+        "files": fingerprint(index_dir),
+    });
+    let _ = std::fs::write(index_dir.join(RELEASED_FILE), mark.to_string());
+}
+
+/// Whether the service with the registry `owner`, claiming `index_dir` at
+/// `epoch`, released it itself at the epoch before and its files are exactly
+/// as it left them. Then the index is the service's own last state: a backup
+/// "before the transfer" would only copy it again (and push the backups of
+/// real transfers out of the kept ones). The mark is consumed either way.
+pub fn unchanged_since_release(index_dir: &Path, owner: &str, epoch: i64) -> bool {
+    release_check(index_dir, owner, epoch).is_ok()
+}
+
+/// [`unchanged_since_release`], with the reason when it is not.
+pub fn release_check(index_dir: &Path, owner: &str, epoch: i64) -> Result<(), String> {
+    let path = index_dir.join(RELEASED_FILE);
+    let mark: Option<serde_json::Value> = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok());
+    let _ = std::fs::remove_file(&path);
+    let Some(mark) = mark else {
+        return Err("no release mark".into());
+    };
+    if mark["owner"] != owner {
+        return Err(format!("released by another service ({})", mark["owner"]));
+    }
+    if mark["epoch"].as_i64() != Some(epoch - 1) {
+        return Err(format!(
+            "released at epoch {}, claimed at {epoch}",
+            mark["epoch"]
+        ));
+    }
+    let now = fingerprint(index_dir);
+    if mark["files"]["db"].is_null() || mark["files"] != now {
+        return Err(format!(
+            "written since the release ({} -> {now})",
+            mark["files"]
+        ));
+    }
+    Ok(())
+}
+
 /// Backups of `index_dir`, newest first (by name: `index-<ms>-e<epoch>.db`).
 pub fn list(index_dir: &Path) -> Vec<PathBuf> {
     let Ok(rd) = std::fs::read_dir(index_dir.join(BACKUP_DIR)) else {
@@ -192,6 +269,41 @@ mod tests {
             .unwrap()
             .query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0))
             .unwrap()
+    }
+
+    #[test]
+    fn a_release_mark_holds_only_for_untouched_files_of_the_same_owner() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        assert!(!unchanged_since_release(dir, "A", 2), "no mark");
+        make_db(dir, 3);
+        let close_all = || {
+            // The last connection is gone (as at a release): no WAL left.
+            assert!(!dir.join("index.db-wal").exists());
+        };
+        close_all();
+
+        mark_released(dir, "A", 1);
+        // A reader (the admission check) leaves an empty WAL behind.
+        std::fs::write(dir.join("index.db-wal"), b"").unwrap();
+        assert!(
+            unchanged_since_release(dir, "A", 2),
+            "same owner, next epoch, untouched"
+        );
+        std::fs::remove_file(dir.join("index.db-wal")).unwrap();
+        assert!(!dir.join(RELEASED_FILE).exists(), "the mark is consumed");
+
+        // Another owner, or not the next epoch: a transfer.
+        mark_released(dir, "A", 1);
+        assert!(!unchanged_since_release(dir, "B", 2));
+        mark_released(dir, "A", 1);
+        assert!(!unchanged_since_release(dir, "A", 3));
+
+        // Written in between (another program, through SQLite): a transfer.
+        mark_released(dir, "A", 4);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        make_db(dir, 4);
+        assert!(!unchanged_since_release(dir, "A", 5));
     }
 
     #[test]

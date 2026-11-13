@@ -532,8 +532,18 @@ impl Bridge {
     /// Start the daemon installed next to this executable and wait until it
     /// answers. An already running service is reported, not restarted.
     pub async fn start_service(&self) -> Result<Value, UiError> {
-        if let Ok(c) = self.client().await {
-            return Ok(json!({"started": false, "instanceId": c.hello().daemon_instance_id}));
+        match Client::connect(&self.root, CLIENT_NAME).await {
+            Ok(c) => {
+                return Ok(json!({"started": false, "instanceId": c.hello().daemon_instance_id}));
+            }
+            // Never report a service on its way out as running.
+            Err(e) if e.code() == Some(wrongindex_contracts::ErrorCode::ShuttingDown) => {
+                return Err(UiError::new(
+                    "SHUTTING_DOWN",
+                    "The service is finishing its running job and shutting down. Start it again once it has stopped.",
+                ));
+            }
+            Err(_) => {}
         }
         let exe = wrongindex_ipc::launch::sibling_daemon_exe()
             .map_err(|e| UiError::new("INTERNAL", e.to_string()))?;
@@ -547,7 +557,10 @@ impl Bridge {
             if Instant::now() > deadline {
                 return Err(UiError::new(
                     "SERVICE_UNAVAILABLE",
-                    "the service was started but did not answer within 15 s",
+                    match self.root.take_start_error() {
+                        Some(reason) => format!("the service could not start: {reason}"),
+                        None => "the service was started but did not answer within 15 s".into(),
+                    },
                 ));
             }
             tokio::time::sleep(Duration::from_millis(150)).await;

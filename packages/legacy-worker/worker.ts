@@ -37,10 +37,12 @@ process.env['WRONGSTACK_INDEX_INLINE'] = '1';
 const { IndexStore, indexStorePool } = await import(join(base, 'writer.ts'));
 const { runIndexerWithStore } = await import(join(base, 'indexer.ts'));
 const { callInline } = await import(join(base, 'index-inline.ts'));
+const ownerModule = join(base, 'wrongindex/owner-lock.ts');
+const ownerApi = existsSync(ownerModule) ? await import(ownerModule) : null;
 
 const marker = join(engine, '.wrongindex-oracle.json');
 const engineInfo = existsSync(marker)
-  ? { kind: 'clean-archive', ...JSON.parse(readFileSync(marker, 'utf8')) }
+  ? { kind: 'recorded-oracle', ...JSON.parse(readFileSync(marker, 'utf8')) }
   : { kind: 'checkout', path: engine };
 
 const READ_OPS = new Set([
@@ -66,7 +68,8 @@ async function handle(req: Req): Promise<unknown> {
     case 'hello':
       return { engine: engineInfo, bun: Bun.version, pid: process.pid };
     case 'index': {
-      const a = req.args as { projectRoot: string; indexDir: string; files?: string[]; force?: boolean };
+      const a = req.args as { projectRoot: string; indexDir: string; files?: string[]; force?: boolean; writeDelegation?: { instanceId: string; pid: number; epoch: number } };
+      const index = async () => {
       // The pooled read store must not hold the database across a write run.
       indexStorePool.evict(a.projectRoot, a.indexDir);
       const store = new IndexStore(a.projectRoot, { indexDir: a.indexDir });
@@ -92,6 +95,16 @@ async function handle(req: Req): Promise<unknown> {
       } finally {
         store.close();
       }
+      };
+      if (typeof ownerApi?.withWrongIndexWriteDelegation === 'function') {
+        return ownerApi.withWrongIndexWriteDelegation(a.indexDir, a.writeDelegation, index);
+      }
+      // Older engines without ownership guards remain the preview baseline.
+      // A guarded engine without scoped delegation must fail before opening DB.
+      if (ownerApi?.isOwnedByWrongIndex?.(a.indexDir)) {
+        throw new Error('WrongStack engine lacks scoped write delegation; use the native backend or a matching WrongStack build');
+      }
+      return index();
     }
     case 'query': {
       const q = req.args as { op: string; args: Record<string, unknown> };

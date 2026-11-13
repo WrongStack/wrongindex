@@ -16,11 +16,18 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 if (-not $Installer) {
   $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $root 'target' }
-  $Installer = Get-ChildItem (Join-Path $target 'release\bundle\nsis') -Filter *-setup.exe | Select-Object -First 1 -ExpandProperty FullName
+  $version = ((cargo metadata --format-version 1 --no-deps --locked | ConvertFrom-Json).packages | Where-Object name -eq 'wrongindexd').version
+  $candidates = @(Get-ChildItem (Join-Path $target 'release\bundle\nsis') -Filter "WrongIndex_${version}_*-setup.exe")
+  if ($candidates.Count -ne 1) { throw "expected one installer for $version, found $($candidates.Count)" }
+  $Installer = $candidates[0].FullName
 }
 $existing = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
   ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' }
 if ($existing) { throw "WrongIndex is already installed ($($existing.InstallLocation)); not touching it" }
+# The installer remembers its directory; a later real install must not go to
+# this test's deleted temporary directory.
+Import-Module (Join-Path $PSScriptRoot 'InstallLocation.psm1') -Force
+$installLocation = Save-InstallLocation
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ("wi-smoke-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $dir = Join-Path $work 'app'
@@ -41,6 +48,8 @@ try {
   $result.install = $p.ExitCode
   # The license inventory ships next to the binaries (WI-703).
   $result.licensesInstalled = Test-Path (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+  $result.nativeGuiInstalled = Test-Path (Join-Path $dir 'wrongindex-gpui.exe')
+  if (-not $result.nativeGuiInstalled) { throw 'Native GPUI client missing from installer' }
   # The install directory goes on the user's PATH (and comes off on uninstall).
   $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   $result.onUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
@@ -89,6 +98,8 @@ try {
   $result.filesLeft = if (Test-Path $dir) { (Get-ChildItem $dir -Recurse -File | Measure-Object).Count } else { 0 }
   $result.uninstallEntryLeft = [bool](Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
     ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'WrongIndex*' })
+  try { $result.installLocationRestored = Restore-InstallLocation $installLocation }
+  catch { $result.installLocationRestored = $false; $result.installLocationError = $_.Exception.Message }
   Remove-Item Env:WRONGINDEX_HOME -ErrorAction SilentlyContinue
   Remove-Item Env:WRONGSTACK_HOME -ErrorAction SilentlyContinue
 }
@@ -105,6 +116,7 @@ if ($result.parallelJobsAfterGui -ne 2) { $failures += 'refused setting was appl
 if ($result.uninstall -ne 0) { $failures += "uninstall exit $($result.uninstall)" }
 if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left after uninstall" }
 if ($result.uninstallEntryLeft) { $failures += 'uninstall entry left' }
+if (-not $result.installLocationRestored) { $failures += 'remembered install location not restored' }
 $result.failures = $failures
 $result | ConvertTo-Json -Depth 6
 if ($failures.Count) { exit 1 }

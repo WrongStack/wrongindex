@@ -1,0 +1,46 @@
+name: publish-signed
+on:
+  workflow_dispatch:
+    inputs:
+      signing_run_id:
+        description: Exact signing-preview run already accepted by final qualification
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  promote:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    env:
+      SOURCE_SIGNING_RUN_ID: ${{ inputs.signing_run_id }}
+      QUALIFIED_SIGNING_RUN_ID: ${{ vars.WRONGINDEX_QUALIFIED_SIGNING_RUN_ID }}
+      SIGNPATH_CERTIFICATE_SHA256: ${{ vars.SIGNPATH_CERTIFICATE_SHA256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify canonical successful qualified signing run
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/signpath/promote.ps1 -Mode Inspect
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wrongindex-signed-preview
+          path: target/promoted
+          run-id: ${{ inputs.signing_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify signed files and exact source attestations
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/signpath/promote.ps1 -Mode Verify
+      - name: Promote those same bytes without rebuilding or signing again
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/signpath/promote.ps1 -Mode Publish

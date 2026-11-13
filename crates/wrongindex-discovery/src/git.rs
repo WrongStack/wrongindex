@@ -160,6 +160,25 @@ pub fn worktree_listing(root: &Path) -> Option<Vec<u8>> {
     worktree_listing_with(root, isolation_env(root)?)
 }
 
+/// Revalidate each file's clean blob without rediscovering/reading the tree.
+/// Unrelated edits do not invalidate good rows; no Git answer grants no trust.
+pub fn current_clean_blobs(root: &Path) -> Option<BTreeMap<String, String>> {
+    let listing = worktree_listing(root)?;
+    let resolve = |relative: &str| {
+        wrongindex_storage::wrongstack_paths::node_resolve(&root.join(relative))
+            .to_string_lossy()
+            .into_owned()
+    };
+    let worktree = parse_worktree(&listing, &resolve);
+    Some(
+        worktree
+            .blobs
+            .into_iter()
+            .filter(|(file, _)| !worktree.dirty.contains(file) && !worktree.deleted.contains(file))
+            .collect(),
+    )
+}
+
 /// [`worktree_listing`] with an [`isolation_env`] already computed.
 pub fn worktree_listing_with(root: &Path, env: Vec<(String, String)>) -> Option<Vec<u8>> {
     let mut c = base_command(root);

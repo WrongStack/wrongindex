@@ -12,6 +12,7 @@ mod graph;
 mod search;
 
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{Map, Value, json};
@@ -68,10 +69,11 @@ impl Reader {
     /// `graph_stamp` read from the same snapshot: the answer and the stamp
     /// describe the same generation, even while a writer commits a new one.
     pub fn call_snapshot(
-        &self,
+        &mut self,
         op: &str,
         args: &Value,
     ) -> Result<(Value, Option<String>), QueryError> {
+        self.install_budget(Duration::from_secs(30))?;
         self.conn.execute_batch("BEGIN")?;
         let out = (|| {
             use rusqlite::OptionalExtension;
@@ -85,8 +87,15 @@ impl Reader {
                 .optional()?;
             Ok((self.call(op, args)?, stamp))
         })();
+        self.conn.progress_handler(0, None::<fn() -> bool>)?;
         let _ = self.conn.execute_batch("COMMIT");
         out
+    }
+
+    fn install_budget(&mut self, budget: Duration) -> rusqlite::Result<()> {
+        let deadline = Instant::now() + budget;
+        self.conn
+            .progress_handler(1_000, Some(move || Instant::now() >= deadline))
     }
 
     /// Run `op` with WrongStack's argument shape (`projectRoot`/`indexDir`
@@ -196,5 +205,40 @@ pub fn js_number(s: &str) -> Value {
         json!(v as i64)
     } else {
         json!(v)
+    }
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+    #[test]
+    fn a_sqlite_budget_interrupts_work_and_can_be_reset() {
+        let mut reader = Reader {
+            conn: Connection::open_in_memory().unwrap(),
+            index_dir: String::new(),
+        };
+        assert_eq!(
+            reader
+                .conn
+                .query_row("SELECT 1", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        reader.install_budget(Duration::ZERO).unwrap();
+        let error = reader.conn.query_row("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000000000) SELECT sum(x) FROM n", [], |r| r.get::<_, i64>(0)).unwrap_err();
+        assert!(
+            matches!(error, rusqlite::Error::SqliteFailure(e, _) if e.code == rusqlite::ErrorCode::OperationInterrupted)
+        );
+        reader
+            .conn
+            .progress_handler(0, None::<fn() -> bool>)
+            .unwrap();
+        assert_eq!(
+            reader
+                .conn
+                .query_row("SELECT 2", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
     }
 }
