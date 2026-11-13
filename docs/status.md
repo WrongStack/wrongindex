@@ -39,7 +39,18 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
   - The unpublished `v0.2.0` tag was moved to the commit carrying this record.
 - Oracle fixtures and their provenance stay from 9ec: this is a drift-gate update, not a fixture regeneration. `signpath-preview.yml` was deliberately left on 9ec, because signing is not set up.
 
-**Publication.** The tag push no longer publishes, because `release.yml` is `workflow_dispatch` only. The release is created by hand from that workflow's attested artifacts, with the notes `main`'s former publish step built from `changelog-section.ps1`. Results are recorded after publication.
+**Publication.** The tag push no longer publishes, because `release.yml` is `workflow_dispatch` only. The release was created by hand from that workflow's attested artifacts, with the notes `main`'s former publish step built from `changelog-section.ps1`.
+
+| Step | Result |
+|---|---|
+| `main` | PR #1, #2 and #3 merged. `main` = `c8b86e09d267084c578c747b37ee2ec47d0008cf`, the same tree that passed PR CI (three jobs each on #2 and #3) |
+| Tag `v0.2.0` | At `c8b86e0`. It was first pushed at `5650bf0` and moved before any release existed, because that run failed the drift gate |
+| [Release workflow run 43500349209](https://github.com/WrongStack/wrongindex/actions/runs/43500349209) on `refs/tags/v0.2.0` | PASS, every step: drift gate on d4dc, workspace tests, real-volume disk full, packaging, GPUI actor acceptance on the shipped daemon, attestation |
+| Downloaded artifacts | `SHA256SUMS.txt` matches the installer (`8c9dad000816c8e9d5b6f3cde0bad98ea035caf98b555766efd886f44e53d34d`). `RELEASE-MANIFEST.json` names commit `c8b86e0` with `dirtyWorktree: false` and lists the same hash |
+| `gh attestation verify … --repo WrongStack/wrongindex` | PASS: signer `release.yml@refs/tags/v0.2.0`, digest `c8b86e0` |
+| Draft release, assets downloaded again | All four files byte-identical to the verified artifacts |
+| [Published](https://github.com/WrongStack/wrongindex/releases/tag/v0.2.0) 2026-11-13 21:03 UTC | `--latest`; not a prerelease. `releases/latest` answers `v0.2.0`, with the asset names 0.1.9 self-update and `install.ps1` look for |
+| Self-update from an installed 0.1.9, and installed acceptance of these bytes | NOT RUN |
 
 ## WI-VERIFY-03 — Source identity and soak observer (2026-11-12)
 
