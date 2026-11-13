@@ -308,19 +308,16 @@ fn encodings_match_the_wrongstack_oracle() {
 fn unsupported_projects_and_existing_indexes_are_refused_without_writing() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
-    // Every language WrongStack detects is native now; a project with no
-    // indexable files is still refused, and nothing is created.
+    // Every language WrongStack detects is native now. A project with no
+    // indexable files gets an empty index (refused only in strict mode, see
+    // `native::tests::an_empty_project_gets_an_empty_index`).
     let empty_root = base.join("empty");
     std::fs::create_dir_all(&empty_root).unwrap();
     std::fs::write(empty_root.join("notes.bin"), b"\x00\x01").unwrap();
     let index = base.join("idx-empty");
-    let err = index_fresh(&empty_root, &index).unwrap_err();
-    assert!(err.to_string().contains("no indexable files"), "{err}");
-    assert!(matches!(err, NativeError::Unsupported(_)), "{err}");
-    assert!(
-        !index.exists(),
-        "nothing may be created for an unsupported project"
-    );
+    let report = index_fresh(&empty_root, &index).unwrap();
+    assert_eq!((report.files_indexed, report.symbols_indexed), (0, 0));
+    assert!(index.join("index.db").exists());
 
     let root = base.join("cfg");
     copy_dir(&repo().join("tests/fixtures/projects/config-only"), &root);

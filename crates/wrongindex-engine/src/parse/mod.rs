@@ -94,6 +94,90 @@ pub struct ParsedRef {
     pub module: Option<String>,
 }
 
+/// What a toolchain route returns for a list of files.
+#[derive(Debug, Default)]
+pub struct Batch {
+    /// One entry per file, in order. `None`: nothing could parse the file in
+    /// this run; no rows are written for it and its previous rows stay.
+    pub parsed: Vec<Option<Parsed>>,
+    /// What ran in a reduced way (a missing or failing helper), for the
+    /// run's report. Never source text.
+    pub notes: Vec<String>,
+}
+
+impl Batch {
+    pub(crate) fn of(parsed: Vec<Parsed>) -> Self {
+        Batch {
+            parsed: parsed.into_iter().map(Some).collect(),
+            notes: Vec::new(),
+        }
+    }
+}
+
+/// Whether a run must refuse what it cannot do exactly as WrongStack does
+/// (`WRONGINDEX_NATIVE_STRICT`, set by the service when WrongStack's own
+/// engine is there to take a refused project). Without it a missing or
+/// failing helper degrades per file, as WrongStack's parsers do, and the
+/// run says so in its report.
+pub(crate) fn strict() -> bool {
+    std::env::var_os("WRONGINDEX_NATIVE_STRICT").is_some()
+}
+
+/// One helper program's failures across the chunks of a run.
+///
+/// The first chunk the program cannot complete (not started, timed out,
+/// non-zero exit, undecodable output) goes through `fallback`, and so does
+/// every later chunk without starting the program again: a hostile checkout
+/// must not keep a job busy for one timeout per chunk (WI-604). In strict
+/// mode the failure is the run's, as before.
+pub(crate) struct Degrade {
+    strict: bool,
+    tripped: std::sync::atomic::AtomicBool,
+    why: std::sync::Mutex<Option<String>>,
+}
+
+impl Degrade {
+    pub(crate) fn new(strict: bool) -> Self {
+        Degrade {
+            strict,
+            tripped: std::sync::atomic::AtomicBool::new(false),
+            why: std::sync::Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn run<T>(
+        &self,
+        helper: impl FnOnce() -> Result<T, String>,
+        fallback: impl FnOnce() -> T,
+    ) -> Result<T, String> {
+        use std::sync::atomic::Ordering::SeqCst;
+        if !self.tripped.load(SeqCst) {
+            match helper() {
+                Ok(v) => return Ok(v),
+                Err(e) if self.strict => return Err(e),
+                Err(e) => {
+                    self.tripped.store(true, SeqCst);
+                    self.why
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .get_or_insert(e);
+                }
+            }
+        }
+        Ok(fallback())
+    }
+
+    /// The note for the report: `what` and the first failure.
+    pub(crate) fn notes(self, what: &str) -> Vec<String> {
+        self.why
+            .into_inner()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|why| format!("{what} ({why})"))
+            .into_iter()
+            .collect()
+    }
+}
+
 /// Languages parsed natively: [`parse_file`] reproduces `parseFileContent`
 /// for each of them.
 pub fn is_native_lang(lang: &str) -> bool {

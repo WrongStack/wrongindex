@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "baseline:export": "bun scripts/baseline/export.ts",
+    "baseline:check": "bun scripts/baseline/check-drift.ts --check",
+    "test:baseline": "bun scripts/baseline/check-drift.test.ts",
+    "test:certification": "node scripts/release/certify.test.mjs",
     "oracle:prepare": "bun scripts/oracle/prepare-clean-wrongstack.ts",
     "oracle:build": "bun scripts/oracle/build-fixtures.ts",
     "inventory:languages": "bun scripts/inventory/languages.ts",
@@ -11,6 +14,7 @@
     "oracle:resolver-diff": "bun scripts/oracle/resolver-diff.ts",
     "oracle:discovery-diff": "bun scripts/oracle/discovery-diff.ts",
     "oracle:parser-kat": "bun scripts/oracle/parser-kat.ts",
+    "oracle:helper-parity": "bun scripts/oracle/helper-parity.ts",
     "bench:baseline": "bun scripts/bench/baseline.ts",
     "profile:semantic": "bun scripts/profile/semantic.ts",
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked"

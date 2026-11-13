@@ -62,7 +62,8 @@ const authenticode = (p) => {
   }
   return null;
 };
-const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop'];
+const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop', 'wrongindex-gpui'];
+const BINARIES = ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe', 'wrongindex-gpui.exe'];
 
 // The installer's files, unpacked by 7-Zip (it reads NSIS installers) into a
 // new temporary directory the caller removes.
@@ -216,7 +217,7 @@ if (mode === 'licenses') {
     '',
     'WrongIndex itself: MIT License, Copyright (c) 2026 ECOSTACK TECHNOLOGY OÜ (see LICENSE).',
     '',
-    `Rust crates linked into wrongindexd, wrongindex and wrongindex-desktop: ${crates.length}.`,
+    `Rust crates linked into wrongindexd, wrongindex, wrongindex-desktop and wrongindex-gpui: ${crates.length}.`,
     '',
     `Bundled JavaScript and WebAssembly (the tree-sitter route, from WrongStack ${ts.wrongstackCommit}):`,
     ...assets.components.map((c) => `  ${c.component} ${c.version} (${c.license})`),
@@ -252,6 +253,7 @@ if (mode === 'licenses') {
 } else if (mode === 'manifest') {
   const bin = opt('--bin');
   const bundle = opt('--bundle');
+  const selectedInstaller = opt('--installer');
   const out = opt('--out');
   // Where to leave the binaries as the installer ships them (attested).
   const shippedOut = opt('--shipped-out');
@@ -262,7 +264,7 @@ if (mode === 'licenses') {
   const profileDir = path.join(repo, 'contracts', 'profiles', 'wrongstack-index-v5-baseline');
   const profile = JSON.parse(fs.readFileSync(path.join(profileDir, 'manifest.json'), 'utf8'));
   const binaries = {};
-  for (const n of ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe']) {
+  for (const n of BINARIES) {
     const p = path.join(bin, n);
     if (fs.existsSync(p)) binaries[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p), imports: peImports(p) };
   }
@@ -270,7 +272,8 @@ if (mode === 'licenses') {
   const installers = {};
   const notShipped = [];
   if (bundle && fs.existsSync(bundle)) {
-    for (const n of fs.readdirSync(bundle).filter((f) => f.endsWith('.exe'))) {
+    if (selectedInstaller && !fs.existsSync(path.join(bundle, selectedInstaller))) throw new Error('Selected installer is missing from the bundle directory');
+    for (const n of fs.readdirSync(bundle).filter((f) => f.endsWith('.exe') && (!selectedInstaller || f === selectedInstaller))) {
       const p = path.join(bundle, n);
       installers[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p) };
       // Each binary as the installer ships it, which is what a user can
@@ -347,7 +350,7 @@ if (mode === 'licenses') {
   };
   fs.writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(out);
-  const absent = ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe'].filter((n) => !binaries[n]);
+  const absent = BINARIES.filter((n) => !binaries[n]);
   if (buildInfo && !buildInfo.sqlite?.fts5Trigram) absent.push('SQLite FTS5 trigram tokenizer');
   if (notShipped.length) {
     console.error(`not shipped as built: ${notShipped.join(', ')}`);

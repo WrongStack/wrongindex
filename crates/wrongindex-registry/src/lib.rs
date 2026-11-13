@@ -468,6 +468,19 @@ impl Registry {
     /// Remove a registration. Source and index files are never deleted
     /// (INV-10); job history for the project is dropped with it.
     pub fn detach_project(&mut self, project_id: &str) -> Result<ProjectRecord, ErrorBody> {
+        let project = self.ensure_detachable(project_id)?;
+        self.conn
+            .execute(
+                "DELETE FROM projects WHERE project_id = ?1",
+                params![project_id],
+            )
+            .map_err(db_err)?;
+        Ok(project)
+    }
+
+    /// The project, when nothing stands in the way of removing its
+    /// registration: a queued or running job refuses it.
+    pub fn ensure_detachable(&self, project_id: &str) -> Result<ProjectRecord, ErrorBody> {
         let project = self.get_project(project_id)?;
         let active: i64 = self
             .conn
@@ -485,12 +498,6 @@ impl Registry {
                 ),
             ));
         }
-        self.conn
-            .execute(
-                "DELETE FROM projects WHERE project_id = ?1",
-                params![project_id],
-            )
-            .map_err(db_err)?;
         Ok(project)
     }
 
@@ -612,8 +619,21 @@ impl Registry {
         rows.collect::<Result<Vec<_>, _>>().map_err(db_err)
     }
 
+    /// The project's newest job. The supervisor asks this for every project
+    /// every second: it must be an index seek (`idx_jobs_project`), which
+    /// the optional filter of [`Self::list_jobs`] is not.
     pub fn latest_job(&self, project_id: &str) -> Result<Option<JobRecord>, ErrorBody> {
-        Ok(self.list_jobs(Some(project_id), 1)?.into_iter().next())
+        self.conn
+            .query_row(
+                &format!(
+                    "SELECT {JOB_COLUMNS} FROM jobs WHERE project_id = ?1
+                     ORDER BY admitted_at_ms DESC, job_id LIMIT 1"
+                ),
+                params![project_id],
+                job_from_row,
+            )
+            .optional()
+            .map_err(db_err)
     }
 
     /// The project's newest job of `kind` (say its last health check).

@@ -36,7 +36,7 @@ fn wrongstack_index(root: &Path, index: &Path) -> Value {
 fn wrongstack_index_with(root: &Path, index: &Path, files: Option<&[String]>) -> Value {
     let engine = std::env::var("WRONGINDEX_TEST_ENGINE").expect("WRONGINDEX_TEST_ENGINE");
     let mut child = Command::new("bun")
-        .arg(repo().join("packages/legacy-worker/worker.ts"))
+        .arg(repo().join("scripts/oracle/index-fixture.ts"))
         .arg("--engine")
         .arg(engine)
         .stdin(Stdio::piped())

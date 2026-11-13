@@ -193,10 +193,60 @@ pub struct Report {
     /// no rows; the run went on without them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub oversized_files: Vec<String>,
+    /// Files that could not be read (in use by another program, access
+    /// denied): no rows written, their previous rows kept; the next run
+    /// that reaches them tries again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable_files: Vec<String>,
+    /// Files no available parser could take (TS/JS the in-process parser
+    /// refuses, without Bun or Node.js): no rows written, previous rows kept.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unparsed_files: Vec<String>,
+    /// What ran in a reduced way: a missing or failing helper whose files
+    /// went to the regex extractor, as WrongStack's parsers do.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub degraded: Vec<String>,
     /// SAGE memories whose anchors an in-place run healed (moved or renamed
     /// symbols), as WrongStack's indexer does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sage_healed: Option<crate::sage::Remapped>,
+}
+
+/// Why a file gets no rows in a run (see [`FileRow::failed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoRows {
+    /// Over the 5 MiB read limit.
+    Oversized,
+    /// The read failed (sharing violation, access denied, ...).
+    Unreadable,
+    /// No available parser takes the file.
+    Unparsed,
+}
+
+/// The report's lists of files without rows, sorted.
+#[derive(Default)]
+pub(crate) struct NoRowsLists {
+    pub oversized: Vec<String>,
+    pub unreadable: Vec<String>,
+    pub unparsed: Vec<String>,
+}
+
+impl NoRowsLists {
+    pub(crate) fn of<'a>(files: impl Iterator<Item = (&'a str, NoRows)>) -> Self {
+        let mut out = NoRowsLists::default();
+        for (path, why) in files {
+            match why {
+                NoRows::Oversized => &mut out.oversized,
+                NoRows::Unreadable => &mut out.unreadable,
+                NoRows::Unparsed => &mut out.unparsed,
+            }
+            .push(path.to_string());
+        }
+        out.oversized.sort();
+        out.unreadable.sort();
+        out.unparsed.sort();
+        out
+    }
 }
 
 struct FileRow {
@@ -204,9 +254,12 @@ struct FileRow {
     lang: &'static str,
     mtime_ms: i64,
     content_hash: String,
-    /// A per-file read failure (`readBatchFiles` error, e.g. over 5 MiB):
-    /// no rows, but the file still takes its place in the write batches.
+    /// A per-file failure (`readBatchFiles` error, e.g. over 5 MiB; a file
+    /// nothing could parse): no rows, but the file still takes its place in
+    /// the write batches.
     failed: bool,
+    /// Why, when `failed`.
+    why: NoRows,
     symbols: Vec<ParsedSymbol>,
     refs: Vec<ParsedRef>,
 }
@@ -253,6 +306,8 @@ struct Source {
     content_hash: String,
     /// See [`FileRow::failed`].
     failed: bool,
+    /// Why, when `failed`.
+    why: NoRows,
     text: String,
     /// Not read: Git reports the file clean and its stored stamp matches,
     /// so the stored content hash stands in (WrongStack skips such a file
@@ -272,6 +327,7 @@ impl Source {
                 mtime_ms: 0,
                 content_hash: String::new(),
                 failed: true,
+                why: NoRows::Oversized,
                 text: String::new(),
                 unread: false,
             });
@@ -289,18 +345,44 @@ impl Source {
             mtime_ms,
             content_hash,
             failed: false,
+            why: NoRows::Oversized,
             text,
             unread: false,
         })
     }
 
-    /// Read a file the scan skipped.
-    fn read(&mut self) -> Result<(), NativeError> {
-        if self.unread {
-            *self = Source::load(std::mem::take(&mut self.path), self.lang)?;
+    /// A file that gets no rows in this run (its previous rows are kept).
+    pub(crate) fn without_rows(path: String, lang: &'static str, why: NoRows) -> Self {
+        Source {
+            path,
+            lang,
+            mtime_ms: 0,
+            content_hash: String::new(),
+            failed: true,
+            why,
+            text: String::new(),
+            unread: false,
         }
-        Ok(())
     }
+
+    /// Read a file the scan skipped. A file that cannot be read now (in use
+    /// by another program, gone since discovery) is a per-file failure, as
+    /// in `readBatchFiles`: the run goes on without it.
+    fn read(&mut self) {
+        if self.unread {
+            let path = std::mem::take(&mut self.path);
+            *self = Source::load(path.clone(), self.lang)
+                .unwrap_or_else(|_| Source::without_rows(path, self.lang, NoRows::Unreadable));
+        }
+    }
+}
+
+/// `isMissingPathError`: ENOENT or ENOTDIR.
+pub(crate) fn is_missing(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    )
 }
 
 /// Stored `(content_hash, git_blob)` per file, for skipping Git-trusted
@@ -362,13 +444,12 @@ impl Scan {
     }
 
     /// Read every file the scan skipped (a fresh build needs them all).
-    fn read_all(&mut self) -> Result<(), NativeError> {
+    fn read_all(&mut self) {
         let t = std::time::Instant::now();
         for f in &mut self.files {
-            f.read()?;
+            f.read();
         }
         timing("read skipped", t);
-        Ok(())
     }
 }
 
@@ -401,6 +482,14 @@ fn scan(
     project_root: &Path,
     trusted: &std::collections::HashMap<String, (String, String)>,
 ) -> Result<Scan, NativeError> {
+    scan_with(project_root, trusted, parse::strict())
+}
+
+fn scan_with(
+    project_root: &Path,
+    trusted: &std::collections::HashMap<String, (String, String)>,
+    strict: bool,
+) -> Result<Scan, NativeError> {
     stage("discover");
     let t = std::time::Instant::now();
     let d = wrongindex_discovery::discover(project_root, &[]);
@@ -423,7 +512,11 @@ fn scan(
         clean_blobs: d.clean_blobs.clone(),
         snapshot_key: d.snapshot_key.clone(),
     });
-    if d.files.is_empty() {
+    // A checkout with nothing to index yet (a project just created) gets an
+    // empty index, so its first file is one more targeted run; refusing it
+    // would count as a failing project and park its watcher. In strict mode
+    // WrongStack's own engine takes it instead.
+    if d.files.is_empty() && strict {
         return Err(NativeError::Unsupported(
             "a project with no indexable files".into(),
         ));
@@ -450,16 +543,31 @@ fn scan(
                 lang,
                 mtime_ms: 0,
                 failed: false,
+                why: NoRows::Oversized,
                 text: String::new(),
                 unread: true,
             });
             continue;
         }
-        files.push(Source::load(path, lang)?);
+        match Source::load(path.clone(), lang) {
+            Ok(source) => files.push(source),
+            // Deleted since discovery listed it: not part of the project.
+            Err(NativeError::Io(e)) if is_missing(&e) => {}
+            // In use by another program, access denied: a per-file failure
+            // (`readBatchFiles`); one such file must not fail the project.
+            Err(NativeError::Io(_)) => {
+                files.push(Source::without_rows(path, lang, NoRows::Unreadable))
+            }
+            Err(e) => return Err(e),
+        }
     }
     timing("read", t);
     Ok(Scan { files, git })
 }
+
+/// The parsed files, the Git trust evidence, and what ran in a reduced way
+/// (see [`Report::degraded`]).
+type ParsedScan = (Vec<FileRow>, Option<GitTrust>, Vec<String>);
 
 /// Which route parses a file.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -509,7 +617,9 @@ fn parse_in_process(src: &Source) -> Result<Option<Parsed>, NativeError> {
 /// Parse every scanned file. In-process parsing runs on several large-stack
 /// threads and the toolchain routes run concurrently; every result lands at
 /// its file's position, so the outcome does not depend on scheduling.
-fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+///
+/// The third value is what ran in a reduced way (see [`Report::degraded`]).
+fn parse_scan(scan: Scan) -> Result<ParsedScan, NativeError> {
     let Scan { files, git } = scan;
     progress_line(serde_json::json!({"phase": "parse", "files": files.len()}));
     let n = files.len();
@@ -521,10 +631,7 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
     let in_process: Vec<usize> = (0..n)
         .filter(|&i| !files[i].failed && routes[i] == Route::InProcess)
         .collect();
-    let threads = std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .clamp(1, 16)
-        .min(in_process.len().max(1));
+    let threads = crate::parse_budget::slots().min(in_process.len().max(1));
     let per = in_process.len().div_ceil(threads).max(1);
     type ThreadOut = Result<Vec<(usize, Option<Parsed>)>, NativeError>;
     let results: Vec<ThreadOut> = std::thread::scope(|s| {
@@ -537,7 +644,10 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
                     .stack_size(PARSE_STACK_BYTES)
                     .spawn_scoped(s, move || {
                         ids.iter()
-                            .map(|&i| parse_in_process(&files[i]).map(|p| (i, p)))
+                            .map(|&i| {
+                                let _permit = crate::parse_budget::acquire();
+                                parse_in_process(&files[i]).map(|p| (i, p))
+                            })
                             .collect::<Result<Vec<_>, _>>()
                     })
             })
@@ -566,7 +676,7 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
 
     // 2. Toolchain routes, concurrently.
     let t = std::time::Instant::now();
-    type Batch = fn(&[parse::py::SourceFile<'_>]) -> Result<Vec<Parsed>, String>;
+    type Batch = fn(&[parse::py::SourceFile<'_>]) -> Result<parse::Batch, String>;
     let jobs: Vec<(Vec<usize>, Batch)> = [
         (Route::Python, parse::py::parse_all as Batch),
         (Route::Go, parse::go::parse_all as Batch),
@@ -585,7 +695,7 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
     })
     .filter(|(ids, _)| !ids.is_empty())
     .collect();
-    let outcomes: Vec<Result<Vec<Parsed>, String>> = std::thread::scope(|s| {
+    let outcomes: Vec<Result<parse::Batch, String>> = std::thread::scope(|s| {
         let handles: Vec<_> = jobs
             .iter()
             .map(|(ids, run)| {
@@ -611,10 +721,15 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
             })
             .collect()
     });
+    let mut notes: Vec<String> = Vec::new();
+    // Files no available parser took: no rows in this run.
+    let mut unparsed: Vec<bool> = vec![false; n];
     for ((ids, _), outcome) in jobs.iter().zip(outcomes) {
         let out = outcome.map_err(NativeError::Unsupported)?;
-        for (&i, p) in ids.iter().zip(out) {
-            parsed[i] = Some(p);
+        notes.extend(out.notes);
+        for (&i, p) in ids.iter().zip(out.parsed) {
+            unparsed[i] = p.is_none();
+            parsed[i] = p;
         }
     }
     timing("parse toolchains", t);
@@ -622,24 +737,26 @@ fn parse_scan(scan: Scan) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeErro
     let rows = files
         .into_iter()
         .zip(parsed)
-        .map(|(f, p)| {
+        .zip(unparsed)
+        .map(|((f, p), unparsed)| {
             let p = p.unwrap_or_default();
             FileRow {
                 path: f.path,
                 lang: f.lang,
                 mtime_ms: f.mtime_ms,
                 content_hash: f.content_hash,
-                failed: f.failed,
+                failed: f.failed || unparsed,
+                why: if unparsed { NoRows::Unparsed } else { f.why },
                 symbols: p.symbols,
                 refs: p.refs,
             }
         })
         .collect();
-    Ok((rows, git))
+    Ok((rows, git, notes))
 }
 
 /// Read and parse every discovered file.
-fn collect(project_root: &Path) -> Result<(Vec<FileRow>, Option<GitTrust>), NativeError> {
+fn collect(project_root: &Path) -> Result<ParsedScan, NativeError> {
     parse_scan(scan(project_root, &Default::default())?)
 }
 
@@ -927,7 +1044,7 @@ fn rebuild_unmapped(project_root: &Path, index_dir: &Path) -> Result<Rebuild, Na
         ".wrongindex-staging-{}",
         uuid::Uuid::new_v4().simple()
     ));
-    first.read_all()?;
+    first.read_all();
     let result = (|| {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         if carry {
@@ -1096,7 +1213,7 @@ pub fn rebuild_replacing(project_root: &Path, index_dir: &Path) -> Result<Replac
         ".wrongindex-staging-{}",
         uuid::Uuid::new_v4().simple()
     ));
-    first.read_all()?;
+    first.read_all();
     let result = (|| -> Result<(Report, Option<String>), NativeError> {
         let report = index_fresh_from(project_root, &staging, Some(first))?;
         // Re-checked at the swap: a newer WrongStack may have written it
@@ -1470,7 +1587,7 @@ fn index_once(
     db_path: &Path,
     first: Option<Scan>,
 ) -> Result<Report, NativeError> {
-    let (files, git) = match first {
+    let (files, git, degraded) = match first {
         Some(scan) => parse_scan(scan)?,
         None => collect(project_root)?,
     };
@@ -1637,8 +1754,8 @@ fn index_once(
     )?;
     set_meta(&tx, "rank_version", crate::rank::RANK_VERSION)?;
     set_meta(&tx, "rank_stale_files", "0")?;
-    // Git trust pass: every file Git reports clean gets `blob:contentHash`;
-    // a new stamp is only written if the checkout did not move meanwhile.
+    // Match current WrongStack: validate each new stamp against its own file.
+    // Unrelated worktree edits must not discard the usable generation.
     let t = std::time::Instant::now();
     if let Some(git) = &git {
         let stamps: Vec<(String, &str)> = files
@@ -1650,17 +1767,16 @@ fn index_once(
                     .map(|b| (format!("{b}:{}", f.content_hash), f.path.as_str()))
             })
             .collect();
-        if !stamps.is_empty() {
-            let now = wrongindex_discovery::discover(project_root, &[]);
-            if now.snapshot_key != git.snapshot_key
-                || now.files != files.iter().map(|f| f.path.clone()).collect::<Vec<_>>()
-            {
-                return Err(NativeError::SourceChanged);
-            }
-        }
+        let now = if stamps.is_empty() {
+            None
+        } else {
+            wrongindex_discovery::git::current_clean_blobs(project_root)
+        };
         let mut update = tx.prepare_cached("UPDATE files SET git_blob = ?1 WHERE file = ?2")?;
         for (stamp, file) in stamps {
-            update.execute([stamp.as_str(), file])?;
+            if now.as_ref().and_then(|m| m.get(file)) == git.clean_blobs.get(file) {
+                update.execute([stamp.as_str(), file])?;
+            }
         }
     }
     timing("write: git trust", t);
@@ -1668,11 +1784,12 @@ fn index_once(
     write_stat1(&tx)?;
     timing("write: stat1", t);
     let written = files.iter().filter(|f| !f.failed).count();
-    let oversized_files: Vec<String> = files
-        .iter()
-        .filter(|f| f.failed)
-        .map(|f| f.path.clone())
-        .collect();
+    let no_rows = NoRowsLists::of(
+        files
+            .iter()
+            .filter(|f| f.failed)
+            .map(|f| (f.path.as_str(), f.why)),
+    );
     let changed = written;
     let graph_stamp = format!("{}:{changed}", now_ms());
     set_meta(&tx, "graph_stamp", &graph_stamp)?;
@@ -1688,7 +1805,10 @@ fn index_once(
         files_empty,
         symbols_indexed: (next_id - 1) as usize,
         graph_stamp,
-        oversized_files,
+        oversized_files: no_rows.oversized,
+        unreadable_files: no_rows.unreadable,
+        unparsed_files: no_rows.unparsed,
+        degraded,
         sage_healed: None,
     })
 }
@@ -1788,7 +1908,248 @@ fn insert_fts(tx: &Connection, rows: &[(i64, String)]) -> rusqlite::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unrelated_git_edit_does_not_discard_the_scanned_generation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        // Git expands Windows runner temp aliases such as RUNNER~1. As in
+        // discovery's Git-mode fixtures, use the canonical long spelling so
+        // this test exercises Git trust rather than the walk fallback.
+        let canonical = std::fs::canonicalize(&root).unwrap();
+        let canonical = canonical.to_string_lossy();
+        let root = PathBuf::from(canonical.strip_prefix(r"\\?\").unwrap_or(&canonical));
+        std::fs::write(root.join("config.json"), "{\"port\":1}").unwrap();
+        std::fs::write(root.join("noise.txt"), "before").unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["add", "."],
+            vec![
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-qm",
+                "fixture",
+            ],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .current_dir(&root)
+                    .args(args)
+                    .output()
+                    .unwrap()
+                    .status
+                    .success()
+            );
+        }
+        assert_eq!(
+            wrongindex_discovery::discover(&root, &[]).source,
+            wrongindex_discovery::Source::Git,
+            "the fixture must exercise Git trust"
+        );
+        let first = super::scan(&root, &Default::default()).unwrap();
+        let control = temp.path().join("control");
+        assert!(super::index_once(&root, &control, &control.join("index.db"), Some(first)).is_ok());
+        // Force the suspension boundary: scan first, then an unrelated edit,
+        // then publication. No sleep or concurrent-writer timing is involved.
+        let first = super::scan(&root, &Default::default()).unwrap();
+        std::fs::write(root.join("noise.txt"), "after").unwrap();
+        let index = temp.path().join("index");
+        let result = super::index_once(&root, &index, &index.join("index.db"), Some(first));
+        assert!(
+            result.is_ok(),
+            "unrelated Git changes must not discard good file rows: {result:?}"
+        );
+        let conn = rusqlite::Connection::open(index.join("index.db")).unwrap();
+        let trusted: String = conn
+            .query_row("SELECT git_blob FROM files", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            !trusted.is_empty(),
+            "unchanged indexed file retains its trust stamp"
+        );
+        let first = super::scan(&root, &Default::default()).unwrap();
+        std::fs::write(root.join("config.json"), "{\"port\":2}").unwrap();
+        let changed = temp.path().join("changed");
+        let result = super::index_once(&root, &changed, &changed.join("index.db"), Some(first));
+        assert!(
+            result.is_ok(),
+            "changed files keep the scanned rows without a new trust stamp: {result:?}"
+        );
+        let conn = rusqlite::Connection::open(changed.join("index.db")).unwrap();
+        let trusted: String = conn
+            .query_row("SELECT git_blob FROM files", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            trusted.is_empty(),
+            "a changed indexed file must never be vouched for"
+        );
+    }
     use super::*;
+
+    fn indexed_files(db: &Path) -> Vec<String> {
+        let conn = Connection::open(db).unwrap();
+        let mut st = conn
+            .prepare("SELECT file FROM files ORDER BY file")
+            .unwrap();
+        st.query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|r| {
+                let f = r.unwrap();
+                f.rsplit(['/', '\\']).next().unwrap().to_string()
+            })
+            .collect()
+    }
+
+    /// A project with nothing to index yet gets an empty index; its first
+    /// file, and the removal of every file, are ordinary runs.
+    #[test]
+    fn an_empty_project_gets_an_empty_index() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("notes.bin"), b"\x00\x01").unwrap();
+        let index = temp.path().join("index");
+        let db = index.join("index.db");
+
+        // Strict (WrongStack's engine is there to take it): refused.
+        let err = super::scan_with(&root, &Default::default(), true)
+            .err()
+            .expect("strict refusal");
+        assert!(err.to_string().contains("no indexable files"), "{err}");
+
+        let first = match super::rebuild(&root, &index).unwrap() {
+            Rebuild::Written(r) => r,
+            other => panic!("expected a written index, got {other:?}"),
+        };
+        assert_eq!((first.files_indexed, first.symbols_indexed), (0, 0));
+        assert!(indexed_files(&db).is_empty());
+        assert!(matches!(
+            super::rebuild(&root, &index).unwrap(),
+            Rebuild::Unchanged { .. }
+        ));
+
+        // The first file arrives as a watcher path.
+        std::fs::write(root.join("first.json"), "{\"first\":1}").unwrap();
+        let targeted = super::update_files(
+            &root,
+            &index,
+            &[root.join("first.json").to_string_lossy().into_owned()],
+        )
+        .unwrap();
+        // (An index without rows is rebuilt rather than updated in place.)
+        assert!(
+            !matches!(targeted, Rebuild::Unchanged { .. }),
+            "{targeted:?}"
+        );
+        assert_eq!(indexed_files(&db), ["first.json"]);
+
+        // Every file gone again: the whole-project run empties the index.
+        std::fs::remove_file(root.join("first.json")).unwrap();
+        let emptied = super::rebuild(&root, &index).unwrap();
+        assert!(!matches!(emptied, Rebuild::Unchanged { .. }), "{emptied:?}");
+        assert!(indexed_files(&db).is_empty());
+    }
+
+    /// One file another program holds open must not fail the project: the
+    /// run indexes the rest, names the file, and a later run picks it up.
+    #[cfg(windows)]
+    #[test]
+    fn a_file_in_use_does_not_fail_the_project() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("ok.json"), "{\"ok\":1}").unwrap();
+        std::fs::write(root.join("held.json"), "{\"held\":1}").unwrap();
+        let index = temp.path().join("index");
+        // No sharing: every other open of the file fails (ERROR_SHARING_VIOLATION).
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(root.join("held.json"))
+            .unwrap();
+
+        let first = match super::rebuild(&root, &index).unwrap() {
+            Rebuild::Written(r) => r,
+            other => panic!("expected a written index, got {other:?}"),
+        };
+        assert_eq!(first.unreadable_files.len(), 1, "{first:?}");
+        assert!(first.unreadable_files[0].ends_with("held.json"));
+        assert!(first.oversized_files.is_empty());
+        assert_eq!(indexed_files(&index.join("index.db")), ["ok.json"]);
+
+        // Still held: the in-place run keeps going too.
+        std::fs::write(root.join("new.json"), "{\"new\":1}").unwrap();
+        let second = match super::rebuild(&root, &index).unwrap() {
+            Rebuild::Updated { report, .. } => report,
+            other => panic!("expected an updated index, got {other:?}"),
+        };
+        assert_eq!(second.unreadable_files.len(), 1, "{second:?}");
+        assert_eq!(
+            indexed_files(&index.join("index.db")),
+            ["new.json", "ok.json"]
+        );
+
+        drop(lock);
+        let third = match super::rebuild(&root, &index).unwrap() {
+            Rebuild::Updated { report, .. } => report,
+            other => panic!("expected an updated index, got {other:?}"),
+        };
+        assert!(third.unreadable_files.is_empty(), "{third:?}");
+        assert_eq!(
+            indexed_files(&index.join("index.db")),
+            ["held.json", "new.json", "ok.json"]
+        );
+    }
+
+    /// A previously indexed file that cannot be read keeps its rows.
+    #[cfg(windows)]
+    #[test]
+    fn a_file_in_use_keeps_its_previous_rows() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("project");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("ok.json"), "{\"ok\":1}").unwrap();
+        std::fs::write(root.join("held.json"), "{\"held\":1}").unwrap();
+        let index = temp.path().join("index");
+        assert!(matches!(
+            super::rebuild(&root, &index).unwrap(),
+            Rebuild::Written(_)
+        ));
+        let symbols = |db: &Path| -> i64 {
+            Connection::open(db)
+                .unwrap()
+                .query_row(
+                    "SELECT count(*) FROM symbols WHERE file LIKE '%held.json'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        let before = symbols(&index.join("index.db"));
+        assert!(before > 0);
+
+        std::fs::write(root.join("held.json"), "{\"held\":2,\"more\":3}").unwrap();
+        std::fs::write(root.join("ok.json"), "{\"ok\":2}").unwrap();
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(root.join("held.json"))
+            .unwrap();
+        let run = match super::rebuild(&root, &index).unwrap() {
+            Rebuild::Updated { report, .. } => report,
+            other => panic!("expected an updated index, got {other:?}"),
+        };
+        assert_eq!(run.unreadable_files.len(), 1, "{run:?}");
+        assert_eq!(symbols(&index.join("index.db")), before);
+        drop(lock);
+    }
 
     #[test]
     fn disk_full_is_told_apart() {

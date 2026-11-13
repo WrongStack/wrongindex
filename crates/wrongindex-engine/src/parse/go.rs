@@ -33,49 +33,76 @@ pub fn go() -> Option<&'static std::path::Path> {
 /// fails the same way (`extract` error -> no symbols) and so ends in the
 /// regex extractor without refs. Every result then gets `withRelations`.
 ///
-/// A chunk `go run` cannot complete is an error (WrongStack would retry per
-/// file, which is not reproduced).
-pub fn parse_all(files: &[SourceFile<'_>]) -> Result<Vec<Parsed>, String> {
-    let finish = |parsed: Parsed, f: &SourceFile<'_>| {
-        let content = utf16(f.text);
-        with_relations(parsed, &content, "go")
+/// A program that cannot be built (a broken Go installation) or a chunk it
+/// cannot complete goes to the regex extractor too, and the run says so
+/// (WrongStack would retry per file, which is not reproduced). In strict
+/// mode either is the run's error.
+pub fn parse_all(files: &[SourceFile<'_>]) -> Result<super::Batch, String> {
+    parse_with(go(), files, super::strict())
+}
+
+fn finish(parsed: Parsed, f: &SourceFile<'_>) -> Parsed {
+    let content = utf16(f.text);
+    with_relations(parsed, &content, "go")
+}
+
+fn regex_fallback(f: &SourceFile<'_>) -> Parsed {
+    finish(without_toolchain(&utf16(f.text)), f)
+}
+
+pub(super) fn parse_with(
+    go: Option<&std::path::Path>,
+    files: &[SourceFile<'_>],
+    strict: bool,
+) -> Result<super::Batch, String> {
+    let Some(go) = go else {
+        let mut batch = super::Batch::of(files.iter().map(regex_fallback).collect());
+        batch
+            .notes
+            .push("go: the regex extractor ran (no Go toolchain on PATH)".into());
+        return Ok(batch);
     };
-    let Some(go) = go() else {
-        return Ok(files
-            .iter()
-            .map(|f| finish(without_toolchain(&utf16(f.text)), f))
-            .collect());
-    };
+    let degrade = super::Degrade::new(strict);
     // `go run` is build + run. Building once, with a deadline that covers a
     // cold build cache, keeps the per-chunk `batchTimeoutMs` about parsing
     // (a cold `go run` can exceed it, which made results timing-dependent);
     // the program, and so its output, is the same.
-    let (_dir, exe) = program(go)?;
-    par_chunks(files, |chunk| {
-        let mut out = Vec::with_capacity(chunk.len());
-        let cmd = Command::new(&exe);
-        let stdout = run_chunk(cmd, &exe, chunk)?
-            .ok_or_else(|| "go parser failed on a chunk".to_string())?;
-        let results = decode_batch(&stdout, "go")?;
-        for f in chunk {
-            let ok = results
-                .iter()
-                .rev()
-                .find(|r| r.file == f.file && r.error.is_none());
-            let parsed = match ok {
-                Some(r) => Parsed {
-                    symbols: r.symbols.clone(),
-                    refs: r.refs.clone(),
-                    unsupported: None,
-                },
-                None if results.iter().any(|r| r.file == f.file) => {
-                    without_toolchain(&utf16(f.text))
-                }
-                None => return Err(format!("go parser returned no result for {}", f.file)),
+    let built = degrade.run(|| program(go).map(Some), || None)?;
+    let parsed = par_chunks(files, |chunk| {
+        let helper = || {
+            let Some((_dir, exe)) = &built else {
+                return Err("no parser program".to_string());
             };
-            out.push(finish(parsed, f));
-        }
-        Ok(out)
+            let mut out = Vec::with_capacity(chunk.len());
+            let cmd = Command::new(exe);
+            let stdout = run_chunk(cmd, exe, chunk)?
+                .ok_or_else(|| "go parser failed on a chunk".to_string())?;
+            let results = decode_batch(&stdout, "go")?;
+            for f in chunk {
+                let ok = results
+                    .iter()
+                    .rev()
+                    .find(|r| r.file == f.file && r.error.is_none());
+                let parsed = match ok {
+                    Some(r) => Parsed {
+                        symbols: r.symbols.clone(),
+                        refs: r.refs.clone(),
+                        unsupported: None,
+                    },
+                    None if results.iter().any(|r| r.file == f.file) => {
+                        without_toolchain(&utf16(f.text))
+                    }
+                    None => return Err(format!("go parser returned no result for {}", f.file)),
+                };
+                out.push(finish(parsed, f));
+            }
+            Ok(out)
+        };
+        degrade.run(helper, || chunk.iter().map(regex_fallback).collect())
+    })?;
+    Ok(super::Batch {
+        parsed: parsed.into_iter().map(Some).collect(),
+        notes: degrade.notes("go: the regex extractor ran where the Go parser failed"),
     })
 }
 

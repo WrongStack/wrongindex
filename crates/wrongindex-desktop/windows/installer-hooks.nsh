@@ -43,6 +43,7 @@ Var WiServiceWasRunning
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  CreateShortCut "$SMPROGRAMS\WrongIndex Native (Preview).lnk" "$INSTDIR\wrongindex-gpui.exe"
   nsExec::Exec '"$INSTDIR\wrongindex.exe" setup add-to-path "$INSTDIR"'
   Pop $0
   ${If} $WiServiceWasRunning == "1"
@@ -53,6 +54,7 @@ Var WiServiceWasRunning
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  Delete "$SMPROGRAMS\WrongIndex Native (Preview).lnk"
   !insertmacro WRONGINDEX_STOP_SERVICE
   nsExec::Exec '"$INSTDIR\wrongindex.exe" setup remove-from-path "$INSTDIR"'
   Pop $0

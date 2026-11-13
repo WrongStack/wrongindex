@@ -111,6 +111,8 @@ try {
   const search = await rpc('tools/call', { name: 'codebase_search', arguments: { query: 'greet', limit: 5 } });
   out.searchReply = text(search).slice(0, 300);
   check('searchThroughWrongStack', /greet/.test(out.searchReply), out.searchReply);
+  const publications = search.result?._meta?.['wrongindex/publications'];
+  check('publicationMetadataThroughWrongStack', Array.isArray(publications) && publications.some((x) => x.projectId === p.projectId && x.generation >= 1 && x.daemonInstanceId), 'missing per-call publication metadata');
   const stats = await rpc('tools/call', { name: 'codebase_stats', arguments: {} });
   out.statsReply = text(stats).slice(0, 200);
   check('statsThroughWrongStack', !stats.result?.isError && /ts/.test(out.statsReply), out.statsReply);
