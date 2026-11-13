@@ -23,6 +23,15 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 - `install.ps1` also runs a repository-level `gh attestation verify`.
 - `release.yml` uploads exactly these files, plus `RELEASE-MANIFEST.json` and `THIRD-PARTY-LICENSES.txt`, and attests the installer and the shipped programs.
 
+**WrongStack drift during the release (reviewed).** While PR #2 ran, WrongStack `main` advanced to `626bd1be1886caa1ad3fda31bcda52fe4ce3cc0f`, and the CI drift gate FAILED: 3 of 282 contract files had changed since `9ec93ad7f306`.
+- Each change was reviewed; none touches the index format or the protocol WrongIndex serves:
+  - `packages/codebase-index-mcp/package.json` changes only the version (1.6.0 → 1.6.2).
+  - `packages/tools/src/codebase-index/wrongindex/client.ts`: a `SHUTTING_DOWN` handshake is now treated as unavailable. This is the adapter change recorded earlier as uncommitted; it matches the service's draining answer.
+  - `packages/core/src/utils/continue-intent-detection.ts` strips politeness words from "continue" prompts. It is unrelated to indexing and lies in scope only through the `packages/core/src/utils/` prefix.
+- `scripts/baseline/export.ts` recorded `contracts/baseline/wrongstack-626bd1be1886.json` from a clean detached copy (282 files, 0 dirty). Its file hashes differ from the 9ec record in exactly those three paths. `check-drift.ts --check` against it: PASS.
+- `ci.yml` and `release.yml` now gate on it. The 9ec record is kept unchanged.
+- Oracle fixtures and their provenance stay from 9ec: this is a drift-gate update, not a fixture regeneration. `signpath-preview.yml` was deliberately left on 9ec, because signing is not set up.
+
 **Publication.** The tag push no longer publishes, because `release.yml` is `workflow_dispatch` only. The release is created by hand from that workflow's attested artifacts, with the notes `main`'s former publish step built from `changelog-section.ps1`. Results are recorded after publication.
 
 ## WI-VERIFY-03 — Source identity and soak observer (2026-11-12)
