@@ -4,6 +4,34 @@ Last updated: 2026-11-14. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-01 — Linux/macOS slice 1: Unix transport and a portable daemon (2026-11-14)
+
+**Decision.** On 2026-11-14 the owner asked to start Linux/macOS after 0.3.0 ("önce sürümü çıkaralım sonra linux/macos", then "devam et, başla"). Slice 1 is the transport and the daemon core; watching backends, packaging, user services and signing are later slices. **Linux and macOS are not supported platforms by this work**: no package, no user service, no installed-artifact evidence (M8 gates in the delivery backlog). Branch `ci/unix`, draft PR #7; workflow `portability.yml` measures Linux and macOS and gates nothing.
+
+**What changed.**
+- Endpoint identity on Unix: effective uid instead of `$USER`; `..` applied to the resolved directory. The socket path is built from the same resolved spelling, under `/tmp/wrongindex-<euid>` when it would not fit `sun_path`.
+- Unix transport (WI-ADR-024): `wrongindex_ipc::unix` — socket in an owner-only directory, `flock` guard beside it held until discovery is retracted, leftover sockets (and only sockets) replaced, peer uid checked by server and client. The daemon serves on it; `--ipc-bridge` works on Unix; a detached start uses `setsid`; `SIGINT`/`SIGTERM` stop the service with the usual drain (listeners made once, before the accept loop).
+- Watcher bug found by the first Linux run: inotify reports every open, read and close, and the service's own indexing reads re-marked the attach reconciliation, so a watched project ran a full pass about every 450 ms forever and never became current. Read-only access events are now ignored (a close after writing still counts). Windows and macOS do not report reads. Proven both ways with the probe in `.temp_files/unix-probe/run.sh`: filter off 15 jobs in ~7 s, filter on one job and the project current.
+- Tests: `vertical_slice.rs` and `single_instance.rs` run on Unix (raw connects through the new `wrongindex_ipc::client::connect_raw`); new `sigterm_stops_the_service_cleanly` (Unix) and unit tests for the socket guard and the event filter. The registration alias is a case variant on Windows only. `identity_slug` on Unix expects WrongStack's own POSIX result (Node `path.posix` + `wstack-paths.ts` `slugify`: `d-codebox-projects-wrongstack-6fc446`, `repo-one-57756a`), which the Rust code already gave.
+- Unix clippy: dead code of Windows-only helpers marked as such; the daemon's 42 warnings came from `run()` returning early on Unix and are gone.
+
+**Evidence** (Linux: WSL2 Ubuntu, ext4 temp dirs, `CARGO_TARGET_DIR=~/wi-unix-target`; Windows: private target under `.temp_files/target-unix-win`):
+
+| Check | Result |
+|---|---|
+| Linux `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
+| Linux `cargo test --workspace --locked --no-fail-fast` | PASS: 257 passed, 0 failed, 27 ignored (was 236 passed, 10 failed, 20 ignored) |
+| Linux `vertical_slice` + `single_instance`, five consecutive runs | PASS 5/5 (13 tests each run) |
+| Linux `detached_start` (CLI `daemon start` through a pipe, then `daemon stop`) | PASS, ran against the built daemon (no NOT RUN line) |
+| Windows fmt / clippy / `cargo test --workspace --locked` | PASS (54 test binaries, 0 failed) |
+| Windows `crates/wrongindexd/tests`, five consecutive runs | PASS 5/5 (34 test binaries each run, 0 failed; 17:09-17:25, no gap) |
+| macOS | NOT RUN locally; only the `portability.yml` job measures it |
+
+**Open, by status.**
+- UNSUPPORTED on Unix: the seven oracle parity tests (`native_parity.rs`), ignored with the reason: the oracle was recorded by WrongStack on Windows and its stored paths use backslashes. A POSIX oracle needs a WrongStack run on Linux.
+- NOT RUN on Unix: the other 28 daemon integration files (still `#![cfg(windows)]`, to be opened one at a time), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end with a WrongStack client, macOS anything.
+- Known limits recorded in WI-ADR-024: `/tmp` fallback squatting and cleaning, `flock` on network file systems, and case-insensitive macOS volumes (two case spellings of one data root give two services).
+
 ## WI-RELEASE-030 — 0.3.0 (2026-11-14)
 
 **Decision.** On 2026-11-14 the owner asked to release once the work was done, chose version 0.3.0 and agreed that the attested candidate is first installed over their 0.2.0 installation, with publication only after that check passes. Branch `release/v0.3.0` carries WI-DESKTOP-01 (PR #4) and WI-IPC-RTL-01 (PR #5).

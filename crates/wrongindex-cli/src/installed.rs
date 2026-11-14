@@ -29,12 +29,14 @@ pub struct Stopped {
 
 /// The comparable spelling of a path: no verbatim prefix, backslashes,
 /// lower case, no trailing separator.
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 fn key(p: &str) -> String {
     let s = p.strip_prefix(r"\\?\").unwrap_or(p).replace('/', "\\");
     s.trim_end_matches('\\').to_lowercase()
 }
 
 /// Whether `program` lies in (or under) `dir`, both as [`key`].
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 fn inside(dir: &str, program: &str) -> bool {
     program
         .strip_prefix(dir)
@@ -172,6 +174,7 @@ fn from(dirs: &[String], program: &str) -> bool {
 /// `me` and the processes that started it, as far as they are still known
 /// (a parent id that is gone, or reused, ends the chain safely: at worst a
 /// process is spared).
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 fn starters(
     me: u32,
     parents: &std::collections::HashMap<u32, u32>,

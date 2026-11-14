@@ -6,6 +6,7 @@
 use std::io;
 
 /// Largest body accepted (an installer is a few MiB).
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 pub const MAX_BODY: usize = 256 * 1024 * 1024;
 
 pub struct Response {

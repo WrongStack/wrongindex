@@ -12,6 +12,7 @@
 use std::path::Path;
 
 /// The most programs named.
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 const MAX: usize = 16;
 
 /// A program that has an index's files open.
