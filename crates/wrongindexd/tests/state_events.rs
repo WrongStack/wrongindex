@@ -3,8 +3,6 @@
 //! edit through pending back to current with a new generation, and nothing
 //! is published while nothing changes.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

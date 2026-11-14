@@ -739,6 +739,7 @@ impl Supervisor {
                 return;
             }
             let msg = match res {
+                Ok(ev) if changes_nothing(&ev) => return,
                 Ok(ev) => WatchMsg::Event {
                     project_id: pid.clone(),
                     rescan: ev.need_rescan(),
@@ -1877,6 +1878,51 @@ async fn dispatch_ready(shared: &Arc<Shared>) {
                 }
             }
         }
+    }
+}
+
+/// An event that reports a read, not a change: inotify (Linux) reports
+/// every open, read and close, the service's own indexing passes among
+/// them, so treating them as edits started a new pass after each one.
+/// A close after writing is kept: some writers are seen only through it.
+/// Windows and macOS do not report reads.
+fn changes_nothing(ev: &notify::Event) -> bool {
+    use notify::EventKind;
+    use notify::event::{AccessKind, AccessMode};
+    !ev.need_rescan()
+        && matches!(ev.kind, EventKind::Access(a) if a != AccessKind::Close(AccessMode::Write))
+}
+
+#[cfg(test)]
+mod event_kind_tests {
+    use super::*;
+    use notify::event::{
+        AccessKind, AccessMode, CreateKind, DataChange, EventKind, Flag, ModifyKind,
+    };
+
+    #[test]
+    fn reads_are_not_changes_and_writes_are() {
+        let ev = |kind| notify::Event::new(kind);
+        for kind in [
+            AccessKind::Open(AccessMode::Read),
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Read,
+            AccessKind::Close(AccessMode::Read),
+            AccessKind::Any,
+        ] {
+            assert!(changes_nothing(&ev(EventKind::Access(kind))), "{kind:?}");
+        }
+        for kind in [
+            EventKind::Access(AccessKind::Close(AccessMode::Write)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            EventKind::Create(CreateKind::File),
+            EventKind::Any,
+        ] {
+            assert!(!changes_nothing(&ev(kind)), "{kind:?}");
+        }
+        // A dropped queue is reported, whatever kind it carries.
+        let rescan = ev(EventKind::Access(AccessKind::Read)).set_flag(Flag::Rescan);
+        assert!(!changes_nothing(&rescan));
     }
 }
 

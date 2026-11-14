@@ -13,8 +13,6 @@
 //!   it, writes stop, and answers say the index is damaged;
 //! * the scheduled check (`integrityCheckHours`) finds it with nobody asking.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

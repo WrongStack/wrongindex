@@ -11,8 +11,6 @@
 //! * once there is room again, the warning clears and the pending edit is
 //!   indexed by itself.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -169,7 +167,10 @@ async fn a_full_disk_holds_writes_until_there_is_room() {
     assert_eq!(w["resource"], "disk", "{w}");
     assert_eq!(w["freeBytes"], 100 * MIB, "{w}");
     assert_eq!(w["fullBytes"], 256 * MIB, "{w}");
+    #[cfg(windows)]
     assert!(w["volume"].as_str().unwrap().ends_with('\\'), "{w}");
+    #[cfg(not(windows))]
+    assert!(base.starts_with(w["volume"].as_str().unwrap()), "{w}");
     assert_eq!(w["projects"], json!([pid]), "{w}");
     // What WrongIndex keeps there: the index, the service's own files.
     let u = &w["usage"];

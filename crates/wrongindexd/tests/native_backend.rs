@@ -3,8 +3,6 @@
 //! an edit, and followed by the watcher; an unsupported project fails with a
 //! clear NOT_IMPLEMENTED reason instead of being written.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

@@ -3,8 +3,6 @@
 //! The slow project is simulated with the debug-only
 //! `WRONGINDEX_NATIVE_STALL` hook in the native child.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -121,6 +119,16 @@ async fn a_slow_project_does_not_hold_up_another() {
     let fast_root = base.join("fastproj");
     copy_dir(&fixture, &slow_root);
     copy_dir(&fixture, &fast_root);
+    // Two runs at once whatever this machine's memory: the automatic cap
+    // leaves one slot on an 8 GB host, and this test is about fairness.
+    c.call_raw(
+        method::SETTINGS_SET,
+        None,
+        json!({"settings": {"nativeMemoryMb": 512, "workerMemoryMb": 512}}),
+        None,
+    )
+    .await
+    .unwrap();
     let slow = register(&mut c, &slow_root, &base.join("slow-index")).await;
     let fast = register(&mut c, &fast_root, &base.join("fast-index")).await;
 
@@ -190,6 +198,29 @@ async fn a_slow_project_does_not_hold_up_another() {
     );
 }
 
+/// The service's native children (`pgrep`, on Linux and macOS alike).
+#[cfg(unix)]
+fn child_pids(parent: u32) -> Vec<u32> {
+    let out = Command::new("pgrep")
+        .args(["-P", &parent.to_string(), "-x", "wrongindexd"])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.trim().parse().ok())
+        .collect()
+}
+
+#[cfg(unix)]
+fn alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+#[cfg(windows)]
 fn powershell(script: &str) -> String {
     let out = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
@@ -198,6 +229,7 @@ fn powershell(script: &str) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+#[cfg(windows)]
 fn child_pids(parent: u32) -> Vec<u32> {
     powershell(&format!(
         "Get-CimInstance Win32_Process -Filter 'ParentProcessId={parent}' | Where-Object Name -eq 'wrongindexd.exe' | ForEach-Object {{ $_.ProcessId }}"
@@ -207,6 +239,7 @@ fn child_pids(parent: u32) -> Vec<u32> {
     .collect()
 }
 
+#[cfg(windows)]
 fn alive(pid: u32) -> bool {
     powershell(&format!(
         "if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ 'yes' }}"

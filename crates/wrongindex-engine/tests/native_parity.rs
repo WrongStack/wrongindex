@@ -39,6 +39,10 @@ fn oracle_root(fixture: &str) -> (String, String) {
 }
 
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn config_only_matches_the_wrongstack_oracle() {
     let tmp = tempfile::tempdir().unwrap();
     let base = long(tmp.path());
@@ -124,6 +128,10 @@ fn meta(db: &Path, key: &str) -> String {
 /// Rust crate with a TOML manifest: module owners, an import ref resolved
 /// through the crate's module root (`to_file`), `crate:` package labels.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn rs_basic_matches_the_wrongstack_oracle() {
     use wrongindex_engine::relations::{detect_module_roots, hex_sha256, structure_json};
 
@@ -287,12 +295,20 @@ fn assert_matches_oracle(fixture: &str) -> (usize, usize, usize) {
 /// npm package with TS and TSX sources (WI-505/506): classes, interfaces,
 /// imports bound through the package, JSX, `<module>` owners, npm labels.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn basic_ts_matches_the_wrongstack_oracle() {
     assert_eq!(assert_matches_oracle("basic-ts"), (4, 0, 14));
 }
 
 /// TypeScript files under directory names with spaces and non-ASCII letters.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn paths_unicode_matches_the_wrongstack_oracle() {
     assert_eq!(assert_matches_oracle("paths-unicode"), (3, 0, 4));
 }
@@ -300,6 +316,10 @@ fn paths_unicode_matches_the_wrongstack_oracle() {
 /// TypeScript files with a BOM, CRLF, astral characters, invalid UTF-8 and
 /// no content.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn encodings_match_the_wrongstack_oracle() {
     assert_eq!(assert_matches_oracle("encodings"), (5, 1, 11));
 }
@@ -483,6 +503,10 @@ fn pathologically_nested_sources_are_refused_without_crashing() {
 /// Python through the interpreter WrongStack would pick (the oracle was
 /// recorded with `python` = 3.14.8; `python3` was the Store stub).
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn py_basic_matches_the_wrongstack_oracle() {
     if wrongindex_engine::parse::py::python().is_none() {
         eprintln!("NOT RUN: no Python interpreter");
@@ -506,6 +530,10 @@ fn toolchain_serial() -> std::sync::MutexGuard<'static, ()> {
 
 /// Go through `go run` of WrongStack's own `go/ast` program.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn go_basic_matches_the_wrongstack_oracle() {
     if wrongindex_engine::parse::go::go().is_none() {
         eprintln!("NOT RUN: no Go toolchain");
@@ -518,6 +546,10 @@ fn go_basic_matches_the_wrongstack_oracle() {
 /// C, Java, Ruby, shell, SQL and a Dockerfile through WrongStack's own
 /// tree-sitter route (bundled visitor, queries, runtime and grammars).
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn treesitter_mix_matches_the_wrongstack_oracle() {
     if wrongindex_engine::parse::treesitter::runtime().is_none() {
         eprintln!("NOT RUN: neither Bun nor Node.js on PATH");

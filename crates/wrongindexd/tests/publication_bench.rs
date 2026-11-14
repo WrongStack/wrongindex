@@ -10,8 +10,6 @@
 //!   WRONGINDEX_BENCH_PROJECT=<checkout> cargo test --release -p wrongindexd \
 //!     --test publication_bench -- --ignored --nocapture
 
-#![cfg(windows)]
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

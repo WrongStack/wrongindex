@@ -275,6 +275,7 @@ mod tests {
         assert_eq!(slugify(&"x".repeat(50)), "x".repeat(40));
     }
 
+    #[cfg(windows)]
     #[test]
     fn identity_slug_is_basename_plus_sha_prefix() {
         // sha256("D:\\Codebox\\PROJECTS\\WrongStack") computed independently.
@@ -287,6 +288,20 @@ mod tests {
             sha256_hex_prefix("abc", 12),
             "ba7816bf8f01" // NIST SHA-256("abc")
         );
+    }
+
+    /// WrongStack's `slugify(path.basename(id))-sha256(id)[..6]` with Node's
+    /// POSIX `path`, where `\` is no separator. Expected values from Node
+    /// (`path.posix` and `wstack-paths.ts` `slugify`), 2026-11-14.
+    #[cfg(not(windows))]
+    #[test]
+    fn identity_slug_is_basename_plus_sha_prefix() {
+        assert_eq!(slug_for_identity("/home/u/Repo One"), "repo-one-57756a");
+        assert_eq!(
+            slug_for_identity(r"D:\Codebox\PROJECTS\WrongStack"),
+            "d-codebox-projects-wrongstack-6fc446"
+        );
+        assert_eq!(sha256_hex_prefix("abc", 12), "ba7816bf8f01");
     }
 
     #[cfg(windows)]

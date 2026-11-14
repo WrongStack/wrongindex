@@ -2,8 +2,6 @@
 //! survive a restart; pausing background indexing holds watcher work (the
 //! project is never reported current while edits wait).
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

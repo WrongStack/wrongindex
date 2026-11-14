@@ -4,8 +4,6 @@
 //! gap (`events.snapshot`, `job.get`) reports the failure - the stream is a
 //! hint, the daemon's state is the truth.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

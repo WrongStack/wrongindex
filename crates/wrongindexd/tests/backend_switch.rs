@@ -3,8 +3,6 @@
 //! queues a reconciliation with the new engine, and a choice the service
 //! cannot honour is refused without changing anything.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

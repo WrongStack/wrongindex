@@ -3,8 +3,6 @@
 //! of the deepest file is picked up by the watcher's targeted run. Native
 //! backend: no engine needed.
 
-#![cfg(windows)]
-
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

@@ -2,8 +2,6 @@
 //! instances, epoch fencing across restarts, and admission before mutation.
 //! Real daemon processes, real registry, real OS locks; nothing mocked.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

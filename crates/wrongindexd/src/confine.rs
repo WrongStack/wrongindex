@@ -62,7 +62,25 @@ fn physical_memory() -> u64 {
     }
 }
 
-#[cfg(not(windows))]
+/// Unix: pages times page size (`sysconf`, on Linux and macOS alike). It
+/// returned 0 here before, which left the 2 GiB floor as the budget: one
+/// job at a time, so a slow project held up every other.
+#[cfg(unix)]
+fn physical_memory() -> u64 {
+    // SAFETY: sysconf has no preconditions; it returns -1 when unknown.
+    let (pages, size) = unsafe {
+        (
+            libc::sysconf(libc::_SC_PHYS_PAGES),
+            libc::sysconf(libc::_SC_PAGESIZE),
+        )
+    };
+    if pages <= 0 || size <= 0 {
+        return 0;
+    }
+    (pages as u64).saturating_mul(size as u64)
+}
+
+#[cfg(not(any(windows, unix)))]
 fn physical_memory() -> u64 {
     0
 }
@@ -397,9 +415,55 @@ fn resume(pid: u32) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+/// How often a native child on Unix checks that the service still lives.
+#[cfg(unix)]
+const PARENT_POLL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Unix: no memory cap yet (WI-ADR-024 records it), but a native child must
+/// not outlive the service. On Windows the job object kills it with the
+/// service; here a watchdog thread notices the service gone (this process
+/// re-parented) and kills this child's own process group (itself and its
+/// parser helpers) at once, so nothing is published after the ownership
+/// lock died with the service (INV-01). The service's pid comes from
+/// `WRONGINDEX_SERVICE_PID` (set by the worker, which also starts the child
+/// in a process group of its own), so a service that died
+/// before this ran is noticed too. Returns the cap: 0, none.
+#[cfg(unix)]
 pub fn confine_current_process() -> Result<usize, String> {
-    Err("process confinement is implemented for Windows only".into())
+    // SAFETY: getppid has no preconditions.
+    let parent = std::env::var("WRONGINDEX_SERVICE_PID")
+        .ok()
+        .and_then(|p| p.trim().parse::<libc::pid_t>().ok())
+        .unwrap_or_else(|| unsafe { libc::getppid() });
+    let gone = move || unsafe { libc::getppid() } != parent;
+    if gone() {
+        return Err(format!("the service (pid {parent}) is gone"));
+    }
+    std::thread::Builder::new()
+        .name("wrongindex-service-watch".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(PARENT_POLL);
+                if gone() {
+                    // SAFETY: signals to this process's own group (it leads
+                    // it: the worker starts it in a new one) and an
+                    // immediate exit; nothing here touches shared state.
+                    unsafe {
+                        if libc::getpgrp() == libc::getpid() {
+                            libc::kill(-libc::getpid(), libc::SIGKILL);
+                        }
+                        libc::_exit(70);
+                    }
+                }
+            }
+        })
+        .map_err(|e| format!("cannot start the service watch: {e}"))?;
+    Ok(0)
+}
+
+#[cfg(not(any(windows, unix)))]
+pub fn confine_current_process() -> Result<usize, String> {
+    Err("process confinement is implemented for Windows and Unix only".into())
 }
 
 #[cfg(not(windows))]
@@ -527,6 +591,9 @@ mod tests {
         let auto = cap_bytes(0);
         assert!(auto >= 2 << 30);
         assert!(auto as u64 >= physical_memory() / 4);
+        // Known on every platform the service runs on (0 meant one job slot).
+        #[cfg(any(windows, unix))]
+        assert!(physical_memory() > 1 << 30);
     }
 
     #[test]

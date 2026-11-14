@@ -9,6 +9,7 @@ use std::path::Path;
 
 /// Normalized form for comparing PATH entries: case-insensitive, without
 /// surrounding quotes or a trailing separator.
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 fn same_dir(entry: &str, dir: &str) -> bool {
     let norm = |s: &str| {
         s.trim()
@@ -24,6 +25,7 @@ fn same_dir(entry: &str, dir: &str) -> bool {
 /// gives back the value byte for byte: a trailing separator (Windows writes
 /// `...\WindowsApps;` on a new account) stays after the added entry, and
 /// removing drops only the matching entries (empty ones stay).
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only callers
 pub fn edit(value: &str, dir: &str, add: bool) -> Option<String> {
     let entries: Vec<&str> = value.split(';').collect();
     let present = entries.iter().any(|e| same_dir(e, dir));

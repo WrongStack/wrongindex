@@ -2,8 +2,6 @@
 //! refuse is replaced only on explicit request, with the old file kept as a
 //! backup; a newer schema is never replaced.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

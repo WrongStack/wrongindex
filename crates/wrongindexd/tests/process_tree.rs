@@ -5,8 +5,6 @@
 //! projects natively; its process tree is the service and its own confined
 //! child (`wrongindexd --native-rebuild`).
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

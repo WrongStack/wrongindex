@@ -102,10 +102,27 @@ pub fn spawn_detached_program(exe: &Path, args: &[&OsStr]) -> io::Result<Detache
         if let Some(d) = cwd {
             cmd.current_dir(d);
         }
+        // A session of its own: no controlling terminal, so closing the
+        // caller's terminal (SIGHUP) or Ctrl+C in it never reaches the service.
+        // SAFETY: setsid is async-signal-safe and touches no memory.
+        unsafe {
+            use std::os::unix::process::CommandExt;
+            cmd.pre_exec(|| {
+                if setsid() == -1 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         Ok(Detached {
             child: cmd.spawn()?,
         })
     }
+}
+
+#[cfg(not(windows))]
+unsafe extern "C" {
+    fn setsid() -> i32;
 }
 
 #[cfg(windows)]

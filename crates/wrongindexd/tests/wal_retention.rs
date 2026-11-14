@@ -9,8 +9,6 @@
 //!   reader's would - the WAL is copied into the index and cut to zero
 //!   bytes, the warning clears, and the reader sees the latest generation.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

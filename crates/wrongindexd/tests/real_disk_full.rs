@@ -12,6 +12,8 @@
 //! 4. The daemon refuses a job for that index before running anything,
 //!    with the volume's real free space (under 256 MiB) in the message.
 
+// Windows only: CI attaches a small NTFS volume; a Unix run needs a small
+// file system of its own (a loop device or tmpfs), not set up yet.
 #![cfg(windows)]
 
 use std::path::{Path, PathBuf};

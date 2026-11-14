@@ -8,8 +8,6 @@
 //! - a manual project is still refused until it is claimed;
 //! - concurrent claims of one project all succeed with one acquisition.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

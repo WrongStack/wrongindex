@@ -7,8 +7,6 @@
 //! start. Both endings are simulated with the debug-only
 //! `WRONGINDEX_DEBUG_EXIT_AFTER_READY` hook.
 
-#![cfg(windows)]
-
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};

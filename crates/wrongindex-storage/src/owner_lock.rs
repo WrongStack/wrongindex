@@ -219,6 +219,9 @@ mod tests {
         assert_eq!(read_owner(&dir).unwrap().epoch, 8);
     }
 
+    /// Windows only: the holder is a PowerShell process; a Unix holder
+    /// (`flock` in a child) is M8 work.
+    #[cfg(windows)]
     #[test]
     fn guard_held_by_another_process_is_detected() {
         // Hold the lock in a child process (PowerShell/sh keeps the handle open).
@@ -226,7 +229,6 @@ mod tests {
         let dir = tmp.path().join("idx");
         std::fs::create_dir_all(&dir).unwrap();
         let lock = dir.join(LOCK_FILE);
-        #[cfg(windows)]
         let mut child = std::process::Command::new("powershell")
             .args([
                 "-NoProfile",
@@ -238,7 +240,6 @@ mod tests {
             .stdout(std::process::Stdio::piped())
             .spawn()
             .unwrap();
-        #[cfg(windows)]
         {
             use std::io::BufRead;
             let mut line = String::new();

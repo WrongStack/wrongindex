@@ -944,6 +944,12 @@ async fn rebuild_in_child(
     }
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    // Unix: a process group of its own, which the child kills with its
+    // helpers if this service dies (`confine::confine_current_process`),
+    // never this service or whoever started it; and the pid it watches.
+    #[cfg(unix)]
+    cmd.process_group(0)
+        .env("WRONGINDEX_SERVICE_PID", std::process::id().to_string());
     let mut child = cmd.spawn().map_err(|e| {
         NativeOutcome::Failed(ErrorBody::new(
             ErrorCode::Internal,

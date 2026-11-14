@@ -190,11 +190,12 @@ fn rebuild_reply(
 }
 
 /// Confine a native child before it does any work; refuse to run unconfined
-/// on Windows (the daemon then reports the run as failed).
+/// (the daemon then reports the run as failed). On Unix that means a child
+/// whose service is already gone, or whose watch cannot start.
 fn confined_or_reply() -> Option<ExitCode> {
     match confine::confine_current_process() {
         Ok(_) => None,
-        Err(e) if cfg!(windows) => {
+        Err(e) => {
             let reply = serde_json::json!({
                 "ok": false,
                 "kind": "error",
@@ -203,7 +204,6 @@ fn confined_or_reply() -> Option<ExitCode> {
             println!("{reply}");
             Some(ExitCode::SUCCESS)
         }
-        Err(_) => None,
     }
 }
 

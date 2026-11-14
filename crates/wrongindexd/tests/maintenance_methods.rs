@@ -10,8 +10,6 @@
 //! * a refusal because the index is open names the programs that have it
 //!   open (here: this test program), for a checkpoint and for a restore.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

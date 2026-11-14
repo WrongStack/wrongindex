@@ -1,9 +1,7 @@
-//! M1 exit gate: a real named-pipe client connects, authenticates, admits a
-//! fixture job, and obtains a durable result — against the real daemon
-//! process, real registry SQLite, and a real WrongStack-produced index.db.
+//! M1 exit gate: a real IPC client (named pipe or Unix socket) connects,
+//! authenticates, admits a fixture job, and obtains a durable result —
+//! against the real daemon process, real registry SQLite, and a real WrongStack-produced index.db.
 //! Nothing here mocks the transport, registry, or inspector.
-
-#![cfg(windows)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -248,6 +246,51 @@ async fn vertical_slice_admits_and_completes_a_durable_check_job() {
     daemon.stop(&root).await;
 }
 
+/// `SIGTERM` (launchd, systemd, `kill`) stops the service as Ctrl+C does:
+/// it drains, retracts discovery, and leaves no socket or lock behind, so
+/// the next service starts at once.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn sigterm_stops_the_service_cleanly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("home");
+    let mut daemon = Daemon::start(&root).await;
+    let socket = Discovery::load(&data_root(&root)).unwrap().info.endpoint;
+    assert!(Path::new(&socket).exists());
+    let mut child = daemon.child.take().unwrap();
+    let killed = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let status = loop {
+        if let Some(s) = child.try_wait().unwrap() {
+            break s;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "SIGTERM did not stop the service"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(status.success(), "exit status {status}");
+    assert!(!data_root(&root).endpoint_file().exists(), "discovery kept");
+    assert!(!Path::new(&socket).exists(), "socket kept");
+    let lock = wrongindex_ipc::unix::lock_path(Path::new(&socket));
+    assert!(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&lock)
+            .unwrap()
+            .try_lock()
+            .is_ok(),
+        "lock still held"
+    );
+    // The next service takes the endpoint at once.
+    Daemon::start(&root).await.stop(&root).await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn concurrent_starts_elect_exactly_one_daemon() {
     let tmp = tempfile::tempdir().unwrap();
@@ -340,7 +383,7 @@ async fn transport_rejects_bad_credentials_and_bounds_frames() {
     );
 
     // Requests before authentication are treated as a failed auth frame.
-    let mut raw = wrongindex_ipc::win::connect(&endpoint, Duration::from_secs(5))
+    let mut raw = wrongindex_ipc::client::connect_raw(&endpoint, Duration::from_secs(5))
         .await
         .unwrap();
     write_frame(
@@ -359,7 +402,7 @@ async fn transport_rejects_bad_credentials_and_bounds_frames() {
     );
 
     // Authenticated: malformed JSON is answered and the connection survives.
-    let mut raw = wrongindex_ipc::win::connect(&endpoint, Duration::from_secs(5))
+    let mut raw = wrongindex_ipc::client::connect_raw(&endpoint, Duration::from_secs(5))
         .await
         .unwrap();
     write_frame(
@@ -432,7 +475,7 @@ async fn transport_rejects_bad_credentials_and_bounds_frames() {
     );
 
     // Silent unauthenticated client is dropped after the auth deadline.
-    let mut idle = wrongindex_ipc::win::connect(&endpoint, Duration::from_secs(5))
+    let mut idle = wrongindex_ipc::client::connect_raw(&endpoint, Duration::from_secs(5))
         .await
         .unwrap();
     let started = Instant::now();
@@ -469,8 +512,12 @@ async fn registration_identity_rules_over_ipc() {
         )
         .await
         .unwrap();
-    // Alias of the same checkout (different case / trailing separator) is the same project.
+    // Alias of the same checkout (different case on Windows, where paths
+    // ignore it; `.` and a trailing separator everywhere) is the same project.
+    #[cfg(windows)]
     let alias = format!("{}\\", a.display().to_string().to_uppercase());
+    #[cfg(not(windows))]
+    let alias = format!("{}/./", a.display());
     let again: RegisterProjectResult = c
         .call(
             method::PROJECT_REGISTER,

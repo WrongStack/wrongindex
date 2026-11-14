@@ -3,8 +3,6 @@
 //! an explicit job that succeeds closes the circuit so pending edits run at
 //! once. Native backend: no engine needed.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
