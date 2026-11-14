@@ -73,16 +73,21 @@ fn side(db: &Path, suffix: &str) -> PathBuf {
 /// not remove them (the service's own checks, `wrongindex inspect`). On
 /// Windows every connection keeps the `-shm` open, so opening it without
 /// sharing tells the two apart: that fails while anyone has it open. (A
-/// SQLite connection opening it in that instant retries.) Elsewhere the
-/// files' presence alone counts.
+/// SQLite connection opening it in that instant retries.) On Unix the
+/// processes holding it are looked up instead; where that cannot be told,
+/// the files' presence alone counts.
 pub fn in_use(db: &Path) -> Option<PathBuf> {
     let (wal, shm) = (side(db, "-wal"), side(db, "-shm"));
     if std::fs::metadata(&wal).is_ok_and(|m| m.len() > 0) {
         return Some(wal);
     }
-    let held = shm.exists() && shm_held(&shm);
-    if held || (!cfg!(windows) && wal.exists()) {
-        return Some(if held { shm } else { wal });
+    if shm.exists() && shm_held(&shm) {
+        return Some(shm);
+    }
+    // Windows: an empty log without a held `-shm` is a leftover. Unix asks
+    // about the log as about the `-shm`.
+    if !cfg!(windows) && wal.exists() && shm_held(&wal) {
+        return Some(wal);
     }
     None
 }
@@ -100,9 +105,12 @@ fn shm_held(shm: &Path) -> bool {
     }
 }
 
+/// Unix has no sharing modes: ask which processes have the `-shm` open
+/// ([`crate::holders`]), this one included as on Windows. Where that cannot
+/// be told, its presence counts.
 #[cfg(not(windows))]
-fn shm_held(_: &Path) -> bool {
-    true
+fn shm_held(shm: &Path) -> bool {
+    crate::holders::anyone_has_open(shm).unwrap_or(true)
 }
 
 /// Remove the empty `-wal` and the `-shm` that closed connections left next
@@ -117,6 +125,16 @@ pub fn remove_leftovers(db: &Path) -> std::io::Result<()> {
 }
 
 fn remove_if_present(p: &Path) -> std::io::Result<()> {
+    // Windows refuses to delete a file someone has open. Unix unlinks it,
+    // and a `-shm` unlinked under a live connection lets the next one make
+    // a second, which can corrupt the database: ask again right before.
+    #[cfg(not(windows))]
+    if p.exists() && shm_held(p) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("{} is open", p.display()),
+        ));
+    }
     match std::fs::remove_file(p) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
         _ => Ok(()),
@@ -130,7 +148,7 @@ mod tests {
 
     /// A read-only connection leaves an empty `-wal` and a `-shm` behind; they
     /// stop nothing once it is closed, while an open connection does.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     #[test]
     fn leftovers_of_closed_readers_do_not_count_as_in_use() {
         let dir = tempfile::tempdir().unwrap();
