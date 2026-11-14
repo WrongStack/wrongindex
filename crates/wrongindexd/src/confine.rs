@@ -809,13 +809,13 @@ mod unix_tests {
     /// runs on, and the peak is what it used.
     #[tokio::test]
     async fn a_tree_over_its_cap_is_stopped() {
-        // bash keeps the 48 MB string in memory, then waits.
+        // bash keeps a 48 MB string in memory while it waits. `x` is used
+        // after the wait: bash runs a `-c` script's last command with `exec`,
+        // which would replace bash (and free the string) with `sleep`; the
+        // first version of this test saw only the spike while it was built.
         let hog = |cap: usize| {
             let child = tokio::process::Command::new("bash")
-                .args([
-                    "-c",
-                    r"x=$(head -c 48000000 /dev/zero | tr '\0' a); sleep 60",
-                ])
+                .args(["-c", "printf -v x '%*s' 48000000 ''; sleep 60; echo ${#x}"])
                 .process_group(0)
                 .kill_on_drop(true)
                 .spawn()
