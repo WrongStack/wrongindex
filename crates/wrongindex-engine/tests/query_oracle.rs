@@ -28,6 +28,47 @@ fn is_volatile(key: &str) -> bool {
     )
 }
 
+/// `got` equals `want`, except that off Windows a `score` may differ in its
+/// last bits: scores are SQLite's `bm25()`, whose `log()` is the platform's
+/// libm, and Apple's differs from the Windows one the oracle was recorded
+/// with by an ulp or two (glibc's does not). Order and every other field
+/// still match exactly, and on Windows so does the score.
+fn agrees(got: &Value, want: &Value, key: &str) -> bool {
+    match (got, want) {
+        (Value::Number(a), Value::Number(b)) if key == "score" && !cfg!(windows) => {
+            let (a, b) = (a.as_f64().unwrap(), b.as_f64().unwrap());
+            a == b || (a - b).abs() <= 8.0 * f64::EPSILON * a.abs().max(b.abs())
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| agrees(x, y, key))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(k, x)| b.get(k).is_some_and(|y| agrees(x, y, k)))
+        }
+        _ => got == want,
+    }
+}
+
+#[test]
+fn scores_agree_within_ulps_off_windows_only() {
+    let want = json!({"results": [{"score": 2.672547483196222, "name": "after"}]});
+    let near = json!({"results": [{"score": 2.6725474831962215, "name": "after"}]});
+    let far = json!({"results": [{"score": 2.6725474832, "name": "after"}]});
+    let renamed = json!({"results": [{"score": 2.672547483196222, "name": "other"}]});
+    assert!(agrees(&want, &want, ""));
+    assert_eq!(agrees(&near, &want, ""), !cfg!(windows));
+    assert!(!agrees(&far, &want, ""));
+    assert!(!agrees(&renamed, &want, ""));
+    // Only a field named `score` is compared loosely.
+    assert!(!agrees(
+        &json!({"rank": 2.6725474831962215}),
+        &json!({"rank": 2.672547483196222}),
+        ""
+    ));
+}
+
 /// Port of `normalize` in `scripts/oracle/build-fixtures.ts`.
 fn normalize(v: &Value, root: &str, index: &str, key: &str) -> Value {
     if is_volatile(key) && (v.is_number() || v.is_string()) {
@@ -132,7 +173,7 @@ fn native_queries_match_recorded_wrongstack_results() {
             args["projectRoot"] = json!(root);
             match (reader.call(&name, &args), op.get("result"), op.get("error")) {
                 (Err(QueryError::Unsupported(_)), _, _) => t.not_run += 1,
-                (Ok(v), Some(want), _) if normalize(&v, &root, &index_s, "") == *want => {
+                (Ok(v), Some(want), _) if agrees(&normalize(&v, &root, &index_s, ""), want, "") => {
                     t.pass += 1
                 }
                 (got, want_ok, want_err) => {

@@ -530,6 +530,10 @@ fn toolchain_serial() -> std::sync::MutexGuard<'static, ()> {
 
 /// Go through `go run` of WrongStack's own `go/ast` program.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "the oracle was recorded by WrongStack on Windows, so its stored paths use backslashes; a POSIX oracle is M8 work"
+)]
 fn go_basic_matches_the_wrongstack_oracle() {
     if wrongindex_engine::parse::go::go().is_none() {
         eprintln!("NOT RUN: no Go toolchain");

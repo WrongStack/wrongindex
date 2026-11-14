@@ -20,7 +20,7 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | Check | Result |
 |---|---|
 | Linux `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
-| Linux `cargo test --workspace --locked --no-fail-fast` | PASS: 257 passed, 0 failed, 27 ignored (was 236 passed, 10 failed, 20 ignored) |
+| Linux `cargo test --workspace --locked --no-fail-fast` | PASS: 257 passed, 0 failed, 27 ignored (was 236 passed, 10 failed, 20 ignored); `go_basic` passed only because WSL has no Go (it skips itself) and is ignored on Unix since |
 | Linux `vertical_slice` + `single_instance`, five consecutive runs | PASS 5/5 (13 tests each run) |
 | Linux `detached_start` (CLI `daemon start` through a pipe, then `daemon stop`) | PASS, ran against the built daemon (no NOT RUN line) |
 | Windows fmt / clippy / `cargo test --workspace --locked` | PASS (54 test binaries, 0 failed) |
@@ -28,8 +28,9 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | macOS | NOT RUN locally; only the `portability.yml` job measures it |
 
 **Open, by status.**
-- UNSUPPORTED on Unix: the seven oracle parity tests (`native_parity.rs`), ignored with the reason: the oracle was recorded by WrongStack on Windows and its stored paths use backslashes. A POSIX oracle needs a WrongStack run on Linux.
+- UNSUPPORTED on Unix: the eight oracle parity tests (`native_parity.rs`; `go_basic` fails only where Go is installed, as on the CI runner), ignored with the reason: the oracle was recorded by WrongStack on Windows and its stored paths use backslashes. A POSIX oracle needs a WrongStack run on Linux.
 - NOT RUN on Unix: the other 28 daemon integration files (still `#![cfg(windows)]`, to be opened one at a time), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end with a WrongStack client, macOS anything.
+- Recorded difference, macOS only (first portability run, `a51fb0a`): search `score` values differ from the oracle by one or two ulps (`2.672547483196222` recorded, `2.6725474831962215` on macOS). They are SQLite's `bm25()`, whose `log()` is the platform libm; Linux matches exactly. `query_oracle.rs` accepts at most 8 ulps on the `score` field off Windows only; order and every other field stay exact, and Windows stays exact. Fixtures unchanged.
 - Known limits recorded in WI-ADR-024: `/tmp` fallback squatting and cleaning, `flock` on network file systems, and case-insensitive macOS volumes (two case spellings of one data root give two services).
 
 ## WI-RELEASE-030 — 0.3.0 (2026-11-14)
