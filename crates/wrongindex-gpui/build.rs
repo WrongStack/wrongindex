@@ -2,5 +2,5 @@
 mod windows_resource;
 
 fn main() {
-    windows_resource::compile("wrongindex-gpui.exe");
+    windows_resource::compile_with_icon("wrongindex-gpui.exe", Some("icons/icon.ico"));
 }

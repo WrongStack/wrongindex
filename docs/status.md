@@ -1,8 +1,36 @@
 # Implementation status
 
-Last updated: 2026-11-13. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
+Last updated: 2026-11-14. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
+
+## WI-DESKTOP-01 — one desktop window: GPUI replaces the Tauri desktop (2026-11-14)
+
+**Decision.** On 2026-11-14 the owner asked for one GUI instead of two and chose the GPUI window ("GPUI (native)") as the one to keep and develop, settings included; the Tauri/WebView desktop is retired (WI-ADR-023). Branch `retire-tauri-desktop`.
+
+**What changed.**
+- `crates/wrongindex-desktop` is deleted, with the `tauri`, `tauri-build` and `windows` workspace dependencies; `Cargo.lock` only loses packages (203 entries, Tauri/wry/WebView2 among them; no package or version added).
+- `crates/wrongindex-gpui` carries every Tauri surface except the tray (see WI-ADR-023): `logic.rs` (request rules and presentation, ported with the bridge's tests), `system.rs` (sign-in entry through `windows-sys`, updates and diagnostics through the sibling CLI, local times, window preferences in `<data root>/desktop/preferences.json`), `service.rs` (concurrent actor, event subscription, one outcome per command), `input.rs` (text field adapted from GPUI's example), `ui/` (one module per view). `--start-service` replaces the Tauri program's sign-in mode. The exe embeds the product icon.
+- Installer: Tauri's NSIS bundler now runs from `crates/wrongindex-gpui` (`cargo tauri bundle`, `mainBinaryName: wrongindex-gpui`, same product name and identifier, `webviewInstallMode: skip`). Hooks remove the retired executable and preview shortcut and move a `Run\WrongIndex` entry that pointed at `wrongindex-desktop.exe`. `self-update` and `install.ps1` reopen `wrongindex-gpui.exe`.
+- Release tooling: three shipped programs in manifest, PE metadata, signing preparation and smoke scripts; `smoke-gui.mjs` and `smoke-reconnect.mjs` (WebView2/CDP only) deleted; certify gate G18 retired with its reason; manual gate M06 (rendered window) added.
+
+**Evidence** (private `CARGO_TARGET_DIR` under `.temp_files/retire-tauri/`):
+
+| Check | Result |
+|---|---|
+| Packaging spike: `cargo tauri bundle` on a crate without a `tauri` dependency | PASS: NSIS installer built; the bundler only warns that the main binary has no bundle-type marker. The generated script deletes the previous `MainBinaryName` and retargets the `WrongIndex` shortcuts |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
+| `cargo test --workspace --locked` | PASS (54 test binaries, 0 failed) |
+| `cargo test -p wrongindex-gpui -- --ignored` with a debug `WRONGINDEX_TEST_DAEMON` (7 actor tests: register/index, live Activity events, search and pinned watching after the client closes; backup, refused path-like restore, restore and remove without touching sources; offline; settings with a stale revision refused; start and already-running; sign-in start; drain) | PASS |
+| `node scripts/release/certify.test.mjs`, `scripts/release/signpath/check.ps1`, license inventory without Tauri crates | PASS |
+| `pwsh scripts/release/package-windows.ps1` (release build, `cargo tauri bundle`, manifest, PE metadata) | PASS: `WrongIndex_0.2.0_x64-setup.exe` (local, unsigned, sha256 `670963eb…`, not installed); three shipped programs; the shipped `wrongindex-gpui.exe` is byte-identical to the build. Under Windows PowerShell 5.1 the script's `node -e` version probe fails on quoting; run it with `pwsh` as documented |
+| GPUI actor tests against the shipped release `wrongindexd.exe` (as `release.yml`, drain test skipped) | PASS (6/6) |
+| Upgrade migration, read-only on the owner's machine (`reg query`) | PASS as input: the 0.2.0 uninstall entry records `MainBinaryName` `wrongindex-desktop.exe` (so the template deletes it and retargets `WrongIndex.lnk`), and `Run\WrongIndex` is exactly `"<InstallLocation>\wrongindex-desktop.exe" --start-service`, the value the hook rewrites. The hooks also close a running 0.2.0 window (Restart Manager, as the template does for its main program) and open the new one: an update started from the old window's Settings is run by the old CLI, which spares that window and is moved aside. Installer rebuilt with these hooks (NSIS compiles). Running the upgrade: NOT RUN |
+| The window creating `<data root>/desktop/` before the service ever ran | PASS: a fresh root holding only `desktop/preferences.json` is accepted by `daemon start` |
+| Rendered window on a disposable data root and `WRONGSTACK_HOME` (debug build): every tab, project detail, Check index outcome and live Integrity update, search through the text field and Enter, native Remove confirmation | PASS for what was looked at. A stray Enter from another window confirmed one Remove of a demo project while the dialog was open; Cancel is now the first and default button (Enter test after the change: NOT RUN, to stop driving the owner's mouse and keyboard) |
+| Installed upgrade from 0.2.0 (shortcut, Run entry, retired files), `smoke-installed*`, `smoke-uninstall-running` | NOT RUN (they install software; not on the owner's PC) |
+| Manual gates M01/M06 (all screens and actions, keyboard, accessibility, DPI) | NOT RUN |
 
 ## WI-RELEASE-020 — unsigned 0.2.0 by the owner's decision (2026-11-13)
 

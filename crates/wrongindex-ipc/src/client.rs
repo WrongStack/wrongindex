@@ -1,4 +1,4 @@
-//! Rust IPC client shared by the CLI and the desktop bridge.
+//! Rust IPC client shared by the CLI and the desktop window.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;

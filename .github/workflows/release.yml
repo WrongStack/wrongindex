@@ -63,6 +63,7 @@ jobs:
             diskpart /s $detach
           }
       - name: Install the Tauri CLI
+        # Its NSIS bundler packs the installer (no Tauri code ships).
         # Outside the repository so the pinned workspace toolchain does not apply.
         working-directory: ${{ runner.temp }}
         run: cargo install tauri-cli --version "=2.12.4" --locked
@@ -74,14 +75,14 @@ jobs:
         run: |
           $env:WRONGINDEX_TEST_DAEMON = (Resolve-Path 'target/release/bundle/shipped/wrongindexd.exe').Path
           # The drain regression needs the debug-only native stall hook and
-          # runs in CI with a debug daemon. All four other actor cases must
-          # also pass against the actual shipped release service.
+          # runs in CI with a debug daemon. All other actor cases must also
+          # pass against the actual shipped release service.
           cargo test -p wrongindex-gpui --locked -- --ignored --skip debug_start_waits_for_draining_service_and_preserves_its_job
           if ($LASTEXITCODE) { throw 'Native client actor acceptance failed' }
       - name: Attest build provenance
-        # The binaries as the installer ships them (the bundler patches the
-        # desktop's copy; see scripts/release/manifest.mjs), so an installed
-        # file verifies with `gh attestation verify`.
+        # The binaries as the installer ships them (see
+        # scripts/release/manifest.mjs), so an installed file verifies with
+        # `gh attestation verify`.
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
         with:
           subject-path: |

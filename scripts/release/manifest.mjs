@@ -2,7 +2,7 @@
 //
 //   node scripts/release/manifest.mjs licenses --out <file>
 //       THIRD-PARTY-LICENSES.txt for what the shipped binaries contain: every
-//       crate the service, CLI and desktop link (normal dependencies for
+//       crate the service, CLI and desktop (wrongindex-gpui) link (normal dependencies for
 //       x86_64-pc-windows-msvc; build scripts, proc macros and dev
 //       dependencies are not shipped), with the license texts found in each
 //       crate's source, plus the bundled tree-sitter assets.
@@ -14,8 +14,10 @@
 //       assets, and the third-party license summary.
 //
 //       A binary's hash is the one of the copy the installer ships, unpacked with
-//       7-Zip; where the bundler patched it (the desktop's bundle type marker),
-//       `builtSha256` and `bundlerPatch` say what was built and what changed.
+//       7-Zip; where the bundler patched it (Tauri's bundle type marker, which
+//       only a Tauri app carries; the GPUI desktop has none, so its copy is
+//       expected byte-identical), `builtSha256` and `bundlerPatch` say what
+//       was built and what changed.
 //       Any other difference, or a binary missing from the installer, fails.
 //       `--shipped-out` keeps those shipped copies (the release attests them).
 //
@@ -62,8 +64,8 @@ const authenticode = (p) => {
   }
   return null;
 };
-const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-desktop', 'wrongindex-gpui'];
-const BINARIES = ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe', 'wrongindex-gpui.exe'];
+const SHIPPED = ['wrongindexd', 'wrongindex-cli', 'wrongindex-gpui'];
+const BINARIES = ['wrongindexd.exe', 'wrongindex.exe', 'wrongindex-gpui.exe'];
 
 // The installer's files, unpacked by 7-Zip (it reads NSIS installers) into a
 // new temporary directory the caller removes.
@@ -99,9 +101,10 @@ function findFile(dir, name) {
   return null;
 }
 
-// Tauri's bundler writes the bundle type into the desktop binary it packs
-// (`__TAURI_BUNDLE_TYPE_VAR_UNK` becomes `..._NSS` for NSIS), so the shipped
-// copy differs from the build in those three bytes. What the patch was, when
+// Tauri's bundler writes the bundle type into a Tauri app binary it packs
+// (`__TAURI_BUNDLE_TYPE_VAR_UNK` becomes `..._NSS` for NSIS), so such a
+// shipped copy differs from the build in those three bytes. The GPUI desktop
+// carries no marker (the bundler only warns), so none is expected now. What the patch was, when
 // that is the only difference; null otherwise.
 const MARKER = Buffer.from('__TAURI_BUNDLE_TYPE_VAR_');
 function patchOnly(built, shipped) {
@@ -217,7 +220,7 @@ if (mode === 'licenses') {
     '',
     'WrongIndex itself: MIT License, Copyright (c) 2026 ECOSTACK TECHNOLOGY OÜ (see LICENSE).',
     '',
-    `Rust crates linked into wrongindexd, wrongindex, wrongindex-desktop and wrongindex-gpui: ${crates.length}.`,
+    `Rust crates linked into wrongindexd, wrongindex and wrongindex-gpui: ${crates.length}.`,
     '',
     `Bundled JavaScript and WebAssembly (the tree-sitter route, from WrongStack ${ts.wrongstackCommit}):`,
     ...assets.components.map((c) => `  ${c.component} ${c.version} (${c.license})`),
@@ -277,7 +280,7 @@ if (mode === 'licenses') {
       const p = path.join(bundle, n);
       installers[n] = { sha256: sha256(p), bytes: fs.statSync(p).size, authenticode: authenticode(p) };
       // Each binary as the installer ships it, which is what a user can
-      // check: the bundler patches the desktop's copy (see `shipped`).
+      // check: a bundler patch would show here (see `patchOnly`).
       const dir = extract(p);
       try {
         for (const [name, b] of Object.entries(binaries)) {

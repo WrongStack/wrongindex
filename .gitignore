@@ -6,10 +6,15 @@ node_modules/
 .wrongindex-test-*/
 
 .dfmt/
-/crates/wrongindex-desktop/gen/
-/crates/wrongindex-desktop/binaries/
+/crates/wrongindex-gpui/binaries/
 
 # Per-user agent tooling (never committed)
 /.claude/
 /.dfmt/
 /.playwright-mcp/
+.temp_files/
+
+.wrongstack/
+!/.wrongstack/
+/.wrongstack/*
+!/.wrongstack/project.json
