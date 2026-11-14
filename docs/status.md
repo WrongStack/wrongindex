@@ -4,6 +4,27 @@ Last updated: 2026-11-14. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-02 — Linux/macOS: the daemon's integration tests, and what they found (2026-11-14)
+
+Of the 28 daemon integration files still built for Windows only, 27 now run on Unix; `real_disk_full.rs` stays Windows-only (CI attaches a small NTFS volume; a Unix run needs a small file system of its own). Measured one file at a time on Linux before any fix: 19 passed as they were, 7 failed, 2 did not compile. The failures were real gaps, not test spelling:
+
+- **A second writer beside WrongStack (INV-01).** Ownership is refused while another program has the index open, but on Unix the lookup of who has it open returned nobody: the service took over an index WrongStack's own index server had open. Linux now reads `/proc/<pid>/fd` (device and inode; no lock taken, no file opened), macOS runs the system `lsof`. The same lookup tells a live `-shm`/`-wal` from the leftovers of closed readers, which on Unix had counted as in use forever (restores and checkpoints refused); and since Unix unlinks a file in use, leftovers are removed only after asking again just before.
+- **A native child outliving the service (INV-01).** Windows kills it with the job object; on Unix it ran on and would publish `index.db` after the ownership lock died with the service. The child now starts in a process group of its own with the service's pid, and a watchdog thread kills that group within 100 ms of the service being gone. Proven both ways with `fair_queue.rs`: watchdog off, "children outlived the daemon" (the child still stalled, waiting to publish); on, the test passes.
+- **One job at a time.** Physical memory read as 0 on Unix, which left the 2 GiB floor as the budget: one slot, so a slow project held up every other. Now `sysconf`. (`fair_queue.rs` sets 512 MiB caps so it tests fairness, not this host's memory: an 8 GB host gets one slot on any platform.)
+- **Disk-full protection off.** Free space was unknown on Unix, so nothing was ever held for a full volume; the volume was always `/`. Now `statvfs` `f_bavail` and the mount point by device. `libc = "=0.2.191"` (already in `Cargo.lock`) is a Unix-only dependency of `wrongindexd`.
+- Test-only: `many_clients.rs` connects through `connect_raw`; `query_diff.rs` joins paths with the platform separator; `disk_pressure.rs` expects a mount point on Unix.
+
+| Check | Result |
+|---|---|
+| Linux `cargo fmt --check`, `clippy --workspace --all-targets -D warnings` | PASS |
+| Linux `cargo test --workspace --locked --no-fail-fast` | PASS: 305 passed, 0 failed, 36 ignored |
+| Linux `cargo test -p wrongindexd --tests`, five consecutive runs | PASS 5/5 (34 test binaries, 103 tests each run; 18:33-18:46, no gap) |
+| Windows fmt / clippy / `cargo test --workspace --locked` | PASS (54 test binaries) |
+| Windows `cargo test -p wrongindexd --tests`, five consecutive runs | PASS 5/5 (34 test binaries each run; 18:54-19:14, no gap) |
+| macOS | only the portability CI job (this push) |
+
+Open on Unix: no memory cap is enforced (Windows: job object); the compatibility engine's processes are not tied to the service's life; a canceled or timed-out run's parser helpers are not killed with it (they lose their pipes); `real_disk_full.rs`; `process_tree.rs` runs with a PATH naming no directory, which shows nothing about a system PATH.
+
 ## WI-M8-01 — Linux/macOS slice 1: Unix transport and a portable daemon (2026-11-14)
 
 **Decision.** On 2026-11-14 the owner asked to start Linux/macOS after 0.3.0 ("önce sürümü çıkaralım sonra linux/macos", then "devam et, başla"). Slice 1 is the transport and the daemon core; watching backends, packaging, user services and signing are later slices. **Linux and macOS are not supported platforms by this work**: no package, no user service, no installed-artifact evidence (M8 gates in the delivery backlog). Branch `ci/unix`, draft PR #7; workflow `portability.yml` measures Linux and macOS and gates nothing.
@@ -30,7 +51,7 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 
 **Open, by status.**
 - UNSUPPORTED on Unix: the eight oracle parity tests (`native_parity.rs`; `go_basic` fails only where Go is installed, as on the CI runner), ignored with the reason: the oracle was recorded by WrongStack on Windows and its stored paths use backslashes. A POSIX oracle needs a WrongStack run on Linux.
-- NOT RUN on Unix: the other 28 daemon integration files (still `#![cfg(windows)]`, to be opened one at a time), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end (implemented, never run on Unix), refusal of a peer running as another uid (implemented, not exercised), anything on macOS beyond the CI job.
+- NOT RUN on Unix at that point: the other 28 daemon integration files (opened in WI-M8-02), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end (implemented, never run on Unix), refusal of a peer running as another uid (implemented, not exercised), anything on macOS beyond the CI job.
 - Recorded difference, macOS only (first portability run, `a51fb0a`): search `score` values differ from the oracle by one or two ulps (`2.672547483196222` recorded, `2.6725474831962215` on macOS). They are SQLite's `bm25()`, whose `log()` is the platform libm; Linux matches exactly. `query_oracle.rs` accepts at most 8 ulps on the `score` field off Windows only; order and every other field stay exact, and Windows stays exact. Fixtures unchanged.
 - Known limits recorded in WI-ADR-024: `/tmp` fallback squatting and cleaning, `flock` on network file systems, and case-insensitive macOS volumes (two case spellings of one data root give two services).
 

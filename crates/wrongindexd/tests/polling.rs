@@ -21,8 +21,6 @@
 //! The first two use the debug hook `WRONGINDEX_DEBUG_FORCE_POLLING`, as if
 //! the file system had refused.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

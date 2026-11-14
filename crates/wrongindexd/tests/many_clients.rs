@@ -8,8 +8,6 @@
 //! Slow queries are simulated with the debug-only
 //! `WRONGINDEX_DEBUG_SLOW_QUERY_MS` hook.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -157,7 +155,7 @@ async fn searches_beyond_the_query_slots_wait_for_one() {
 /// opened, as a client on a loaded machine does.
 async fn late_handshake(home: &Path, after: Duration) -> Result<AuthResponse, String> {
     let d = Discovery::load(&DataRoot::resolve(Some(home)).unwrap()).unwrap();
-    let mut pipe = wrongindex_ipc::win::connect(&d.info.endpoint, Duration::from_secs(5))
+    let mut pipe = wrongindex_ipc::client::connect_raw(&d.info.endpoint, Duration::from_secs(5))
         .await
         .map_err(|e| format!("open: {e}"))?;
     tokio::time::sleep(after).await;

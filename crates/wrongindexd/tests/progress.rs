@@ -2,8 +2,6 @@
 //! events, `progress` in the project status) and names the files it could
 //! not read (over the 5 MiB limit) in its result.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

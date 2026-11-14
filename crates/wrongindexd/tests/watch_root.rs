@@ -2,8 +2,6 @@
 //! never empties the index, and watching resumes once the root is back.
 //! Native backend: no engine needed.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

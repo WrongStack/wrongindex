@@ -6,8 +6,6 @@
 //! * the periodic reconciliation finds an edit whose watch events were lost,
 //!   and publishes nothing while nothing changed.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};

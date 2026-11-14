@@ -12,8 +12,6 @@
 //!   WRONGINDEX_TEST_ENGINE=C:/wrongindex-oracle/wrongstack-<sha> \
 //!     cargo test -p wrongindexd --test query_diff -- --ignored
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -164,7 +162,11 @@ fn slash_tokens(s: &str, label: &str) -> String {
 fn absolutize(v: &Value, root: &Path) -> Value {
     match v {
         Value::String(s) => match s.strip_prefix("<root>/") {
-            Some(rel) => json!(root.join(rel.replace('/', "\\")).display().to_string()),
+            Some(rel) => json!(
+                root.join(rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+                    .display()
+                    .to_string()
+            ),
             None => v.clone(),
         },
         Value::Array(a) => Value::Array(a.iter().map(|x| absolutize(x, root)).collect()),
@@ -380,8 +382,17 @@ fn normalization_matches_the_fixture_builder() {
             "nested": [{"mtimeMs": "<volatile>", "path": "<root>/b.ts"}],
         })
     );
+    #[cfg(windows)]
     assert_eq!(
         absolutize(&json!({"f": "<root>/src/a.ts", "q": "x"}), Path::new(root)),
         json!({"f": r"C:\w\basic-ts\project\src\a.ts", "q": "x"})
+    );
+    #[cfg(not(windows))]
+    assert_eq!(
+        absolutize(
+            &json!({"f": "<root>/src/a.ts", "q": "x"}),
+            Path::new("/w/basic-ts/project")
+        ),
+        json!({"f": "/w/basic-ts/project/src/a.ts", "q": "x"})
     );
 }

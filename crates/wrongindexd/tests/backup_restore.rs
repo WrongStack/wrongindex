@@ -2,8 +2,6 @@
 //! each claim of an existing index takes a consistent backup first, and a
 //! `restore` job brings a backup back (keeping the replaced file).
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
