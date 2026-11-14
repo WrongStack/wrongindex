@@ -4,7 +4,7 @@ Import-Module (Join-Path $PSScriptRoot 'Signing.psm1') -Force
 $state = Get-Content (Join-Path $Courier 'state.json') -Raw | ConvertFrom-Json
 $result = @{ nonce = $state.nonce; status = 'RUNNING'; startedAt = [DateTimeOffset]::UtcNow.ToString('o') }
 try {
-  Set-Location (Join-Path $Repo 'crates/wrongindex-desktop')
+  Set-Location (Join-Path $Repo 'crates/wrongindex-gpui')
   cargo tauri bundle --config tauri.bundle.json --config $Config --bundles nsis --no-binary-patching *> (Join-Path $Courier 'bundle.log')
   $result.exitCode = $LASTEXITCODE
   if ($LASTEXITCODE) { throw 'Signed NSIS bundling failed' }

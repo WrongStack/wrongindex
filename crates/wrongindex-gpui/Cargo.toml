@@ -1,6 +1,6 @@
 [package]
 name = "wrongindex-gpui"
-description = "Native GPUI desktop client for WrongIndex"
+description = "WrongIndex desktop (native GPUI window over the shared IPC client)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,12 +11,14 @@ license.workspace = true
 wrongindex-contracts.workspace = true
 wrongindex-ipc.workspace = true
 wrongindex-storage.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 clap.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 gpui = { workspace = true, features = ["windows-manifest"] }
+windows-sys.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 tauri-winres.workspace = true

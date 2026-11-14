@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Windows PE metadata acceptance requires Windows' }
 if ($Result -and (Test-Path -LiteralPath $Result)) { throw 'Preserve previous metadata evidence' }
-$programs = foreach ($name in @('wrongindex.exe', 'wrongindexd.exe', 'wrongindex-gpui.exe', 'wrongindex-desktop.exe')) {
+$programs = foreach ($name in @('wrongindex.exe', 'wrongindexd.exe', 'wrongindex-gpui.exe')) {
   $file = Join-Path $Directory $name
   if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
     @{ name = $name; status = 'FAIL'; reason = 'Missing program' }

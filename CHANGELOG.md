@@ -5,6 +5,18 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Changed
+
+- One desktop window instead of two: the native GPUI window (`wrongindex-gpui.exe`) is now the WrongIndex app, and the Tauri/WebView desktop (`wrongindex-desktop.exe`) is retired (WI-ADR-023). The installer no longer needs or installs WebView2.
+- The GPUI window now does everything the retired desktop did: banners for a damaged index, a large write-ahead log and low disk space; project detail with claim/release, Index now, check, reconcile, fold in the log, rebuild and remove (each destructive step confirmed in a native dialog whose default button is Cancel), watch policy, engine, watch mode, files and errors with retry, backups with back-up-now and restore, the search inspector, jobs with cancel and ownership history; every WrongStack index on this machine; live service events; diagnostics preview and export; and Settings with sign-in start, updates and every service setting (applied against the settings revision).
+- Upgrading from 0.2.0 moves everything over by itself: the `WrongIndex` Start menu shortcut opens the new window, the "WrongIndex Native (Preview)" shortcut and `wrongindex-desktop.exe` are removed, and "Start the index service when I sign in" now runs `wrongindex-gpui.exe --start-service` (still no window at sign-in).
+
+### Removed
+
+- The tray icon. Closing the window still never stops the service; pause and resume are in Settings.
+
 ## 0.2.0
 
 Released 2026-11-13 as an unsigned preview, by the owner's decision; what is and is not verified is in `docs/status.md`.

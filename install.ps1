@@ -1,8 +1,8 @@
 # WrongIndex installer for Windows: downloads a release from GitHub, verifies
 # it, installs it for the current user (no administrator rights), and puts the
 # `wrongindex` CLI on the user's PATH. Running it again updates or repairs:
-# the running service and an open desktop window are stopped first and started
-# again afterwards, on the new version.
+# the running service and an open WrongIndex window are stopped first and
+# started again afterwards, on the new version.
 #
 #   irm https://raw.githubusercontent.com/WrongStack/wrongindex/main/install.ps1 | iex
 #
@@ -158,14 +158,17 @@
     # An update stops what runs from the installation first (its files are
     # locked while it runs) and starts it again afterwards, on the new
     # version: the service of this user's data root if it was running (as the
-    # installer itself and `self-update` do), the desktop if it was open.
+    # installer itself and `self-update` do), the window if it was open (up
+    # to 0.2.0 the window was wrongindex-desktop.exe; now wrongindex-gpui.exe).
     $restartService = $false
     $reopenDesktop = $false
+    $openWindow = $null
     $oldCli = if ($InstallDir) { Join-Path $InstallDir 'wrongindex.exe' } else { $null }
     if ($oldCli -and (Test-Path $oldCli)) {
       $svc = Get-WiService $oldCli
       $restartService = [bool]$svc
-      $reopenDesktop = @(Get-RunningFrom $InstallDir | Where-Object { $_.Name -eq 'wrongindex-desktop.exe' }).Count -gt 0
+      $openWindow = Get-RunningFrom $InstallDir | Where-Object { $_.Name -in 'wrongindex-gpui.exe', 'wrongindex-desktop.exe' } | Select-Object -First 1 -ExpandProperty Name
+      $reopenDesktop = [bool]$openWindow
       if ($svc) {
         Say "stopping the service ($($svc.Version), pid $($svc.Pid))"
         $null = Invoke-Native $oldCli daemon stop --wait-seconds 30
@@ -195,7 +198,7 @@
     if ($p.ExitCode -ne 0) {
       # The previous version is still in place: start what was stopped.
       if ($restartService -and (Test-Path $oldCli)) { $null = Start-WiService $oldCli }
-      if ($reopenDesktop -and (Test-Path (Join-Path $InstallDir 'wrongindex-desktop.exe'))) { Start-Process (Join-Path $InstallDir 'wrongindex-desktop.exe') }
+      if ($reopenDesktop -and (Test-Path (Join-Path $InstallDir $openWindow))) { Start-Process (Join-Path $InstallDir $openWindow) }
       throw "the installer exited with $($p.ExitCode)"
     }
   } finally {
@@ -227,8 +230,8 @@
     }
   }
   if ($reopenDesktop) {
-    Start-Process (Join-Path $dir 'wrongindex-desktop.exe')
-    Say 'desktop reopened'
+    Start-Process (Join-Path $dir 'wrongindex-gpui.exe')
+    Say 'window reopened'
   }
   Say 'new terminals have `wrongindex` on PATH'
   if (-not $restartService) {

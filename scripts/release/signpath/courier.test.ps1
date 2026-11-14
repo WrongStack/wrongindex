@@ -79,7 +79,7 @@ $signed = [byte[]]::new(520); $unsigned.CopyTo($signed,0)
 [BitConverter]::GetBytes([uint32]16).CopyTo($signed,0x12c)
 $fakeSignature = Join-Path $root 'fake-signature.exe'; [IO.File]::WriteAllBytes($fakeSignature,$signed)
 Assert-Fails { & $realModule { param($file,$digest) Get-ApprovedSigningIdentity $file $digest } $fakeSignature $cert } 'no valid Windows Authenticode'
-foreach ($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','wrongindex-desktop.exe')) { [IO.File]::WriteAllBytes((Join-Path $payload $name),$signed) }
+foreach ($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe')) { [IO.File]::WriteAllBytes((Join-Path $payload $name),$signed) }
 $courier = Join-Path $root 'courier'
 Initialize-SigningCourier -Directory $courier -PayloadDirectory $payload -BuildRoot $root -Version 0.2.0 -CertificateSha256 $cert -VendorManifest $vendorFile
 Invoke-SigningHook -Directory $courier -File (Join-Path $payload 'wrongindex.exe')

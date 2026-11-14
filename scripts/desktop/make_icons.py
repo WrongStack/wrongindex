@@ -5,7 +5,7 @@ Run: python scripts/desktop/make_icons.py
 import os
 from PIL import Image, ImageDraw
 
-OUT = os.path.join(os.path.dirname(__file__), "..", "..", "crates", "wrongindex-desktop", "icons")
+OUT = os.path.join(os.path.dirname(__file__), "..", "..", "crates", "wrongindex-gpui", "icons")
 
 
 def draw(size: int) -> Image.Image:

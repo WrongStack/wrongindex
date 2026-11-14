@@ -1617,7 +1617,7 @@ async fn self_update(
             );
         }
         if applied.reopened_desktop {
-            println!("desktop reopened");
+            println!("window reopened");
         }
         if was_running {
             println!(

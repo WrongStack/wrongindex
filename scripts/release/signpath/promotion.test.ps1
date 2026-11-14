@@ -27,7 +27,7 @@ $installer = Join-Path $root "nsis/$installerName"
 [IO.File]::WriteAllBytes($installer,[byte[]](1,2,3))
 $installerHash = (Get-FileHash $installer).Hash.ToLowerInvariant()
 $manifest = @{source=@{commit=$sha;dirtyWorktree=$false;version='0.2.0'};codeSigning=@{status='Valid';certificateSha256=$cert};binaries=@{}}
-foreach ($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','wrongindex-desktop.exe','uninstall.exe')) {
+foreach ($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','uninstall.exe')) {
   $file = Join-Path $root "shipped/$name"; [IO.File]::WriteAllBytes($file,[byte[]](4,5,6))
   $entry = @{sha256=(Get-FileHash $file).Hash.ToLowerInvariant();authenticode='Valid'}
   if ($name -ceq 'uninstall.exe') { $manifest.uninstaller=$entry } else { $manifest.binaries[$name]=$entry }
@@ -39,7 +39,7 @@ $manifest | ConvertTo-Json -Depth 8 | Set-Content $manifestFile
 $preview | ConvertTo-Json | Set-Content $previewFile
 [IO.File]::WriteAllText((Join-Path $root 'nsis/SHA256SUMS.txt'),$installerHash+'  '+$installerName+"`n")
 $result = Test-PromotionFiles $root $sha $cert
-if ($result.subjects.Count -ne 6 -or $result.tag -cne 'v0.2.0') { throw 'Unexpected final subject inventory' }
+if ($result.subjects.Count -ne 5 -or $result.tag -cne 'v0.2.0') { throw 'Unexpected final subject inventory' }
 Assert-Fails { Test-PromotionFiles $root ('c'*40) $cert } 'identity mismatch'
 Assert-Fails { Test-PromotionFiles $root $sha ('c'*64) } 'identity mismatch'
 $manifest.source.dirtyWorktree=$true; $manifest | ConvertTo-Json -Depth 8 | Set-Content $manifestFile

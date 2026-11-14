@@ -13,11 +13,11 @@
 //   WRONGINDEX_PARSER_CORPUS  parser known-answer corpus file
 //   WRONGINDEX_VET_DIRS       ';'-separated checkouts for the Git containment vet
 //   WRONGSTACK_CHECKOUT       WrongStack checkout with the adapter, built (dist)
-//   PLAYWRIGHT_CORE           directory holding playwright-core's index.mjs
 //   WRONGINDEX_INSTALLER      installer (default: target/release/bundle/nsis/*-setup.exe)
 //
 // Writes certification.json, certification.md and one log per gate to the
-// output directory (default target/certification/<commit>-<time>). A focused
+// output directory (default target/certification/<commit>-<time>). Retired
+// gates are listed with the reason and what covers them now. A focused
 // selection fails on FAIL or NOT RUN. A full run also requires a clean source
 // tree and current manual evidence; historical acceptance is not this build's
 // release approval. Logs hold command output only (no tokens:
@@ -93,9 +93,9 @@ const engineEnv = engine ? { WRONGINDEX_TEST_ENGINE: engine } : {};
 const gates = [
   { id: 'G01', name: 'Formatting', req: 'AGENTS.md checks', cmd: 'cargo', args: ['fmt', '--all', '--', '--check'] },
   { id: 'G02', name: 'Clippy, warnings denied', req: 'AGENTS.md checks', cmd: 'cargo', args: ['clippy', '--workspace', '--all-targets', '--locked', '--', '-D', 'warnings'] },
-  { id: 'G03', name: 'Workspace tests (oracle parity, native parity, daemon, registry, IPC, desktop bridge)', req: 'WI-108, WI-502..511, WI-601, WI-603', ...cargoTest(['--workspace']) },
+  { id: 'G03', name: 'Workspace tests (oracle parity, native parity, daemon, registry, IPC, desktop rules)', req: 'WI-108, WI-502..511, WI-601, WI-603', ...cargoTest(['--workspace']) },
   { id: 'G04', name: 'Daemon IPC/lifecycle tests, five consecutive runs', req: 'AGENTS.md (IPC/lifecycle)', repeat: 5, ...cargoTest(['-p', 'wrongindexd', '--tests']) },
-  { id: 'G05', name: 'Release build (service, CLI, Tauri and GPUI)', req: 'WI-700', cmd: 'cargo', args: ['build', '--release', '--locked', '-p', 'wrongindexd', '-p', 'wrongindex-cli', '-p', 'wrongindex-desktop', '-p', 'wrongindex-gpui'] },
+  { id: 'G05', name: 'Release build (service, CLI and GPUI desktop)', req: 'WI-700', cmd: 'cargo', args: ['build', '--release', '--locked', '-p', 'wrongindexd', '-p', 'wrongindex-cli', '-p', 'wrongindex-gpui'] },
   { id: 'G06', name: 'Native writer vs WrongStack: generated projects, every language, incremental, targeted, enrichment, SAGE, graph decoration', req: 'WI-503..512, WI-515', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun'), tool('python'), tool('go', ['version'])), ...cargoTest(['--release', '-p', 'wrongindex-engine', '--test', 'differential', '--', '--ignored'], engineEnv) },
   { id: 'G07', name: 'Native writer vs WrongStack on real projects (full and incremental)', req: 'WI-514', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), envVar('WRONGINDEX_DIFF_PROJECTS')), ...cargoTest(['--release', '-p', 'wrongindex-engine', '--test', 'differential', '--', '--ignored', 'on_listed_projects', '--nocapture'], engineEnv) },
   { id: 'G08', name: 'Query differential through the daemon (671 recorded operations)', req: 'WI-302, WI-511', needs: () => need(envVar('WRONGINDEX_TEST_ENGINE'), tool('bun')), ...cargoTest(['-p', 'wrongindexd', '--test', 'query_diff', '--', '--ignored'], engineEnv) },
@@ -108,13 +108,17 @@ const gates = [
   { id: 'G15', name: 'WrongStack adapter, wire, lifecycle, publication and delegation tests', req: 'WI-102, WI-303..309', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), tool('bun'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'bun', args: ['--bun', 'run', 'vitest', 'run', ...['adapter', 'wire-contract', 'client-lifecycle', 'publication', 'delegation'].map((name) => `packages/tools/tests/wrongindex-${name}.test.ts`)], cwd: wsCheckout, env: { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') } },
   { id: 'G16', name: 'Live WrongStack MCP proof', req: 'WI-704', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'node', args: ['scripts/release/wrongstack-live.mjs', path.join(release, 'wrongindexd.exe'), path.join(release, 'wrongindex.exe'), wsCheckout ?? ''] },
   { id: 'G17', name: 'Live WrongStack CLI + WebUI proof', req: 'WI-704', needs: () => need(envVar('WRONGSTACK_CHECKOUT'), file(path.join(release, 'wrongindexd.exe'), 'release service')), cmd: 'node', args: ['scripts/release/wrongstack-live-webui.mjs', path.join(release, 'wrongindexd.exe'), path.join(release, 'wrongindex.exe'), wsCheckout ?? ''] },
-  { id: 'G18', name: 'Desktop reconnect smoke (missed events, no false success)', req: 'WI-404', needs: () => need(envVar('PLAYWRIGHT_CORE'), file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop')), cmd: 'node', args: ['scripts/release/smoke-reconnect.mjs', env.PLAYWRIGHT_CORE ?? '', release] },
-  { id: 'G19', name: 'Installed package smoke (install, service, CLI, GUI, uninstall)', req: 'WI-408, WI-700, WI-701', needs: () => need(envVar('PLAYWRIGHT_CORE'), tool('pwsh', ['-NoProfile', '-Command', 'exit 0']), file(installer, 'installer (scripts/release/package-windows.ps1)')), cmd: 'pwsh', args: ['-NoProfile', '-File', 'scripts/release/smoke-installed.ps1', '-PlaywrightCore', env.PLAYWRIGHT_CORE ?? '', ...(installer ? ['-Installer', installer] : [])] },
+  { id: 'G19', name: 'Installed package smoke (install, service, CLI, desktop start/sign-in/close, uninstall)', req: 'WI-408, WI-700, WI-701', needs: () => need(tool('pwsh', ['-NoProfile', '-Command', 'exit 0']), file(installer, 'installer (scripts/release/package-windows.ps1)')), cmd: 'pwsh', args: ['-NoProfile', '-File', 'scripts/release/smoke-installed.ps1', ...(installer ? ['-Installer', installer] : [])] },
   { id: 'G20', name: 'Third-party license inventory (every shipped crate and bundled asset)', req: 'WI-009, WI-703', cmd: 'node', args: ['scripts/release/manifest.mjs', 'licenses', '--out', path.join(outDir, 'THIRD-PARTY-LICENSES.txt')] },
-  { id: 'G21', name: 'Release manifest (commit, profile, toolchain, hashes, Authenticode status)', req: 'WI-703', needs: () => need(file(path.join(release, 'wrongindex-desktop.exe'), 'release desktop'), file(installer, 'installer')), cmd: 'node', args: ['scripts/release/manifest.mjs', 'manifest', '--bin', release, '--bundle', installer ? path.dirname(installer) : '', '--installer', installer ? path.basename(installer) : '', '--out', path.join(outDir, 'RELEASE-MANIFEST.json')] },
+  { id: 'G21', name: 'Release manifest (commit, profile, toolchain, hashes, Authenticode status)', req: 'WI-703', needs: () => need(file(path.join(release, 'wrongindex-gpui.exe'), 'release desktop'), file(installer, 'installer')), cmd: 'node', args: ['scripts/release/manifest.mjs', 'manifest', '--bin', release, '--bundle', installer ? path.dirname(installer) : '', '--installer', installer ? path.basename(installer) : '', '--out', path.join(outDir, 'RELEASE-MANIFEST.json')] },
   { id: 'G22', name: 'Disk full on a real volume (write rolled back, DISK_FULL, refused before running)', req: 'WI-603', needs: () => envVar('WRONGINDEX_TEST_SMALL_VOLUME'), ...cargoTest(['-p', 'wrongindexd', '--test', 'real_disk_full', '--', '--ignored']) },
 ];
-gates.push({ id: 'G23', name: 'Native GPUI actor lifecycle and offline errors', req: 'WI-GPUI-01', needs: () => file(path.join(release, 'wrongindexd.exe'), 'release service'), ...cargoTest(['--release', '-p', 'wrongindex-gpui', '--', '--ignored'], { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') }) });
+gates.push({ id: 'G23', name: 'GPUI desktop actor: lifecycle, offline errors, maintenance and settings actions', req: 'WI-GPUI-01', needs: () => file(path.join(release, 'wrongindexd.exe'), 'release service'), ...cargoTest(['--release', '-p', 'wrongindex-gpui', '--', '--ignored'], { WRONGINDEX_TEST_DAEMON: path.join(release, 'wrongindexd.exe') }) });
+// Gates that no longer apply, kept in every report with the reason and what
+// covers their requirement now (never a silent deletion).
+const retired = [
+  { id: 'G18', name: 'Desktop reconnect smoke (missed events, no false success)', req: 'WI-404', status: 'RETIRED', reason: 'It drove the WebView2 of the retired Tauri desktop over CDP; the GPUI desktop has no remote automation surface. Actor reconnect, offline and no-false-success behaviour: G23; rendered reconnect: manual M06.' },
+];
 if (only && (!only.length || only.some((id) => !gates.some((g) => g.id === id)))) throw new Error('Unknown or empty certification gate selection');
 
 const results = [];
@@ -166,11 +170,12 @@ for (const g of gates) {
 }
 
 const manual = [
-  { id: 'M01', name: 'Screen reader pass over every desktop screen', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs a person with NVDA/Narrator' },
+  { id: 'M01', name: 'Screen reader pass over every desktop screen (GPUI: Overview, Projects and project detail, Indexes, Activity, Diagnostics, Settings)', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs a person with NVDA/Narrator' },
   { id: 'M02', name: 'Native per-monitor DPI pass on a mixed-DPI setup', req: 'WI-407', status: 'NOT RUN', reason: 'manual; needs mixed-DPI hardware' },
   { id: 'M03', name: 'Code signing of the installer and binaries', req: 'WI-703', status: 'WAIVED', reason: 'owner decision 2026-11-03: releases ship unsigned; SHA-256 and build provenance are checked' },
   { id: 'M04', name: 'Real sleep/resume cycle with watched projects', req: 'WI-207', status: 'NOT RUN', reason: 'manual; needs a machine that is put to sleep (the resume path is unit-tested)' },
-  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'NOT RUN', reason: 'Repeat for this build, including GPUI/D3D startup. Historical 2026-11-03 acceptance is in docs/status.md and does not certify new artifacts.' },
+  { id: 'M05', name: 'Install on a clean Windows machine without developer tools', req: 'WI-700', status: 'NOT RUN', reason: 'Repeat for this build, including GPUI/D3D startup and sign-in start (`wrongindex-gpui.exe --start-service`). Historical 2026-11-03 acceptance is in docs/status.md and does not certify new artifacts.' },
+  { id: 'M06', name: 'Rendered desktop acceptance: every screen and action of the installed GPUI desktop against a throw-away data root (register, claim, index, search, backup/restore, settings apply/refuse, stop/start, reconnect after a service restart, confirm dialogs default to Cancel)', req: 'WI-400..408', status: 'NOT RUN', reason: 'manual; the GPUI window has no automation surface (G18 retired)' },
 ];
 // A person may supply current manual evidence for this exact source/artifact.
 // Never copy historical PASS rows into a new build's acceptance automatically.
@@ -190,6 +195,7 @@ const summary = {
   generatedAt: new Date().toISOString(),
   versions,
   gates: results,
+  retired,
   manual,
   counts: Object.fromEntries(['PASS', 'FAIL', 'NOT RUN'].map((s) => [s, results.filter((r) => r.status === s).length])),
 };
@@ -208,6 +214,7 @@ const md = [
   '|---|---|---|---|---:|',
   ...results.map((r) => `| ${r.id} ${r.name} | ${r.req} | ${r.status} | ${(r.detail || r.reason || '').replace(/\|/g, '/')} | ${r.seconds ?? ''} |`),
   ...manual.map((m) => `| ${m.id} ${m.name} | ${m.req} | ${m.status} | ${m.reason} | |`),
+  ...retired.map((g) => `| ${g.id} ${g.name} | ${g.req} | ${g.status} | ${g.reason} | |`),
   '',
   `PASS ${summary.counts.PASS} · FAIL ${summary.counts.FAIL} · NOT RUN ${summary.counts['NOT RUN']} (automated) · manual PASS (recorded) ${manual.filter((m) => m.status === 'PASS').length}, NOT RUN ${manual.filter((m) => m.status === 'NOT RUN').length}, WAIVED ${manual.filter((m) => m.status === 'WAIVED').length}`,
   '',

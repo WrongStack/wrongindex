@@ -1,5 +1,6 @@
 # Upgrade, self-update and uninstall while WrongIndex runs, as a user would:
-# the service holds a watched project's index, the desktop window is open,
+# the service holds a watched project's index, the desktop window
+# (wrongindex-gpui.exe) is open,
 # and a second service runs from the same installation with another data
 # root (`--data-root`), which the installer's graceful `daemon stop` does not
 # reach.
@@ -49,11 +50,18 @@ New-Item -ItemType Directory -Force (Join-Path $proj 'src') | Out-Null
 foreach ($i in 0..9) { [IO.File]::WriteAllText((Join-Path $proj "src\m$i.ts"), "export function fn_$i(): number { return $i; }`n") }
 $env:WRONGINDEX_HOME = $home_
 # WrongStack's index locations resolve into the work folder too: a click in
-# the test's window (Add project, by a person or anything reaching its
-# remote-debugging port) can never claim one of this machine's real indexes.
+# the test's window (Add project, by a person) can never claim one of this
+# machine's real indexes.
 $env:WRONGSTACK_HOME = Join-Path $work 'wrongstack-home'
 $result = [ordered]@{ installer = (Split-Path -Leaf $Installer) }
 $inDir = { param($p) $p.Path -and $p.Path.StartsWith($dir, [StringComparison]::OrdinalIgnoreCase) }
+# The names of what runs from the installation, in ordinal order (a culture
+# sort may ignore the hyphen of wrongindex-gpui and change the order).
+function Get-RunningNames {
+  [string[]]$names = @(Get-Process wrongindexd, wrongindex-gpui -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { $_.Name })
+  [Array]::Sort($names, [StringComparer]::Ordinal)
+  , $names
+}
 # Wait for the program itself only: `Start-Process -Wait` also waits for
 # what it started, and the installer starts the service, which runs on.
 function Invoke-Program([string]$exe, [string[]]$arguments) {
@@ -111,9 +119,9 @@ try {
   while ((& $cli --json project status $id | ConvertFrom-Json).freshness -ne 'current' -and $sw.Elapsed.TotalSeconds -lt 120) { Start-Sleep -Milliseconds 300 }
   $result.freshnessBefore = (& $cli --json project status $id | ConvertFrom-Json).freshness
   & $cli --data-root $other daemon start --wait-seconds 30 | Out-Null
-  $desktop = Start-Process (Join-Path $dir 'wrongindex-desktop.exe') -PassThru
+  $desktop = Start-Process (Join-Path $dir 'wrongindex-gpui.exe') -PassThru
   Start-Sleep -Seconds 5
-  $result.runningBefore = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { $_.Name } | Sort-Object)
+  $result.runningBefore = Get-RunningNames
 
   # 1. An upgrade in place with everything running.
   $result.upgrade = Invoke-Program $Installer @('/S', "/D=$dir")
@@ -130,9 +138,9 @@ try {
   # 2. A self-update with everything running again.
   & $cli --data-root $other daemon start --wait-seconds 30 | Out-Null
   $otherPid = (Get-Content (Join-Path $other 'runtime\endpoint.json') -Raw | ConvertFrom-Json).pid
-  $desktop = Start-Process (Join-Path $dir 'wrongindex-desktop.exe') -PassThru
+  $desktop = Start-Process (Join-Path $dir 'wrongindex-gpui.exe') -PassThru
   Start-Sleep -Seconds 5
-  $result.runningBeforeSelfUpdate = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { $_.Name } | Sort-Object)
+  $result.runningBeforeSelfUpdate = Get-RunningNames
   $server = Start-ReleaseServer
   $errFile = Join-Path $work 'self-update.err'
   $updated = & $cli --json self-update --version "v$version" 2> $errFile
@@ -140,17 +148,17 @@ try {
   $result.selfUpdate = try { $updated | ConvertFrom-Json } catch { "$updated $(Get-Content $errFile -Raw)" }
   $result.selfUpdateEndedOther = @($result.selfUpdate.stopped | Where-Object { $_.pid -eq $otherPid -and $_.program -like '*\wrongindexd.exe' }).Count -eq 1
   Start-Sleep -Seconds 5
-  $result.runningAfterSelfUpdate = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { $_.Name } | Sort-Object)
+  $result.runningAfterSelfUpdate = Get-RunningNames
   $sw = [Diagnostics.Stopwatch]::StartNew()
   while ((& $cli --json project status $id | ConvertFrom-Json).freshness -ne 'current' -and $sw.Elapsed.TotalSeconds -lt 120) { Start-Sleep -Milliseconds 300 }
   $result.freshnessAfterSelfUpdate = (& $cli --json project status $id | ConvertFrom-Json).freshness
   # Everything running again for the uninstall.
   & $cli --data-root $other daemon start --wait-seconds 30 | Out-Null
-  if (-not (Get-Process wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ })) {
-    $desktop = Start-Process (Join-Path $dir 'wrongindex-desktop.exe') -PassThru
+  if (-not (Get-Process wrongindex-gpui -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ })) {
+    $desktop = Start-Process (Join-Path $dir 'wrongindex-gpui.exe') -PassThru
   }
   Start-Sleep -Seconds 5
-  $result.runningBeforeUninstall = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { $_.Name } | Sort-Object)
+  $result.runningBeforeUninstall = Get-RunningNames
 
   # 3. The user uninstalls with everything running.
   $result.uninstall = Invoke-Program (Join-Path $dir 'uninstall.exe') @('/S')
@@ -163,7 +171,7 @@ try {
   } until ($left -eq 0 -or $sw.Elapsed.TotalSeconds -gt 60)
   $result.filesLeft = $left
   $result.filesLeftNames = if ($left) { @(Get-ChildItem $dir -Recurse -File | ForEach-Object { $_.Name }) } else { @() }
-  $result.runningAfter = @(Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { "$($_.Name) $($_.Id)" })
+  $result.runningAfter = @(Get-Process wrongindexd, wrongindex-gpui -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | ForEach-Object { "$($_.Name) $($_.Id)" })
   $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   $result.leftOnUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
   # The copy in %TEMP% removes the uninstall entry last, after the files:
@@ -177,7 +185,7 @@ try {
   $result.indexKept = Test-Path (Join-Path $idx 'index.db')
 } finally {
   # Whatever is left of this throw-away installation goes.
-  Get-Process wrongindexd, wrongindex-desktop -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | Stop-Process -Force -ErrorAction SilentlyContinue
+  Get-Process wrongindexd, wrongindex-gpui -ErrorAction SilentlyContinue | Where-Object { & $inDir $_ } | Stop-Process -Force -ErrorAction SilentlyContinue
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
   try { $result.installLocationRestored = Restore-InstallLocation $installLocation }
   catch { $result.installLocationRestored = $false; $result.installLocationError = $_.Exception.Message }
@@ -188,19 +196,19 @@ try {
 $failures = @()
 if ($result.install -ne 0) { $failures += "install exit $($result.install)" }
 if ($result.freshnessBefore -ne 'current') { $failures += "project not current before the uninstall ($($result.freshnessBefore))" }
-if (($result.runningBefore -join ',') -ne 'wrongindex-desktop,wrongindexd,wrongindexd') { $failures += "not running before the uninstall (desktop and two services expected): $($result.runningBefore -join ', ')" }
+if (($result.runningBefore -join ',') -ne 'wrongindex-gpui,wrongindexd,wrongindexd') { $failures += "not running before the uninstall (desktop and two services expected): $($result.runningBefore -join ', ')" }
 if ($result.upgrade -ne 0) { $failures += "upgrade exit $($result.upgrade)" }
 if (-not $result.serviceBackAfterUpgrade) { $failures += 'service not running again after the upgrade' }
 if ($result.freshnessAfterUpgrade -ne 'current') { $failures += "project not current after the upgrade ($($result.freshnessAfterUpgrade))" }
-if (($result.runningBeforeSelfUpdate -join ',') -ne 'wrongindex-desktop,wrongindexd,wrongindexd') { $failures += "not running before the self-update: $($result.runningBeforeSelfUpdate -join ', ')" }
+if (($result.runningBeforeSelfUpdate -join ',') -ne 'wrongindex-gpui,wrongindexd,wrongindexd') { $failures += "not running before the self-update: $($result.runningBeforeSelfUpdate -join ', ')" }
 if ($result.selfUpdateExit -ne 0) { $failures += "self-update exit $($result.selfUpdateExit): $($result.selfUpdate)" }
 if ($result.selfUpdate.updated -ne $true -or $result.selfUpdate.to -ne $version) { $failures += "self-update did not install $version" }
 if ($result.selfUpdate.serviceRestarted -ne $true) { $failures += 'service not restarted by the self-update' }
 if ($result.selfUpdate.desktopReopened -ne $true) { $failures += 'desktop not reopened by the self-update' }
 if (-not $result.selfUpdateEndedOther) { $failures += "the other data root's service was not ended and named by the self-update" }
-if (($result.runningAfterSelfUpdate -join ',') -ne 'wrongindex-desktop,wrongindexd') { $failures += "after the self-update (desktop and one service expected): $($result.runningAfterSelfUpdate -join ', ')" }
+if (($result.runningAfterSelfUpdate -join ',') -ne 'wrongindex-gpui,wrongindexd') { $failures += "after the self-update (desktop and one service expected): $($result.runningAfterSelfUpdate -join ', ')" }
 if ($result.freshnessAfterSelfUpdate -ne 'current') { $failures += "project not current after the self-update ($($result.freshnessAfterSelfUpdate))" }
-if (($result.runningBeforeUninstall -join ',') -ne 'wrongindex-desktop,wrongindexd,wrongindexd') { $failures += "not running before the uninstall: $($result.runningBeforeUninstall -join ', ')" }
+if (($result.runningBeforeUninstall -join ',') -ne 'wrongindex-gpui,wrongindexd,wrongindexd') { $failures += "not running before the uninstall: $($result.runningBeforeUninstall -join ', ')" }
 if ($result.uninstall -ne 0) { $failures += "uninstall exit $($result.uninstall)" }
 if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left: $($result.filesLeftNames -join ', ')" }
 if (@($result.runningAfter).Count) { $failures += "still running: $($result.runningAfter -join ', ')" }
