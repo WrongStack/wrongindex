@@ -54,6 +54,10 @@ pub enum ErrorCode {
     ShuttingDown,
     Canceled,
     DeadlineExceeded,
+    /// The reply would exceed the frame limit (`MAX_FRAME_BYTES`). Nothing
+    /// of it was sent and the connection stays usable; the same request
+    /// fails again, so narrow it (a package or file filter, a lower limit).
+    ResponseTooLarge,
     Internal,
 }
 

@@ -5,6 +5,12 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
+## Unreleased
+
+### Fixed
+
+- A reply too large for one message (8 MiB) is answered with the new error `RESPONSE_TOO_LARGE`, logged as `response_too_large`, and the connection stays usable. The service used to close the connection without a word, so WrongStack took it for unavailable, retried the same query and showed CodeMap's "needs a codebase index" hint: the file graph of `@wrongstack/core` is 9.6 MB on a WrongStack checkout of 14,877 files.
+
 ## 0.2.0
 
 Released 2026-11-13 as an unsigned preview, by the owner's decision; what is and is not verified is in `docs/status.md`.

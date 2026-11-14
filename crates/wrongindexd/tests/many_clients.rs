@@ -221,3 +221,46 @@ async fn a_client_turned_away_for_too_many_connections_is_told_so() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
+
+/// A reply larger than one message is refused with `RESPONSE_TOO_LARGE`, and
+/// the same connection answers the next request. The service used to drop
+/// the connection without a word (nothing logged), so a client saw
+/// "connection closed", took the service for unavailable and retried the
+/// same oversized query: a CodeMap file graph of a large package (9.6 MB
+/// against the 8 MiB frame limit). The debug-only
+/// `WRONGINDEX_DEBUG_REPLY_LIMIT` hook lowers the limit to 400 bytes, so the
+/// health report (over 1 KB) is too large and an empty project list is not.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_oversized_reply_is_refused_and_the_connection_stays_usable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = long(tmp.path());
+    let home = base.join("home");
+    let _d = spawn(&home, &[("WRONGINDEX_DEBUG_REPLY_LIMIT", "400")]);
+    let mut c = ready(&home).await;
+    for round in 0..2 {
+        match c
+            .call_raw(method::DAEMON_HEALTH, None, json!({}), None)
+            .await
+        {
+            Err(CallError::Remote(e)) => {
+                assert_eq!(e.code, ErrorCode::ResponseTooLarge, "{e:?}");
+                assert!(!e.retryable, "{e:?}");
+                assert!(
+                    e.message.contains("daemon.health") && e.message.contains("400-byte"),
+                    "{e:?}"
+                );
+            }
+            other => panic!("round {round}: expected RESPONSE_TOO_LARGE, got {other:?}"),
+        }
+        let list = c
+            .call_raw(method::PROJECT_LIST, None, json!({}), None)
+            .await
+            .unwrap_or_else(|e| panic!("round {round}: connection unusable after a refusal: {e}"));
+        assert_eq!(list["projects"], json!([]), "{list}");
+    }
+    let log = std::fs::read_to_string(home.join("logs").join("wrongindexd.log")).unwrap();
+    assert!(
+        log.contains("response_too_large") && log.contains("daemon.health"),
+        "the refusal is not logged"
+    );
+}

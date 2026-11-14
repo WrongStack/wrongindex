@@ -4,6 +4,19 @@ Last updated: 2026-11-13. Historical release level: L2 (compatible preview) met;
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-IPC-RTL-01 — oversized replies get a typed error (2026-11-14)
+
+**Found** by a CodeMap investigation (WrongStack desktop: "Engine API response exceeds 2 MiB" with the "needs a codebase index" hint). On a read-only copy of the owner's WrongStack index (14,877 files, 122,846 symbols, 71 packages; a disposable service), `fileGraph` of 8 packages returned 2-8 MiB and of `@wrongstack/core` (9,598,033 B) and `@wrongstack/cli` (9,511,032 B) failed in IPC: `write_frame` refuses a body over `MAX_FRAME_BYTES` before writing anything, and the connection loop then closed the connection with no reply and no log line. The graph operations have no limit or paging, like WrongStack's own; bounded graphs are a contract change for WrongIndex and WrongStack together and are not part of this fix.
+
+**Fix.** New `ErrorCode::ResponseTooLarge` (`RESPONSE_TOO_LARGE`, not retryable; CLI exit 2). The reply is refused with it, a `response_too_large` warning (method, bytes, limit) is logged, and the connection serves the next request. Debug builds can lower the limit with `WRONGINDEX_DEBUG_REPLY_LIMIT` for tests. `contracts/wire/fixtures.json` regenerated with `node scripts/contracts/export-wire-fixtures.mjs` (one added code). WrongStack's adapter keeps a copy of these fixtures: its error-code type needs the new code when that copy is refreshed.
+
+| Check | Result |
+|---|---|
+| `tests/many_clients.rs::an_oversized_reply_is_refused_and_the_connection_stays_usable` with the fix disabled | FAIL as expected: `connection closed before response` |
+| The same test with the fix | PASS |
+| fmt, clippy `-D warnings` | PASS |
+| `cargo test --workspace --locked`, then `cargo test -p wrongindexd --locked` five consecutive runs | PASS (workspace once, then 5/5) |
+
 ## WI-RELEASE-020 — unsigned 0.2.0 by the owner's decision (2026-11-13)
 
 **Decision.** On 2026-11-13 the owner was asked how to publish 0.2.0. The question stated that signing is not ready, that the unsigned build is blocked on clean Windows with Smart App Control enforced, and that the 24-hour soak did not complete. The owner chose "Tüm çalışma ağacı imzasız": publish the whole shared working tree unsigned, built by the release workflow.

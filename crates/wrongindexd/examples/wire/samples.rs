@@ -11,7 +11,7 @@ use wrongindex_storage::owner_lock::OwnerInfo;
 // Every enum variant, listed once. Each `exhaustive_*` match stops compiling
 // when a variant is added, so the list cannot fall behind silently.
 
-const ERROR_CODES: [ErrorCode; 22] = [
+const ERROR_CODES: [ErrorCode; 23] = [
     ErrorCode::Unauthenticated,
     ErrorCode::Forbidden,
     ErrorCode::ProtocolUnsupported,
@@ -33,6 +33,7 @@ const ERROR_CODES: [ErrorCode; 22] = [
     ErrorCode::ShuttingDown,
     ErrorCode::Canceled,
     ErrorCode::DeadlineExceeded,
+    ErrorCode::ResponseTooLarge,
     ErrorCode::Internal,
 ];
 
@@ -59,6 +60,7 @@ fn exhaustive_error_code(c: ErrorCode) {
         | ErrorCode::ShuttingDown
         | ErrorCode::Canceled
         | ErrorCode::DeadlineExceeded
+        | ErrorCode::ResponseTooLarge
         | ErrorCode::Internal => {}
     }
 }
