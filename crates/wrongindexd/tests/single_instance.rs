@@ -13,8 +13,6 @@
 //! The slow job is simulated with the debug-only `WRONGINDEX_NATIVE_STALL`
 //! hook in the native child, the slow root with `WRONGINDEX_DEBUG_SLOW_ROOT`.
 
-#![cfg(windows)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -375,6 +373,10 @@ async fn an_empty_project_is_current_and_its_first_file_is_indexed() {
 /// current. The file keeps its old rows, the project is degraded and says
 /// why, and once the file can be read again it is indexed without any change
 /// event (closing a handle makes none) and the project is current.
+///
+/// Windows only: a share mode that denies reading is a Windows lock; Unix
+/// has no mandatory lock that a reader would meet.
+#[cfg(windows)]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_file_in_use_keeps_a_watched_project_degraded_until_it_is_indexed() {
     use std::os::windows::fs::OpenOptionsExt;

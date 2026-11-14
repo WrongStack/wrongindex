@@ -217,15 +217,24 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
         }
         Err(e) => return Err(anyhow::Error::new(e).context("binding endpoint").into()),
     };
+    // On Unix the guard is the lock beside the socket (WI-ADR-024). Taking
+    // it creates the socket's directory, the root's owner-only `runtime`
+    // (or a short per-user directory), and nothing else.
+    #[cfg(unix)]
+    let listener = {
+        use wrongindex_ipc::unix::{BindError, SocketListener};
+        match SocketListener::bind(std::path::Path::new(&endpoint)) {
+            Ok(l) => l,
+            Err(BindError::Held) => return Err(StartError::AlreadyRunning(endpoint)),
+            Err(BindError::Io(e)) => {
+                return Err(anyhow::Error::new(e).context("binding endpoint").into());
+            }
+        }
+    };
     cfg.root
         .ensure_private_dirs()
         .with_context(|| format!("creating data root {}", cfg.root.path().display()))?;
     crate::log::init(&cfg.root.logs_dir());
-    #[cfg(not(windows))]
-    return Err(anyhow::anyhow!(
-        "the WrongIndex daemon currently supports Windows only (Unix sockets are M8)"
-    )
-    .into());
 
     // 2. Registry: migrate and recover work interrupted by a previous instance.
     let mut registry = Registry::open(&cfg.root.registry_db())
@@ -348,6 +357,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     ));
 
     // 4. Accept loop.
+    let mut stop = StopSignal::new();
     #[cfg(windows)]
     let late_accept = {
         let mut server = first;
@@ -364,7 +374,7 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
                     tokio::spawn(handle_connection(shared.clone(), conn));
                 }
                 _ = shutdown_rx.changed() => break,
-                _ = tokio::signal::ctrl_c() => {
+                _ = stop.recv() => {
                     info!("signal_shutdown");
                     break;
                 }
@@ -394,6 +404,37 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
             }
         })
     };
+    // As on Windows, the listener (and with it the lock) is kept through the
+    // drain and dropped only after discovery is retracted.
+    #[cfg(unix)]
+    let late_accept = {
+        loop {
+            tokio::select! {
+                accepted = listener.accept() => match accepted {
+                    Ok(conn) => {
+                        tokio::spawn(handle_connection(shared.clone(), conn));
+                    }
+                    Err(e) => accept_failed(&e).await,
+                },
+                _ = shutdown_rx.changed() => break,
+                _ = stop.recv() => {
+                    info!("signal_shutdown");
+                    break;
+                }
+            }
+        }
+        let shared = shared.clone();
+        tokio::spawn(async move {
+            loop {
+                match listener.accept().await {
+                    Ok(conn) => {
+                        tokio::spawn(handle_connection(shared.clone(), conn));
+                    }
+                    Err(e) => accept_failed(&e).await,
+                }
+            }
+        })
+    };
 
     // 5. Drain: refuse new mutating work, let the worker finish its current
     //    job within the budget, then retract only our own discovery metadata.
@@ -410,13 +451,60 @@ pub async fn run(cfg: Config) -> Result<(), StartError> {
     discovery_keeper.abort();
     let _ = discovery_keeper.await;
     let retracted = Discovery::retract(&cfg.root, &instance_id).unwrap_or(false);
-    #[cfg(windows)]
-    {
-        late_accept.abort();
-        let _ = late_accept.await;
-    }
+    late_accept.abort();
+    let _ = late_accept.await;
     info!("stopped", {"instanceId": instance_id, "discoveryRetracted": retracted});
     Ok(())
+}
+
+/// A request to stop from outside: Ctrl+C, and on Unix `SIGINT` and
+/// `SIGTERM` (how launchd, systemd and `kill` stop a service).
+///
+/// On Unix the listeners are made once, before the accept loop: a listener
+/// sees only signals that arrive after it exists, so one made per pass of the
+/// loop lost a signal that arrived between passes - and with the handler
+/// installed, the default action no longer ends the process either.
+struct StopSignal {
+    #[cfg(unix)]
+    unix: Option<(tokio::signal::unix::Signal, tokio::signal::unix::Signal)>,
+}
+
+impl StopSignal {
+    fn new() -> Self {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            Self {
+                unix: signal(SignalKind::interrupt())
+                    .and_then(|int| Ok((int, signal(SignalKind::terminate())?)))
+                    .ok(),
+            }
+        }
+        #[cfg(not(unix))]
+        Self {}
+    }
+
+    async fn recv(&mut self) {
+        #[cfg(unix)]
+        if let Some((int, term)) = &mut self.unix {
+            tokio::select! {
+                _ = int.recv() => {}
+                _ = term.recv() => {}
+            }
+            return;
+        }
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+/// Log a failed accept; a short pause keeps a lasting failure (no file
+/// descriptors left) from spinning.
+#[cfg(unix)]
+async fn accept_failed(e: &std::io::Error) {
+    warn!("accept_failed", {"error": e.to_string()});
+    if e.kind() != std::io::ErrorKind::PermissionDenied {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
 
 /// How often the service checks that its discovery files are still there.

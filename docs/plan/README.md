@@ -99,7 +99,7 @@ The L1/L2 hybrid is a migration technique. It does not fulfill the final one-nat
 | WI-ADR-004 | One serialized writer lane per index | SQLite locking alone cannot enforce graph/cache/application ordering |
 | WI-ADR-005 | Existing project index remains authoritative | Preserve WrongStack database reuse and avoid a second search database |
 | WI-ADR-006 | Separate registry database | Service lifecycle and job bookkeeping do not alter the shared index schema |
-| WI-ADR-007 | Named pipes on Windows; private Unix sockets later | Local authenticated transport without firewall/browser-origin complexity |
+| WI-ADR-007 | Named pipes on Windows; private Unix sockets later (shape: WI-ADR-024) | Local authenticated transport without firewall/browser-origin complexity |
 | WI-ADR-008 | Separate Tauri GUI process | Closing or crashing the WebView must not interrupt indexing |
 | WI-ADR-009 | Explicit WrongStack adapter, new protocol namespace | Current per-project build-election behavior is unsuitable for an independently versioned global daemon |
 | WI-ADR-010 | Hybrid migration before native cutover | Protect parser and graph correctness while Rust infrastructure stabilizes |

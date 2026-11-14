@@ -208,6 +208,20 @@ impl EventStream {
     }
 }
 
+/// This platform's transport stream: a named pipe client on Windows, a Unix
+/// socket elsewhere.
+pub type RawStream = Stream;
+
+/// Open `endpoint` and check that its server runs as this user, without the
+/// protocol handshake (the bridge and transport tests speak frames
+/// themselves).
+pub async fn connect_raw(endpoint: &str, deadline: Duration) -> std::io::Result<RawStream> {
+    #[cfg(windows)]
+    return crate::win::connect(endpoint, deadline).await;
+    #[cfg(unix)]
+    return crate::unix::connect(endpoint, deadline).await;
+}
+
 #[cfg(windows)]
 async fn open(endpoint: &str) -> Result<Stream, CallError> {
     crate::win::connect(endpoint, Duration::from_secs(5))
@@ -215,12 +229,9 @@ async fn open(endpoint: &str) -> Result<Stream, CallError> {
         .map_err(|e| CallError::Unavailable(format!("cannot open {endpoint}: {e}")))
 }
 
-/// Unix sockets are milestone M8; the client side is wired so portable crates
-/// build, but no daemon listens on Unix yet.
 #[cfg(unix)]
 async fn open(endpoint: &str) -> Result<Stream, CallError> {
-    let _ = Duration::ZERO;
-    tokio::net::UnixStream::connect(endpoint)
+    crate::unix::connect(endpoint, Duration::from_secs(5))
         .await
         .map_err(|e| CallError::Unavailable(format!("cannot open {endpoint}: {e}")))
 }

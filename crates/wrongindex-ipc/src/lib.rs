@@ -1,13 +1,16 @@
 //! Local authenticated IPC for WrongIndex (ADR WI-ADR-007).
 //!
 //! Windows uses a named pipe whose DACL admits only the current user's SID and
-//! LocalSystem, with remote clients rejected. Unix sockets are later work
-//! (M8); on other platforms the transport functions return `Unsupported`.
+//! LocalSystem, with remote clients rejected. Unix uses a stream socket in an
+//! owner-only directory, guarded by a lock file, with the peer's uid checked
+//! on both ends (WI-ADR-024).
 
 pub mod client;
 pub mod endpoint;
 pub mod frame;
 pub mod launch;
+#[cfg(unix)]
+pub mod unix;
 #[cfg(windows)]
 pub mod win;
 
