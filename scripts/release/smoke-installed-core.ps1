@@ -24,9 +24,12 @@ $env:WRONGSTACK_HOME=Join-Path $work 'wrongstack'
 $userPathBefore=(Get-Item HKCU:/Environment).GetValue('Path','','DoNotExpandEnvironmentNames')
 $environmentKey=Get-Item HKCU:/Environment
 $pathKindBefore=if($environmentKey.GetValueNames() -contains 'Path'){$environmentKey.GetValueKind('Path').ToString()}else{'Absent'}
+# 0.2.0 shipped a second shortcut for the GPUI preview; the GPUI desktop is
+# now the one program behind WrongIndex.lnk and this one must not come back.
 $nativeShortcut=Join-Path ([Environment]::GetFolderPath('Programs')) 'WrongIndex Native (Preview).lnk'
 $shortcutBefore=Test-Path -LiteralPath $nativeShortcut
 if($shortcutBefore){throw 'An existing native shortcut must not be replaced by a fixture test'}
+$startMenuLink=Join-Path ([Environment]::GetFolderPath('Programs')) 'WrongIndex.lnk'
 $desktopLinks=@((Join-Path ([Environment]::GetFolderPath('Programs')) 'WrongIndex.lnk'),(Join-Path ([Environment]::GetFolderPath('Desktop')) 'WrongIndex.lnk'))
 if(@($desktopLinks|Where-Object{Test-Path -LiteralPath $_}).Count){throw 'An existing desktop shortcut must not be replaced by a fixture test'}
 # The installer remembers its directory; a later real install must not go to
@@ -43,7 +46,7 @@ try {
   if($setup.ExitCode -ne 0){throw "Installer exit $($setup.ExitCode)"}
   $report.installerExit=$setup.ExitCode
   $report.hashes=[ordered]@{}
-  foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-desktop.exe','wrongindex-gpui.exe')){
+  foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe')){
     $got=(Get-FileHash -LiteralPath (Join-Path $app $name) -Algorithm SHA256).Hash.ToLowerInvariant()
     if($got -ne $expected.binaries.$name.sha256){throw "Installed hash mismatch: $name"}
     $report.hashes[$name]=$got
@@ -54,15 +57,26 @@ try {
     $installedIdentity=Get-ApprovedSigningIdentity $installedUninstaller $CertificateSha256
     if($installedIdentity.sha256 -cne $expectedUninstallerIdentity.sha256){throw 'Installed uninstaller differs from the signed compiler output'}
     $report.uninstallerSha256=$installedIdentity.sha256
-    $report.signatureAcceptance='PASS: installer, four programs and installed uninstaller'
+    $report.signatureAcceptance='PASS: installer, three programs and installed uninstaller'
     if($KeepUninstaller){Copy-Item -LiteralPath $installedUninstaller -Destination $KeepUninstaller}
   }else{$report.signatureAcceptance='NOT RUN: unsigned engineering core acceptance'}
   if(-not (Test-Path -LiteralPath (Join-Path $app 'THIRD-PARTY-LICENSES.txt'))){throw 'License inventory not installed'}
-  if(-not (Test-Path -LiteralPath $nativeShortcut)){throw 'Native shortcut not installed'}
+  if(Test-Path -LiteralPath (Join-Path $app 'wrongindex-desktop.exe')){throw 'Retired Tauri desktop installed'}
+  if(Test-Path -LiteralPath $nativeShortcut){throw 'Retired preview shortcut installed'}
+  if(-not (Test-Path -LiteralPath $startMenuLink)){throw 'Start menu shortcut not installed'}
+  $linkTarget=(New-Object -ComObject WScript.Shell).CreateShortcut($startMenuLink).TargetPath
+  if([IO.Path]::GetFileName($linkTarget) -ine 'wrongindex-gpui.exe'){throw "Start menu shortcut targets $linkTarget"}
+  $report.startMenuTarget=[IO.Path]::GetFileName($linkTarget)
   $report.nativeVersion=(node -e 'process.stdout.write(require("node:child_process").execFileSync(process.argv[1],["--version"],{windowsHide:true,timeout:15000}));' (Join-Path $app 'wrongindex-gpui.exe'))
   if($report.nativeVersion -notmatch [regex]::Escape($expected.source.version)){throw 'Wrong native GUI version'}
   & $cli daemon start --wait-seconds 20|Out-Null
   if($LASTEXITCODE){throw 'Installed daemon did not start'}
+  # Sign-in mode against the running service: reports it and exits 0.
+  $signIn=Start-Process -FilePath (Join-Path $app 'wrongindex-gpui.exe') -ArgumentList '--start-service' -PassThru -WindowStyle Hidden
+  $null=$signIn.Handle
+  if(-not $signIn.WaitForExit(60000)){throw 'Sign-in start timeout'}
+  if($signIn.ExitCode -ne 0){throw "Sign-in start exit $($signIn.ExitCode)"}
+  $report.signInStart='PASS'
   $registration=& $cli --json project add $project --index-dir (Join-Path $work 'index') --watch pinned|ConvertFrom-Json
   if($LASTEXITCODE){throw 'Registration failed'}
   $projectId=$registration.project.projectId
@@ -76,8 +90,8 @@ try {
   $env:WRONGINDEX_TEST_DAEMON=Join-Path $app 'wrongindexd.exe'
   node -e 'const {spawnSync}=require("node:child_process"); const r=spawnSync(process.argv[1],["--ignored","--nocapture","--skip","debug_start_waits_for_draining_service_and_preserves_its_job"],{encoding:"utf8",windowsHide:true,timeout:300000}); require("node:fs").writeFileSync(process.argv[2],(r.stdout??"")+(r.stderr??"")); process.exit(r.status??1);' $GuiActorTest (Join-Path $work 'native-actor.log')
   if($LASTEXITCODE){throw 'Installed native actor integration failed'}
-  if((Get-Content (Join-Path $work 'native-actor.log') -Raw) -notmatch '4 passed; 0 failed; 0 ignored'){throw 'All four shipped-service actor tests must run'}
-  $report.nativeActor='PASS (4 tests including cold/idempotent start and pause/resume; debug-only drain covered separately)'
+  if((Get-Content (Join-Path $work 'native-actor.log') -Raw) -notmatch '6 passed; 0 failed; 0 ignored'){throw 'All six shipped-service actor tests must run'}
+  $report.nativeActor='PASS (6 tests: register/index/search, backup/restore/remove, offline, settings, cold/idempotent start, sign-in start; debug-only drain covered separately)'
   $report.status='PASS'
 } catch {
   $report.status='FAIL'

@@ -50,7 +50,6 @@ Pass `--manual-evidence <json>` after a person has performed the manual checks. 
 | `WRONGINDEX_PARSER_CORPUS` | G12 | Parser known-answer corpus (`scripts/oracle`) |
 | `WRONGINDEX_VET_DIRS` | G13 | `;`-separated checkouts for the Git containment vet |
 | `WRONGSTACK_CHECKOUT` | G15-G17 | WrongStack checkout with the adapter, built |
-| `PLAYWRIGHT_CORE` | G18, G19 | Directory with playwright-core's `index.mjs` |
 | `WRONGINDEX_INSTALLER` | G19, G21 | Installer (default `target/release/bundle/nsis/*-setup.exe`) |
 | `WRONGINDEX_TEST_SMALL_VOLUME` | G22 | Root of a small, empty NTFS volume the test may fill (e.g. a 64 MB VHD; attaching one needs an elevated prompt) |
 
@@ -77,7 +76,7 @@ The run writes `certification.json`, `certification.md`, one log per gate, `THIR
 | G15 | WrongStack adapter tests, including end to end through the service, and the adapter against the generated wire fixtures | WI-102, WI-303..309 | `vitest run tests/wrongindex-adapter.test.ts tests/wrongindex-wire-contract.test.ts` |
 | G16 | Live proof: WrongStack's MCP server over a running service | WI-704 | `scripts/release/wrongstack-live.mjs` |
 | G17 | Live proof: WrongStack CLI and WebUI over a running service (session start, WebUI index, graphs with SAGE decoration, watcher edit shown in the WebUI) | WI-704 | `scripts/release/wrongstack-live-webui.mjs` |
-| G18 | Desktop reconnect after missed events never shows false success | WI-404 | `scripts/release/smoke-reconnect.mjs` |
+| G18 | Retired 2026-11-14 (WI-ADR-023): drove the Tauri desktop's WebView2 over CDP, which no longer ships. The GPUI window re-reads state from the service after every event and reconnect; G23 covers the actor, M06 the rendered window | WI-404 | — |
 | G19 | Installed package: silent install, installed service, CLI and GUI, license inventory installed, uninstall leaves nothing | WI-408, WI-700, WI-701, WI-703 | `scripts/release/smoke-installed.ps1` |
 | G20 | Third-party license inventory: every shipped crate declares a license; bundled-asset license texts match their recorded hashes | WI-009, WI-703 | `manifest.mjs licenses` |
 | G21 | Release manifest: commit, profile hashes, toolchain, Cargo.lock, SQLite, binary and installer hashes with Authenticode status, the DLLs each binary imports; fails when a binary needs the Visual C++ redistributable | WI-001, WI-700, WI-703 | `manifest.mjs manifest` |

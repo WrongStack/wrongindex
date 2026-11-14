@@ -1,10 +1,12 @@
-# Build the per-user Windows installer (WI-700): WrongIndex desktop with the
-# service (wrongindexd) and the CLI (wrongindex) installed next to it.
+# Build the per-user Windows installer (WI-700): the WrongIndex window
+# (wrongindex-gpui, a native GPUI program) with the service (wrongindexd) and
+# the CLI (wrongindex) installed next to it.
 #
 #   pwsh scripts/release/package-windows.ps1
 #
-# Needs the Tauri CLI (`cargo install tauri-cli --version "=2.12.4" --locked`);
-# Tauri fetches or reuses NSIS. Output: <target dir>/release/bundle/nsis/*.exe
+# Needs the Tauri CLI (`cargo install tauri-cli --version "=2.12.4" --locked`)
+# for its NSIS bundler only: `cargo tauri bundle` packs the binaries built
+# here and builds nothing itself. Tauri fetches or reuses NSIS. Output: <target dir>/release/bundle/nsis/*.exe
 # (honours CARGO_TARGET_DIR) plus, next to it, SHA256SUMS.txt,
 # RELEASE-MANIFEST.json and THIRD-PARTY-LICENSES.txt (WI-703; needs Node).
 # The license inventory is also installed next to the binaries.
@@ -60,7 +62,7 @@ try {
   $built = Get-BuiltVersions
   if (@($built.Values | Where-Object { $_ -ne $version }).Count) {
     Write-Host "stale binaries ($(($built.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ')) for version $version; rebuilding them"
-    cargo clean --release -p wrongindexd -p wrongindex-cli -p wrongindex-desktop -p wrongindex-gpui
+    cargo clean --release -p wrongindexd -p wrongindex-cli -p wrongindex-gpui
     cargo build --release --locked -p wrongindexd -p wrongindex-cli -p wrongindex-gpui
     if ($LASTEXITCODE) { throw 'cargo build failed' }
     $built = Get-BuiltVersions
@@ -68,11 +70,11 @@ try {
   }
 
   # Tauri sidecars are named <name>-<target triple>.exe at build time and
-  # installed as <name>.exe next to the desktop executable, which is where the
-  # desktop looks for the service and the CLI.
-  $bin = Join-Path $root 'crates\wrongindex-desktop\binaries'
+  # installed as <name>.exe next to the window's executable, which is where
+  # it looks for the service and the CLI.
+  $bin = Join-Path $root 'crates\wrongindex-gpui\binaries'
   New-Item -ItemType Directory -Force $bin | Out-Null
-  foreach ($name in 'wrongindexd', 'wrongindex', 'wrongindex-gpui') {
+  foreach ($name in 'wrongindexd', 'wrongindex') {
     Copy-Item (Join-Path $target "release\$name.exe") (Join-Path $bin "$name-$triple.exe") -Force
   }
 
@@ -81,22 +83,24 @@ try {
   node (Join-Path $root 'scripts\release\manifest.mjs') licenses --out (Join-Path $bin 'THIRD-PARTY-LICENSES.txt')
   if ($LASTEXITCODE) { throw 'license inventory failed' }
 
-  Push-Location (Join-Path $root 'crates\wrongindex-desktop')
+  # The main binary is the release build of wrongindex-gpui above; the
+  # bundler only warns that it carries no Tauri bundle-type marker.
+  Push-Location (Join-Path $root 'crates\wrongindex-gpui')
   try {
-    cargo tauri build --config tauri.bundle.json -- --locked
-    if ($LASTEXITCODE) { throw 'cargo tauri build failed' }
+    cargo tauri bundle --config tauri.bundle.json --bundles nsis
+    if ($LASTEXITCODE) { throw 'cargo tauri bundle failed' }
   } finally {
     Pop-Location
   }
   # The mapping took effect: no shipped binary names this machine's paths.
-  foreach ($name in 'wrongindexd.exe', 'wrongindex.exe', 'wrongindex-desktop.exe', 'wrongindex-gpui.exe') {
+  foreach ($name in 'wrongindexd.exe', 'wrongindex.exe', 'wrongindex-gpui.exe') {
     $text = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes((Join-Path $target "release\$name")))
     foreach ($local in $root.Path, $cargoHome) {
       if ($text.IndexOf($local, [StringComparison]::OrdinalIgnoreCase) -ge 0) { throw "$name contains the build path $local; the path mapping did not apply" }
     }
   }
-  $desktopVersion = (Get-Item (Join-Path $target 'release\wrongindex-desktop.exe')).VersionInfo.ProductVersion
-  if ($desktopVersion -ne $version) { throw "wrongindex-desktop.exe is version $desktopVersion, expected $version" }
+  $desktopVersion = (Get-Item (Join-Path $target 'release\wrongindex-gpui.exe')).VersionInfo.ProductVersion
+  if ($desktopVersion -ne $version) { throw "wrongindex-gpui.exe is version $desktopVersion, expected $version" }
 
   $out = Join-Path $target 'release\bundle\nsis'
   # Old local installers may coexist in this directory. Certify only the

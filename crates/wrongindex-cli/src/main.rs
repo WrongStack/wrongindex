@@ -361,7 +361,8 @@ impl From<CallError> for Failure {
                 | ErrorCode::IndexIdentityConflict
                 | ErrorCode::ProjectUnavailable
                 | ErrorCode::MethodNotFound
-                | ErrorCode::NotImplemented => exit_code::INVALID_INPUT,
+                | ErrorCode::NotImplemented
+                | ErrorCode::ResponseTooLarge => exit_code::INVALID_INPUT,
                 ErrorCode::OwnerConflict => exit_code::INCOMPATIBLE_PROFILE,
                 ErrorCode::ProfileUnsupported | ErrorCode::ProtocolUnsupported => {
                     exit_code::INCOMPATIBLE_PROFILE
@@ -1617,7 +1618,7 @@ async fn self_update(
             );
         }
         if applied.reopened_desktop {
-            println!("desktop reopened");
+            println!("window reopened");
         }
         if was_running {
             println!(

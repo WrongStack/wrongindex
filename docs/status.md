@@ -1,8 +1,63 @@
 # Implementation status
 
-Last updated: 2026-11-13. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
+Last updated: 2026-11-14. Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
+
+## WI-RELEASE-030 — 0.3.0 (2026-11-14)
+
+**Decision.** On 2026-11-14 the owner asked to release once the work was done, chose version 0.3.0 and agreed that the attested candidate is first installed over their 0.2.0 installation, with publication only after that check passes. Branch `release/v0.3.0` carries WI-DESKTOP-01 (PR #4) and WI-IPC-RTL-01 (PR #5).
+
+**Contract drift.** WrongStack `main` moved from `d4dc097e74b2` to `27688fb67c3613e5260fdb99e0df175995dd501e`. Within the contract scope only `packages/codebase-index-mcp/package.json` changed: its version, `1.6.2` to `1.6.3`. No IPC method, parameter or index code changed. Recorded as `contracts/baseline/wrongstack-27688fb67c36.json` with the committed exporter from a clean detached clone: 282 files (the same count as `git ls-files` over the scope; no non-ASCII path in it), 0 dirty, drift check PASS, `bun run test:baseline` PASS. `ci.yml` and `release.yml` gate on it.
+
+| Step | Result |
+|---|---|
+| Release workflow artifact, SHA256SUMS, attestation | PENDING |
+| Installed over the owner's 0.2.0 (Start menu shortcut, Run entry, retired files, uninstall entry, service version, window) | PENDING |
+| Published | PENDING |
+
+## WI-DESKTOP-01 — one desktop window: GPUI replaces the Tauri desktop (2026-11-14)
+
+**Decision.** On 2026-11-14 the owner asked for one GUI instead of two and chose the GPUI window ("GPUI (native)") as the one to keep and develop, settings included; the Tauri/WebView desktop is retired (WI-ADR-023). Branch `retire-tauri-desktop`.
+
+**What changed.**
+- `crates/wrongindex-desktop` is deleted, with the `tauri`, `tauri-build` and `windows` workspace dependencies; `Cargo.lock` only loses packages (203 entries, Tauri/wry/WebView2 among them; no package or version added).
+- `crates/wrongindex-gpui` carries every Tauri surface except the tray (see WI-ADR-023): `logic.rs` (request rules and presentation, ported with the bridge's tests), `system.rs` (sign-in entry through `windows-sys`, updates and diagnostics through the sibling CLI, local times, window preferences in `<data root>/desktop/preferences.json`), `service.rs` (concurrent actor, event subscription, one outcome per command), `input.rs` (text field adapted from GPUI's example), `ui/` (one module per view). `--start-service` replaces the Tauri program's sign-in mode. The exe embeds the product icon.
+- Installer: Tauri's NSIS bundler now runs from `crates/wrongindex-gpui` (`cargo tauri bundle`, `mainBinaryName: wrongindex-gpui`, same product name and identifier, `webviewInstallMode: skip`). Hooks remove the retired executable and preview shortcut and move a `Run\WrongIndex` entry that pointed at `wrongindex-desktop.exe`. `self-update` and `install.ps1` reopen `wrongindex-gpui.exe`.
+- Release tooling: three shipped programs in manifest, PE metadata, signing preparation and smoke scripts; `smoke-gui.mjs` and `smoke-reconnect.mjs` (WebView2/CDP only) deleted; certify gate G18 retired with its reason; manual gate M06 (rendered window) added.
+
+**Evidence** (private `CARGO_TARGET_DIR` under `.temp_files/retire-tauri/`):
+
+| Check | Result |
+|---|---|
+| Packaging spike: `cargo tauri bundle` on a crate without a `tauri` dependency | PASS: NSIS installer built; the bundler only warns that the main binary has no bundle-type marker. The generated script deletes the previous `MainBinaryName` and retargets the `WrongIndex` shortcuts |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
+| `cargo test --workspace --locked` | PASS (54 test binaries, 0 failed) |
+| `cargo test -p wrongindex-gpui -- --ignored` with a debug `WRONGINDEX_TEST_DAEMON` (7 actor tests: register/index, live Activity events, search and pinned watching after the client closes; backup, refused path-like restore, restore and remove without touching sources; offline; settings with a stale revision refused; start and already-running; sign-in start; drain) | PASS |
+| `node scripts/release/certify.test.mjs`, `scripts/release/signpath/check.ps1`, license inventory without Tauri crates | PASS |
+| `pwsh scripts/release/package-windows.ps1` (release build, `cargo tauri bundle`, manifest, PE metadata) | PASS: `WrongIndex_0.2.0_x64-setup.exe` (local, unsigned, sha256 `670963eb…`, not installed); three shipped programs; the shipped `wrongindex-gpui.exe` is byte-identical to the build. Under Windows PowerShell 5.1 the script's `node -e` version probe fails on quoting; run it with `pwsh` as documented |
+| GPUI actor tests against the shipped release `wrongindexd.exe` (as `release.yml`, drain test skipped) | PASS (6/6) |
+| Upgrade migration, read-only on the owner's machine (`reg query`) | PASS as input: the 0.2.0 uninstall entry records `MainBinaryName` `wrongindex-desktop.exe` (so the template deletes it and retargets `WrongIndex.lnk`), and `Run\WrongIndex` is exactly `"<InstallLocation>\wrongindex-desktop.exe" --start-service`, the value the hook rewrites. The hooks also close a running 0.2.0 window (Restart Manager, as the template does for its main program) and open the new one: an update started from the old window's Settings is run by the old CLI, which spares that window and is moved aside. Installer rebuilt with these hooks (NSIS compiles). Running the upgrade: NOT RUN |
+| The window creating `<data root>/desktop/` before the service ever ran | PASS: a fresh root holding only `desktop/preferences.json` is accepted by `daemon start` |
+| Rendered window on a disposable data root and `WRONGSTACK_HOME` (debug build): every tab, project detail, Check index outcome and live Integrity update, search through the text field and Enter, native Remove confirmation | PASS for what was looked at. A stray Enter from another window confirmed one Remove of a demo project while the dialog was open; Cancel is now the first and default button (Enter test after the change: NOT RUN, to stop driving the owner's mouse and keyboard) |
+| Installed upgrade from 0.2.0 (shortcut, Run entry, retired files), `smoke-installed*`, `smoke-uninstall-running` | NOT RUN (they install software; not on the owner's PC) |
+| Manual gates M01/M06 (all screens and actions, keyboard, accessibility, DPI) | NOT RUN |
+
+## WI-IPC-RTL-01 — oversized replies get a typed error (2026-11-14)
+
+**Found** by a CodeMap investigation (WrongStack desktop: "Engine API response exceeds 2 MiB" with the "needs a codebase index" hint). On a read-only copy of the owner's WrongStack index (14,877 files, 122,846 symbols, 71 packages; a disposable service), `fileGraph` of 8 packages returned 2-8 MiB and of `@wrongstack/core` (9,598,033 B) and `@wrongstack/cli` (9,511,032 B) failed in IPC: `write_frame` refuses a body over `MAX_FRAME_BYTES` before writing anything, and the connection loop then closed the connection with no reply and no log line. The graph operations have no limit or paging, like WrongStack's own; bounded graphs are a contract change for WrongIndex and WrongStack together and are not part of this fix.
+
+**Fix.** New `ErrorCode::ResponseTooLarge` (`RESPONSE_TOO_LARGE`, not retryable; CLI exit 2). The reply is refused with it, a `response_too_large` warning (method, bytes, limit) is logged, and the connection serves the next request. Debug builds can lower the limit with `WRONGINDEX_DEBUG_REPLY_LIMIT` for tests. `contracts/wire/fixtures.json` regenerated with `node scripts/contracts/export-wire-fixtures.mjs` (one added code). WrongStack's adapter keeps a copy of these fixtures: its error-code type needs the new code when that copy is refreshed.
+
+| Check | Result |
+|---|---|
+| `tests/many_clients.rs::an_oversized_reply_is_refused_and_the_connection_stays_usable` with the fix disabled | FAIL as expected: `connection closed before response` |
+| The same test with the fix | PASS |
+| fmt, clippy `-D warnings` | PASS |
+| `cargo test --workspace --locked`, then `cargo test -p wrongindexd --locked` five consecutive runs | PASS (workspace once, then 5/5) |
+
+**Also fixed (found by this PR's CI).** `index_corruption::the_scheduled_check_finds_damage_nobody_asked_about` failed once on the hosted runner: the first scheduled check reported the index `missing`. Just after a claim, before the first run is admitted, a project looks idle, so the scheduler could admit a check of an index not yet written. The scheduler now skips a project whose `index.db` does not exist yet (looked up on the blocking pool). After the change: that test 10/10, `cargo test --workspace --locked` PASS, `cargo test -p wrongindexd --locked` 5/5 consecutive PASS. The original failure did not reproduce in 5 local runs before the change; the hosted rerun passed too, so the fix is reasoned from the code path, not from a local reproduction.
 
 ## WI-RELEASE-020 — unsigned 0.2.0 by the owner's decision (2026-11-13)
 

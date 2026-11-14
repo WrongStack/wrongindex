@@ -618,13 +618,35 @@ where
             stream_events(&shared, conn, request, shutdown_rx).await;
             return;
         }
+        let op = request.method.clone();
         let response = dispatch(&shared, &client, request).await;
         let accepted = response.error.is_none();
-        if write_frame(&mut conn, &response, MAX_FRAME_BYTES)
-            .await
-            .is_err()
-        {
-            return;
+        match write_frame(&mut conn, &response, reply_limit()).await {
+            Ok(()) => {}
+            // Checked before a byte is written, so the stream is still in
+            // step: answer with a typed error instead of dropping the
+            // connection (a client saw only "connection closed", and
+            // retried the same oversized query).
+            Err(FrameError::TooLarge { size, max }) => {
+                warn!("response_too_large", {"client": client, "method": op, "bytes": size, "limit": max});
+                let refusal = Response::err(
+                    response.request_id,
+                    ErrorBody::new(
+                        ErrorCode::ResponseTooLarge,
+                        format!(
+                            "the reply to {op} is {size} bytes, over the {max}-byte limit of one message; narrow the request (for a graph, a package or file filter)"
+                        ),
+                    ),
+                );
+                if write_frame(&mut conn, &refusal, MAX_FRAME_BYTES)
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+                continue;
+            }
+            Err(_) => return,
         }
         if is_shutdown && accepted {
             info!("shutdown_requested", {"client": client});
@@ -913,6 +935,20 @@ struct JobListParams {
     project_id: Option<String>,
     #[serde(default)]
     limit: Option<usize>,
+}
+
+/// The largest reply sent as one frame. Debug builds can lower it
+/// (`WRONGINDEX_DEBUG_REPLY_LIMIT`, in bytes) so a test reaches the limit
+/// without an index of hundreds of megabytes.
+fn reply_limit() -> usize {
+    #[cfg(debug_assertions)]
+    if let Some(n) = std::env::var("WRONGINDEX_DEBUG_REPLY_LIMIT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+    {
+        return n.min(MAX_FRAME_BYTES);
+    }
+    MAX_FRAME_BYTES
 }
 
 async fn dispatch(shared: &Arc<Shared>, client: &str, req: Request) -> Response {

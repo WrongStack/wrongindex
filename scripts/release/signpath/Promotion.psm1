@@ -19,7 +19,7 @@ function Test-PromotionFiles {
   $checksum=[IO.File]::ReadAllText((Join-Path $out 'SHA256SUMS.txt')).TrimEnd("`r","`n")
   if($checksum -cne ($identity.sha256+'  '+$installerName)){throw 'Signed installer checksum file mismatch'}
   $subjects=@($installer)
-  foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','wrongindex-desktop.exe')){
+  foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe')){
     $file=Join-Path $Directory "shipped/$name"
     $signed=Get-ApprovedSigningIdentity $file $CertificateSha256
     if($signed.sha256 -cne $manifest.binaries.$name.sha256 -or $manifest.binaries.$name.authenticode -cne 'Valid'){throw 'Signed program manifest mismatch'}

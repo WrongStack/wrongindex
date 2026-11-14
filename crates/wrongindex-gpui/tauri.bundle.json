@@ -9,17 +9,19 @@
     "copyright": "MIT License",
     "category": "DeveloperTool",
     "shortDescription": "Local codebase indexing service for WrongStack",
-    "longDescription": "WrongIndex keeps WrongStack-compatible code indexes current in the background: one service per user, a desktop window, and a CLI.",
+    "longDescription": "WrongIndex keeps WrongStack-compatible code indexes current in the background: one service per user, a native desktop window, and a CLI.",
     "licenseFile": "../../LICENSE",
     "resources": {
       "binaries/THIRD-PARTY-LICENSES.txt": "THIRD-PARTY-LICENSES.txt"
     },
     "externalBin": [
       "binaries/wrongindexd",
-      "binaries/wrongindex",
-      "binaries/wrongindex-gpui"
+      "binaries/wrongindex"
     ],
     "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      },
       "nsis": {
         "installMode": "currentUser",
         "displayLanguageSelector": false,

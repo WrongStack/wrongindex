@@ -218,6 +218,9 @@ pub fn remove_leftovers() {
     }
 }
 
+/// The WrongIndex window, installed next to the CLI.
+const DESKTOP_EXE: &str = "wrongindex-gpui.exe";
+
 pub struct Applied {
     pub installed: String,
     pub restarted_service: bool,
@@ -225,7 +228,7 @@ pub struct Applied {
     /// before the installer ran (a service started with another data root,
     /// a `wrongindex events` follower); they are not started again.
     pub stopped: Vec<crate::installed::Stopped>,
-    /// The desktop window was open; the installer closed it and it was
+    /// The WrongIndex window was open; the installer closed it and it was
     /// started again.
     pub reopened_desktop: bool,
 }
@@ -242,7 +245,7 @@ fn start_service(cli: &Path) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Start the desktop detached, as a user would. It inherits no handle of
+/// Start the window detached, as a user would. It inherits no handle of
 /// this process ([`wrongindex_ipc::launch::spawn_detached_program`]).
 fn open_desktop(exe: &Path) -> bool {
     wrongindex_ipc::launch::spawn_detached_program(exe, &[]).is_ok()
@@ -263,8 +266,10 @@ pub fn apply(
     wrongindex_ipc::launch::no_inherit_std_handles();
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let daemon = dir.join("wrongindexd.exe");
-    // The installer closes an open desktop window; reopen it afterwards.
-    let desktop = dir.join("wrongindex-desktop.exe");
+    // The installer closes an open window; reopen it afterwards. (Up to
+    // 0.2.0 the window was wrongindex-desktop.exe; an update from such a
+    // copy is run by that copy's CLI, not this one.)
+    let desktop = dir.join(DESKTOP_EXE);
     let desktop_was_open = desktop.exists() && !wait_unlocked(&desktop, Duration::ZERO);
     // Whatever else still runs from the install directory (a service
     // started with another data root, a `wrongindex events` follower) would
@@ -274,9 +279,7 @@ pub fn apply(
     let stopped: Vec<_> = crate::installed::stop_installed(dir)
         .map_err(|e| format!("ending what runs from {}: {e}", dir.display()))?
         .into_iter()
-        .filter(|s| {
-            !crate::installed::file_name(&s.program).eq_ignore_ascii_case("wrongindex-desktop.exe")
-        })
+        .filter(|s| !crate::installed::file_name(&s.program).eq_ignore_ascii_case(DESKTOP_EXE))
         .collect();
     let note = crate::installed::ended_note(&stopped);
     if !wait_unlocked(&daemon, Duration::from_secs(30)) {
@@ -353,13 +356,13 @@ update again. Leave real-time protection on.";
 /// finished. Windows reports a program its antivirus blocked as 225
 /// (ERROR_VIRUS_INFECTED) or 226 (ERROR_VIRUS_DELETED), and one it removed as
 /// missing; the installer's own exit code was 0, so the rest of the new
-/// version (service, desktop) is in place and the message says so.
+/// version (service, window) is in place and the message says so.
 fn new_cli_failure(e: &std::io::Error) -> String {
     let taken =
         matches!(e.raw_os_error(), Some(225 | 226)) || e.kind() == std::io::ErrorKind::NotFound;
     if taken {
         format!(
-            "running the new CLI: {e}. The installer itself finished, so the new service and desktop are installed; only wrongindex.exe is affected. {SECURITY_ADVICE}"
+            "running the new CLI: {e}. The installer itself finished, so the new service and window are installed; only wrongindex.exe is affected. {SECURITY_ADVICE}"
         )
     } else {
         format!("running the new CLI: {e}")
