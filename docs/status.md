@@ -4,6 +4,18 @@ Last updated: 2026-11-14. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-04 — Linux/macOS: start the service at sign-in (2026-11-14)
+
+`wrongindex daemon autostart on|off|status`, the Linux/macOS counterpart of the desktop's `Run\WrongIndex` entry (WI-ADR-024 does not make either a supported platform). Linux writes the XDG autostart entry `$XDG_CONFIG_HOME/autostart/wrongindex.desktop` (graphical sessions), macOS the LaunchAgent `~/Library/LaunchAgents/dev.wrongstack.wrongindex.plist` (`RunAtLoad`, `AbandonProcessGroup`). Both run `wrongindex daemon start` from the copy that wrote them, with `--data-root` (absolute) when one was named; the `Exec` line is quoted as the Desktop Entry Specification reads it back, the plist is XML-escaped. The command writes or removes that one file atomically and loads or starts nothing. On Windows it says where the setting is (the window) and exits 2.
+
+| Check | Result |
+|---|---|
+| Unit tests (quoting, contents, on/off/status touching only the entry) | PASS on Linux and Windows (the file test runs on Unix) |
+| Linux, built CLI with a throw-away `HOME`: `status`, `--data-root "/srv/wi root" … on`, `status` with and without that root, `off` | PASS: one `.desktop` file written with the quoted root, reported as this install's only for the same options, removed by `off`, nothing else in `HOME` |
+| Windows `daemon autostart on` | exit 2, "on Windows the desktop window's Settings start the service at sign-in" |
+| macOS | only the portability CI job; the LaunchAgent has not been loaded at a real sign-in |
+| A real Linux sign-in starting the service | NOT RUN |
+
 ## WI-M8-03 — Linux/macOS: everything the service starts dies with it (2026-11-14)
 
 Two of the gaps WI-M8-02 left open, both INV-01 (nothing may write an index after the ownership lock died with the service):
