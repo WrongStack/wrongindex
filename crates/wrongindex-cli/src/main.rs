@@ -361,7 +361,8 @@ impl From<CallError> for Failure {
                 | ErrorCode::IndexIdentityConflict
                 | ErrorCode::ProjectUnavailable
                 | ErrorCode::MethodNotFound
-                | ErrorCode::NotImplemented => exit_code::INVALID_INPUT,
+                | ErrorCode::NotImplemented
+                | ErrorCode::ResponseTooLarge => exit_code::INVALID_INPUT,
                 ErrorCode::OwnerConflict => exit_code::INCOMPATIBLE_PROFILE,
                 ErrorCode::ProfileUnsupported | ErrorCode::ProtocolUnsupported => {
                     exit_code::INCOMPATIBLE_PROFILE

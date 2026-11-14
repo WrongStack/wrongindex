@@ -96,6 +96,10 @@
         "retryable": true
       },
       {
+        "code": "RESPONSE_TOO_LARGE",
+        "retryable": false
+      },
+      {
         "code": "INTERNAL",
         "retryable": false
       }

@@ -1382,6 +1382,16 @@ async fn schedule_checks(
         if !shared.owners.holds(&pid) {
             continue;
         }
+        // Nothing to check before the first run has written the index: just
+        // after a claim, before that run is admitted, the project looks idle
+        // and a check would only report the index `missing`.
+        let db = std::path::Path::new(&p.index_dir).join("index.db");
+        if !tokio::task::spawn_blocking(move || db.is_file())
+            .await
+            .unwrap_or(false)
+        {
+            continue;
+        }
         let ws = shared.watch.status(&pid);
         let watcher_busy = ws.pending_paths > 0
             || ws.inflight_job.is_some()
