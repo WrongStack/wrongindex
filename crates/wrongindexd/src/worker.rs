@@ -981,7 +981,24 @@ async fn rebuild_in_child(
             }
         })
     });
-    let out = match tokio::time::timeout(NATIVE_RUN_DEADLINE, child.wait_with_output()).await {
+    // The child is waited for in place, not under `timeout`, so that on the
+    // deadline it is still unreaped here and its process group (its parser
+    // helpers) can be killed by id (Unix; the job object does it on Windows).
+    #[cfg(unix)]
+    let leader = child.id();
+    let wait = child.wait_with_output();
+    tokio::pin!(wait);
+    let finished = tokio::select! {
+        r = &mut wait => Ok(r),
+        () = tokio::time::sleep(NATIVE_RUN_DEADLINE) => {
+            #[cfg(unix)]
+            if let Some(pid) = leader {
+                crate::confine::kill_group(pid);
+            }
+            Err(())
+        }
+    };
+    let out = match finished {
         Ok(Ok(o)) => {
             // Every progress line is handled before the run is reported
             // finished (the job's progress entry is cleared after that).

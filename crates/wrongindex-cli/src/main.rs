@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
+mod autostart;
 mod diagnostics;
 mod http;
 mod installed;
@@ -177,6 +178,19 @@ enum DaemonAction {
         #[arg(long, default_value_t = 20)]
         wait_seconds: u64,
     },
+    /// Start the service at sign-in (Linux: XDG autostart entry; macOS:
+    /// LaunchAgent). On Windows the desktop window's Settings do this.
+    Autostart {
+        #[arg(value_enum, default_value_t = AutostartState::Status)]
+        state: AutostartState,
+    },
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum AutostartState {
+    Status,
+    On,
+    Off,
 }
 
 #[derive(Debug, Subcommand)]
@@ -421,6 +435,9 @@ async fn run(cli: Cli) -> Outcome {
         .map_err(|e| fail(exit_code::INVALID_INPUT, format!("data root: {e}")))?;
     let json = cli.json;
     match cli.command {
+        Command::Daemon {
+            action: DaemonAction::Autostart { state },
+        } => daemon_autostart(cli.data_root.as_ref().map(|_| root.path()), state, json),
         Command::Daemon { action } => daemon(&root, action, json).await,
         Command::Project { action } => project(&root, action, json).await,
         Command::Index(args) => index(&root, args, json).await,
@@ -661,6 +678,50 @@ async fn connect(root: &DataRoot) -> Result<Client, Failure> {
 
 // ─── daemon ─────────────────────────────────────────────────────────────────
 
+/// `daemon autostart`: the entry runs this CLI; a data root named on this
+/// command line is written into it as an absolute path.
+fn daemon_autostart(
+    data_root: Option<&std::path::Path>,
+    state: AutostartState,
+    json: bool,
+) -> Outcome {
+    let cli = std::env::current_exe()
+        .map_err(|e| fail(exit_code::INTERNAL, format!("this program: {e}")))?;
+    let path = autostart::user_entry_path().map_err(|e| {
+        let code = if e.kind() == std::io::ErrorKind::Unsupported {
+            exit_code::INVALID_INPUT
+        } else {
+            exit_code::INTERNAL
+        };
+        fail(code, format!("autostart: {e}"))
+    })?;
+    let cmd = autostart::command(&cli, data_root);
+    let v = match state {
+        AutostartState::Status => autostart::status(&path, &cmd),
+        AutostartState::On | AutostartState::Off => {
+            autostart::set(&path, &cmd, matches!(state, AutostartState::On)).map_err(|e| {
+                fail(
+                    exit_code::INTERNAL,
+                    format!("autostart: {}: {e}", path.display()),
+                )
+            })?
+        }
+    };
+    if json {
+        print_json(&v);
+    } else if v["enabled"] == true {
+        let note = if v["matchesThisInstall"] == true {
+            ""
+        } else {
+            " (it runs another command than this copy would write, with these options; `daemon autostart on` rewrites it)"
+        };
+        println!("autostart on: {}{note}", path.display());
+    } else {
+        println!("autostart off ({} absent)", path.display());
+    }
+    Ok(exit_code::SUCCESS)
+}
+
 async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
     match action {
         DaemonAction::Status => {
@@ -740,6 +801,8 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
+        // `run` answers this one (it needs to know whether a root was named).
+        DaemonAction::Autostart { state } => daemon_autostart(None, state, json),
         DaemonAction::Stop { wait_seconds } => {
             let mut c = match Client::connect(root, CLIENT_NAME).await {
                 Ok(c) => c,

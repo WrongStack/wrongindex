@@ -173,6 +173,22 @@ impl Engine {
     }
 
     async fn spawn(&self, cfg: &EngineConfig) -> Result<Worker, ErrorBody> {
+        // Unix has no job object: the worker runs under this binary's
+        // `--engine-shim`, which leads a process group and kills it the
+        // moment the service is gone, so a request in flight cannot go on
+        // writing after the ownership lock died (INV-01). The worker reads
+        // and writes the shim's own standard handles.
+        #[cfg(unix)]
+        let mut cmd = {
+            let exe = std::env::current_exe().map_err(|e| internal(&e.to_string()))?;
+            let mut c = Command::new(exe);
+            c.arg("--engine-shim")
+                .arg(&cfg.bun)
+                .process_group(0)
+                .env("WRONGINDEX_SERVICE_PID", std::process::id().to_string());
+            c
+        };
+        #[cfg(not(unix))]
         let mut cmd = Command::new(&cfg.bun);
         cmd.arg(&cfg.worker_script)
             .arg("--engine")
@@ -314,7 +330,7 @@ impl Engine {
             warn!("engine_restart", {"op": op, "error": e.to_string(), "memoryCap": capped});
             self.set_hello(None);
             if let Some(mut dead) = guard.take() {
-                let _ = dead.child.kill().await;
+                crate::confine::kill_tree(&mut dead.child).await;
             }
         }
         result
@@ -332,7 +348,7 @@ impl Engine {
             warn!("engine_release_failed", {"error": e.to_string()});
             self.set_hello(None);
             if let Some(mut dead) = guard.take() {
-                let _ = dead.child.kill().await;
+                crate::confine::kill_tree(&mut dead.child).await;
                 let _ = dead.child.wait().await;
             }
         }
@@ -353,7 +369,7 @@ impl Engine {
                 .await
                 .is_err()
             {
-                let _ = w.child.kill().await;
+                crate::confine::kill_tree(&mut w.child).await;
             }
         }
     }
