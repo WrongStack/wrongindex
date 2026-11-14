@@ -10,7 +10,7 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 
 **What changed.**
 - Endpoint identity on Unix: effective uid instead of `$USER`; `..` applied to the resolved directory. The socket path is built from the same resolved spelling, under `/tmp/wrongindex-<euid>` when it would not fit `sun_path`.
-- Unix transport (WI-ADR-024): `wrongindex_ipc::unix` — socket in an owner-only directory, `flock` guard beside it held until discovery is retracted, leftover sockets (and only sockets) replaced, peer uid checked by server and client. The daemon serves on it; `--ipc-bridge` works on Unix; a detached start uses `setsid`; `SIGINT`/`SIGTERM` stop the service with the usual drain (listeners made once, before the accept loop).
+- Unix transport (WI-ADR-024): `wrongindex_ipc::unix` — socket in an owner-only directory, `flock` guard beside it held until discovery is retracted, leftover sockets (and only sockets) replaced, peer uid checked by server and client (implemented; a foreign uid was never exercised). The daemon serves on it; `--ipc-bridge` connects through it (implemented, not run); a detached start uses `setsid`; `SIGINT`/`SIGTERM` stop the service with the usual drain (listeners made once, before the accept loop).
 - Watcher bug found by the first Linux run: inotify reports every open, read and close, and the service's own indexing reads re-marked the attach reconciliation, so a watched project ran a full pass about every 450 ms forever and never became current. Read-only access events are now ignored (a close after writing still counts). Windows and macOS do not report reads. Proven both ways with the probe in `.temp_files/unix-probe/run.sh`: filter off 15 jobs in ~7 s, filter on one job and the project current.
 - Tests: `vertical_slice.rs` and `single_instance.rs` run on Unix (raw connects through the new `wrongindex_ipc::client::connect_raw`); new `sigterm_stops_the_service_cleanly` (Unix) and unit tests for the socket guard and the event filter. The registration alias is a case variant on Windows only. `identity_slug` on Unix expects WrongStack's own POSIX result (Node `path.posix` + `wstack-paths.ts` `slugify`: `d-codebox-projects-wrongstack-6fc446`, `repo-one-57756a`), which the Rust code already gave.
 - Unix clippy: dead code of Windows-only helpers marked as such; the daemon's 42 warnings came from `run()` returning early on Unix and are gone.
@@ -20,16 +20,17 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | Check | Result |
 |---|---|
 | Linux `cargo clippy --workspace --all-targets --locked -- -D warnings` | PASS |
-| Linux `cargo test --workspace --locked --no-fail-fast` | PASS: 257 passed, 0 failed, 27 ignored (was 236 passed, 10 failed, 20 ignored); `go_basic` passed only because WSL has no Go (it skips itself) and is ignored on Unix since |
+| Linux `cargo test --workspace --locked --no-fail-fast` | PASS at `ece5a58`: 257 passed, 0 failed, 28 ignored (before this work: 236 passed, 10 failed, 20 ignored). WSL has no Go, so `go_basic` skipped itself there until it was ignored on Unix |
 | Linux `vertical_slice` + `single_instance`, five consecutive runs | PASS 5/5 (13 tests each run) |
 | Linux `detached_start` (CLI `daemon start` through a pipe, then `daemon stop`) | PASS, ran against the built daemon (no NOT RUN line) |
 | Windows fmt / clippy / `cargo test --workspace --locked` | PASS (54 test binaries, 0 failed) |
 | Windows `crates/wrongindexd/tests`, five consecutive runs | PASS 5/5 (34 test binaries each run, 0 failed; 17:09-17:25, no gap) |
-| macOS | NOT RUN locally; only the `portability.yml` job measures it |
+| CI at `81043c0`: portability run `43610702979` (ubuntu-latest, macos-latest), `ci` run `43610702983` (windows) | PASS: build, tests and clippy on ubuntu and macOS; windows job PASS. macOS has no local evidence; this run is all of it |
+| CI `wrongstack-contract` at `a51fb0a` and `81043c0` | FAIL, not caused by this branch: WrongStack `main` moved from `27688fb67c36` to `e19b14e07c6a`, changing only `packages/codebase-index-mcp/package.json`; needs a new baseline snapshot (it fails on `main` too) |
 
 **Open, by status.**
 - UNSUPPORTED on Unix: the eight oracle parity tests (`native_parity.rs`; `go_basic` fails only where Go is installed, as on the CI runner), ignored with the reason: the oracle was recorded by WrongStack on Windows and its stored paths use backslashes. A POSIX oracle needs a WrongStack run on Linux.
-- NOT RUN on Unix: the other 28 daemon integration files (still `#![cfg(windows)]`, to be opened one at a time), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end with a WrongStack client, macOS anything.
+- NOT RUN on Unix: the other 28 daemon integration files (still `#![cfg(windows)]`, to be opened one at a time), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end (implemented, never run on Unix), refusal of a peer running as another uid (implemented, not exercised), anything on macOS beyond the CI job.
 - Recorded difference, macOS only (first portability run, `a51fb0a`): search `score` values differ from the oracle by one or two ulps (`2.672547483196222` recorded, `2.6725474831962215` on macOS). They are SQLite's `bm25()`, whose `log()` is the platform libm; Linux matches exactly. `query_oracle.rs` accepts at most 8 ulps on the `score` field off Windows only; order and every other field stay exact, and Windows stays exact. Fixtures unchanged.
 - Known limits recorded in WI-ADR-024: `/tmp` fallback squatting and cleaning, `flock` on network file systems, and case-insensitive macOS volumes (two case spellings of one data root give two services).
 
