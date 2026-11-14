@@ -18,6 +18,32 @@
 ; entry over when it pointed at this copy's old program.
 
 Var WiServiceWasRunning
+Var WiReopenWindow
+
+; The retired Tauri window is not this installer's main program, so the
+; template's own check does not close it. An update started from that
+; window (0.2.0 Settings > Updates) runs while it is open: the old CLI spares
+; it as the program that started the update, and that CLI is moved aside,
+; so WRONGINDEX_STOP_SERVICE does not run either. Close it here, or its file
+; stays locked and is never removed; open the new window afterwards.
+!macro WRONGINDEX_CLOSE_RETIRED_WINDOW
+  StrCpy $WiReopenWindow "0"
+  ${If} ${FileExists} "$INSTDIR\wrongindex-desktop.exe"
+    !insertmacro RestartManager_StartSession $R0
+    ${If} $R0 != ""
+      !insertmacro RestartManager_RegisterFile $R0 "$INSTDIR\wrongindex-desktop.exe"
+      ${If} $0 = 0
+        System::Call 'RSTRTMGR::RmGetList(p R0, *i .r1, *i .r2, p 0, *i .r3) i .r0'
+        ; ERROR_MORE_DATA: some process has the file open (it runs).
+        ${If} $0 = ${ERROR_MORE_DATA}
+          StrCpy $WiReopenWindow "1"
+        ${EndIf}
+      ${EndIf}
+      !insertmacro RestartManager_EndSession $R0
+    ${EndIf}
+    !insertmacro CheckIfAppIsRunning "$INSTDIR\wrongindex-desktop.exe" "${PRODUCTNAME}"
+  ${EndIf}
+!macroend
 
 !macro WRONGINDEX_STOP_SERVICE
   ${If} ${FileExists} "$INSTDIR\wrongindex.exe"
@@ -36,6 +62,7 @@ Var WiServiceWasRunning
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
+  !insertmacro WRONGINDEX_CLOSE_RETIRED_WINDOW
   StrCpy $WiServiceWasRunning "0"
   ${If} ${FileExists} "$INSTDIR\wrongindex.exe"
     ; `daemon status` exits 0 only while the service answers.
@@ -57,6 +84,7 @@ Var WiServiceWasRunning
   !insertmacro WRONGINDEX_REMOVE_RETIRED
   ; "Start the index service when I sign in" set by the retired program:
   ; the same entry, now through this one (still no window at sign-in).
+  ; Only an entry of this copy: its own program, by exact path.
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "WrongIndex"
   ${If} $0 == '"$INSTDIR\wrongindex-desktop.exe" --start-service'
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "WrongIndex" '"$INSTDIR\wrongindex-gpui.exe" --start-service'
@@ -67,6 +95,9 @@ Var WiServiceWasRunning
     ; Starts the new service without opening a window, then exits.
     nsExec::Exec '"$INSTDIR\wrongindex-gpui.exe" --start-service'
     Pop $0
+  ${EndIf}
+  ${If} $WiReopenWindow == "1"
+    Exec '"$INSTDIR\wrongindex-gpui.exe"'
   ${EndIf}
 !macroend
 

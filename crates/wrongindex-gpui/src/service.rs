@@ -819,6 +819,14 @@ mod tests {
             },
         );
         assert!(checked.ok, "{:?}", checked.message);
+        // The window follows the service's event stream: the check job it
+        // just asked for shows up in Activity, for this project.
+        let events = next(&service, |s| {
+            s.activity
+                .iter()
+                .any(|e| e["projectId"] == id.as_str() && e["kind"].as_str().is_some())
+        });
+        assert!(events.activity.len() <= crate::model::ACTIVITY_CAP);
         let (searched, after) = send(
             &service,
             4,
