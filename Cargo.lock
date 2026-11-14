@@ -6288,7 +6288,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "wrongindex-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -6308,7 +6308,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-contracts"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6316,7 +6316,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-discovery"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hex",
  "serde",
@@ -6328,7 +6328,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "oxc_allocator",
  "oxc_ast",
@@ -6349,7 +6349,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-gpui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "gpui",
@@ -6366,7 +6366,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-ipc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "getrandom 0.3.4",
  "hex",
@@ -6382,7 +6382,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-registry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rusqlite",
  "serde",
@@ -6394,7 +6394,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindex-storage"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hex",
  "rusqlite",
@@ -6410,7 +6410,7 @@ dependencies = [
 
 [[package]]
 name = "wrongindexd"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",

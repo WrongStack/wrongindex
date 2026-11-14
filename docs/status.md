@@ -4,6 +4,18 @@ Last updated: 2026-11-14. Historical release level: L2 (compatible preview) met;
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-RELEASE-030 — 0.3.0 (2026-11-14)
+
+**Decision.** On 2026-11-14 the owner asked to release once the work was done, chose version 0.3.0 and agreed that the attested candidate is first installed over their 0.2.0 installation, with publication only after that check passes. Branch `release/v0.3.0` carries WI-DESKTOP-01 (PR #4) and WI-IPC-RTL-01 (PR #5).
+
+**Contract drift.** WrongStack `main` moved from `d4dc097e74b2` to `27688fb67c3613e5260fdb99e0df175995dd501e`. Within the contract scope only `packages/codebase-index-mcp/package.json` changed: its version, `1.6.2` to `1.6.3`. No IPC method, parameter or index code changed. Recorded as `contracts/baseline/wrongstack-27688fb67c36.json` with the committed exporter from a clean detached clone: 282 files (the same count as `git ls-files` over the scope; no non-ASCII path in it), 0 dirty, drift check PASS, `bun run test:baseline` PASS. `ci.yml` and `release.yml` gate on it.
+
+| Step | Result |
+|---|---|
+| Release workflow artifact, SHA256SUMS, attestation | PENDING |
+| Installed over the owner's 0.2.0 (Start menu shortcut, Run entry, retired files, uninstall entry, service version, window) | PENDING |
+| Published | PENDING |
+
 ## WI-DESKTOP-01 — one desktop window: GPUI replaces the Tauri desktop (2026-11-14)
 
 **Decision.** On 2026-11-14 the owner asked for one GUI instead of two and chose the GPUI window ("GPUI (native)") as the one to keep and develop, settings included; the Tauri/WebView desktop is retired (WI-ADR-023). Branch `retire-tauri-desktop`.

@@ -5,7 +5,17 @@ section of the tagged version at the top of the GitHub release notes and
 refuses to publish a version that has no section here. What is verified,
 and how, is in [docs/status.md](docs/status.md).
 
-## Unreleased
+## 0.3.0
+
+An unsigned preview, like 0.2.0; what is and is not verified is in `docs/status.md` (WI-RELEASE-030).
+
+### Known limits
+
+- Not code-signed. On a Windows installation where Smart App Control is enforced (typically a fresh install), the installer and programs are blocked. Machines where it is off, or in evaluation mode, are not affected.
+- No tray icon any more (see Removed).
+- A person going through every screen of the window (keyboard, accessibility, DPI) has not been recorded yet, and no 24-hour soak was run for this version.
+- CodeMap still cannot show the file graph of a very large package: `RESPONSE_TOO_LARGE` makes the failure explicit, but graph queries have no limits or paging yet. WrongStack's adapter learns the new error code when its copy of the wire fixtures is refreshed.
+- During a service upgrade or restart, a running WrongStack session in `wrongindex` mode can fall back to its own engine. It then keeps the index until it ends, and the service reports `OWNER_CONFLICT` for that project.
 
 ### Changed
 
@@ -20,6 +30,8 @@ and how, is in [docs/status.md](docs/status.md).
 ### Fixed
 
 - A reply too large for one message (8 MiB) is answered with the new error `RESPONSE_TOO_LARGE`, logged as `response_too_large`, and the connection stays usable. The service used to close the connection without a word, so WrongStack took it for unavailable, retried the same query and showed CodeMap's "needs a codebase index" hint: the file graph of `@wrongstack/core` is 9.6 MB on a WrongStack checkout of 14,877 files.
+- A scheduled health check no longer runs on an index that has not been written yet (just after a claim), where it could only report the index missing.
+- The contract gate follows WrongStack `27688fb67c36` (a version-only change of `@wrongstack/codebase-index-mcp`).
 
 ## 0.2.0
 
