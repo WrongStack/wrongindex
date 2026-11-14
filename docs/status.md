@@ -1,8 +1,22 @@
 # Implementation status
 
-Last updated: 2026-11-14. **0.3.0 is published (WI-RELEASE-030).** Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
+Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical release level: L2 (compatible preview) met; historical L3 profile evidence is defined in [certification.md](certification.md) (helper profile, known differences). **0.2.0 is published as an unsigned preview by the owner's decision of 2026-11-13 (WI-RELEASE-020 below). It is not release-qualified:** clean-Windows installation fails under enforced Smart App Control, the 24-hour soak did not complete, and the other gates below remain open. No 1.0 release is published. The adapter merge and historical signing waiver remain recorded; the waiver does not certify current startup. The [system review](system-review-2026-11-11.md) records current-source integration checks and the compatibility drift boundary.
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
+
+## WI-M8-05 — Linux/macOS: the memory cap (2026-11-15)
+
+The last process-confinement gap on Unix: the `nativeMemoryMb` and `workerMemoryMb` caps were recorded and enforced nowhere, so a runaway run could take the machine's memory. A Unix `confine::Job` now watches the process group a native run or the compatibility worker leads (both run in one of their own): every 250 ms it sums the group's resident memory (Linux `/proc/<pid>/stat`, macOS `ps -A -o pid=,pgid=,rss=`), keeps the peak, and over the cap notes the hit and kills the group, only while the leader is still listed in it. The worker's cap may change while it runs (`set_cap`, read at each look). A native run stopped this way fails with "reached its memory cap of N MiB" instead of the generic crash message; the compatibility worker reports a cap hit as on Windows.
+
+Not the same as Windows: the job object caps committed memory and fails the allocation that would pass it; here the tree is stopped once its resident memory is over, up to 250 ms later.
+
+| Check | Result |
+|---|---|
+| `confine::unix_tests::a_tree_over_its_cap_is_stopped` (a bash tree holding 48 MB, cap 16 MiB; then no cap) | PASS on Linux: stopped and the hit noted; without a cap it runs on with a peak over 40 MB |
+| Linux fmt / clippy / workspace tests | PASS: 314 passed, 0 failed, 36 ignored |
+| Linux daemon tests, five consecutive runs | PASS 5/5 (35 binaries, 109 tests each run; 23:57-00:11, no gap) |
+| Windows fmt / clippy / workspace tests (no Windows code changed) | PASS (55 test binaries) |
+| A real native run or compatibility worker stopped by its cap | NOT RUN (the setting's minimum is 512 MiB; the mechanism is tested with a small tree) |
 
 ## WI-M8-04 — Linux/macOS: start the service at sign-in (2026-11-14)
 
@@ -32,7 +46,7 @@ Two of the gaps WI-M8-02 left open, both INV-01 (nothing may write an index afte
 | Windows fmt / clippy / workspace tests | PASS (55 test binaries) |
 | Windows daemon tests, five consecutive runs | PASS 5/5 (35 binaries each run; 20:22-20:39, no gap) |
 
-NOT RUN on Unix: the compatibility worker itself under the shim (no Linux bun here; the engine tests need a recorded WrongStack engine directory on every platform). Still open: no memory cap is enforced on Unix.
+NOT RUN on Unix: the compatibility worker itself under the shim (no Linux bun here; the engine tests need a recorded WrongStack engine directory on every platform). Still open at that point: no memory cap was enforced on Unix (closed in WI-M8-05).
 
 ## WI-M8-02 — Linux/macOS: the daemon's integration tests, and what they found (2026-11-14)
 

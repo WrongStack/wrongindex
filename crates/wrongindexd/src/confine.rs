@@ -496,40 +496,171 @@ pub fn kill_children_with_me() -> Result<(), String> {
     Ok(())
 }
 
-/// Elsewhere a job only remembers its cap; nothing is confined.
-#[cfg(not(windows))]
+/// Unix: a job watches the process group its tree runs in (the child leads
+/// it) from outside. Every [`WATCH_EVERY`] it sums the group's resident
+/// memory; over the cap, it notes the hit and kills the group. Windows caps
+/// committed memory instead (the allocation fails); here the tree is
+/// stopped once it is over. The cap may change while it runs.
+#[cfg(unix)]
 pub struct Job {
-    cap: std::sync::atomic::AtomicUsize,
+    state: std::sync::Arc<JobState>,
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+#[derive(Default)]
+struct JobState {
+    cap: std::sync::atomic::AtomicUsize,
+    peak: std::sync::atomic::AtomicUsize,
+    hit: std::sync::atomic::AtomicBool,
+    done: std::sync::atomic::AtomicBool,
+}
+
+/// How often a job looks at its tree's memory.
+#[cfg(unix)]
+const WATCH_EVERY: std::time::Duration = std::time::Duration::from_millis(250);
+
+#[cfg(unix)]
 impl Job {
-    pub fn cap(&self) -> usize {
-        self.cap.load(std::sync::atomic::Ordering::Relaxed)
+    /// Watch the group `leader` leads, capped at `cap` bytes (0: no cap).
+    /// The watch ends when the group is gone or the job is dropped.
+    pub fn watch(leader: u32, cap: usize) -> Job {
+        use std::sync::atomic::Ordering;
+        let state = std::sync::Arc::new(JobState::default());
+        state.cap.store(cap, Ordering::Relaxed);
+        let s = state.clone();
+        let _ = std::thread::Builder::new()
+            .name("wrongindex-memory-watch".into())
+            .spawn(move || {
+                while !s.done.load(Ordering::Relaxed) {
+                    let Some((members, bytes)) = group_memory(leader) else {
+                        return;
+                    };
+                    s.peak.fetch_max(bytes, Ordering::Relaxed);
+                    let cap = s.cap.load(Ordering::Relaxed);
+                    // Killed only while the leader is still listed in its
+                    // group: then the group id is still this tree's.
+                    if cap > 0 && bytes > cap && members.contains(&leader) {
+                        s.hit.store(true, Ordering::Relaxed);
+                        kill_group(leader);
+                        return;
+                    }
+                    std::thread::sleep(WATCH_EVERY);
+                }
+            });
+        Job { state }
     }
+
+    pub fn cap(&self) -> usize {
+        self.state.cap.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Change the cap; the watch applies it at its next look.
     pub fn set_cap(&self, cap: usize) -> Result<(), String> {
-        self.cap.store(cap, std::sync::atomic::Ordering::Relaxed);
+        self.state
+            .cap
+            .store(cap, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
+
+    /// Most resident memory the tree has had at one look, in bytes.
     pub fn peak(&self) -> usize {
-        0
+        self.state.peak.load(std::sync::atomic::Ordering::Relaxed)
     }
+
+    /// Whether the cap stopped the tree.
     pub fn cap_hit(&self) -> bool {
-        false
+        self.state.hit.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+impl Drop for Job {
+    fn drop(&mut self) {
+        self.state
+            .done
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// The processes in the group `leader` leads and their resident memory in
+/// bytes; `None` when the group has no process left or cannot be read.
+/// Linux reads `/proc/<pid>/stat` (`pgrp`, `rss` in pages).
+#[cfg(target_os = "linux")]
+fn group_memory(leader: u32) -> Option<(Vec<u32>, usize)> {
+    // SAFETY: sysconf has no preconditions.
+    let page = usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) })
+        .ok()
+        .filter(|p| *p > 0)?;
+    let (mut members, mut bytes) = (Vec::new(), 0usize);
+    for entry in std::fs::read_dir("/proc").ok()?.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+        // After the command name (in parentheses, which may hold anything):
+        // state, ppid, pgrp, ...; rss is the 22nd field from there.
+        let Some(rest) = stat.rfind(')').map(|i| &stat[i + 1..]) else {
+            continue;
+        };
+        let fields: Vec<&str> = rest.split_whitespace().collect();
+        if fields.get(2).and_then(|g| g.parse::<u32>().ok()) != Some(leader) {
+            continue;
+        }
+        members.push(pid);
+        let rss: usize = fields.get(21).and_then(|r| r.parse().ok()).unwrap_or(0);
+        bytes = bytes.saturating_add(rss.saturating_mul(page));
+    }
+    (!members.is_empty()).then_some((members, bytes))
+}
+
+/// macOS: `ps -A -o pid=,pgid=,rss=` (rss in KiB).
+#[cfg(target_os = "macos")]
+fn group_memory(leader: u32) -> Option<(Vec<u32>, usize)> {
+    let out = std::process::Command::new("/bin/ps")
+        .args(["-A", "-o", "pid=,pgid=,rss="])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let (mut members, mut bytes) = (Vec::new(), 0usize);
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut f = line.split_whitespace().map(|x| x.parse::<u64>().ok());
+        if let (Some(Some(pid)), Some(Some(pgid)), Some(Some(kib))) = (f.next(), f.next(), f.next())
+            && pgid == u64::from(leader)
+            && let Ok(pid) = u32::try_from(pid)
+        {
+            members.push(pid);
+            let b = usize::try_from(kib.saturating_mul(1024)).unwrap_or(usize::MAX);
+            bytes = bytes.saturating_add(b);
+        }
+    }
+    (!members.is_empty()).then_some((members, bytes))
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "macos"))))]
+fn group_memory(_leader: u32) -> Option<(Vec<u32>, usize)> {
+    None
+}
+
+/// Unix: the tree runs in a process group the child leads, watched by a
+/// [`Job`].
+#[cfg(unix)]
 pub fn spawn_confined(
     cmd: &mut tokio::process::Command,
     cap: usize,
 ) -> std::io::Result<(tokio::process::Child, Job)> {
-    Ok((
-        cmd.spawn()?,
-        Job {
-            cap: std::sync::atomic::AtomicUsize::new(cap),
-        },
-    ))
+    cmd.process_group(0);
+    let child = cmd.spawn()?;
+    let leader = child
+        .id()
+        .ok_or_else(|| std::io::Error::other("the process ended before it was watched"))?;
+    Ok((child, Job::watch(leader, cap)))
 }
 
 #[cfg(all(test, windows))]
@@ -672,5 +803,48 @@ mod unix_tests {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         assert!(child.id().is_none(), "reaped");
+    }
+
+    /// A tree over its cap is stopped and the hit noted; without a cap it
+    /// runs on, and the peak is what it used.
+    #[tokio::test]
+    async fn a_tree_over_its_cap_is_stopped() {
+        // bash keeps a 48 MB string in memory while it waits. `x` is used
+        // after the wait: bash runs a `-c` script's last command with `exec`,
+        // which would replace bash (and free the string) with `sleep`; the
+        // first version of this test saw only the spike while it was built.
+        let hog = |cap: usize| {
+            let child = tokio::process::Command::new("bash")
+                .args(["-c", "printf -v x '%*s' 48000000 ''; sleep 60; echo ${#x}"])
+                .process_group(0)
+                .kill_on_drop(true)
+                .spawn()
+                .unwrap();
+            let job = Job::watch(child.id().unwrap(), cap);
+            (child, job)
+        };
+        let (mut over, job) = hog(16 << 20);
+        let status = tokio::time::timeout(std::time::Duration::from_secs(20), over.wait())
+            .await
+            .expect("the tree over its cap was not stopped")
+            .unwrap();
+        assert!(!status.success());
+        assert!(job.cap_hit());
+        assert!(job.peak() > 16 << 20, "{}", job.peak());
+
+        let (mut under, job) = hog(0);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while job.peak() < 40 << 20 {
+            assert!(std::time::Instant::now() < deadline, "{}", job.peak());
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        assert!(under.try_wait().unwrap().is_none(), "no cap: still running");
+        assert!(!job.cap_hit());
+        kill_tree(&mut under).await;
+    }
+
+    #[test]
+    fn a_missing_group_has_no_memory() {
+        assert!(group_memory(u32::MAX - 7).is_none());
     }
 }

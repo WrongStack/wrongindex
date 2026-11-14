@@ -956,6 +956,12 @@ async fn rebuild_in_child(
             format!("cannot start the native indexer: {e}"),
         ))
     })?;
+    // Unix: the run's memory is watched from here (on Windows the child
+    // caps itself with a job object); over the cap the tree is stopped.
+    #[cfg(unix)]
+    let memory = child
+        .id()
+        .map(|pid| crate::confine::Job::watch(pid, crate::confine::cap_bytes(memory_mb)));
     if let (Some(t), Some(mut stdin)) = (targets, child.stdin.take()) {
         use tokio::io::AsyncWriteExt;
         let list = serde_json::to_vec(t).unwrap_or_default();
@@ -1052,6 +1058,14 @@ async fn rebuild_in_child(
         // Crashed (e.g. stack overflow) or produced no reply: the staging
         // directory it may have left is private and is ignored by readers.
         None => {
+            #[cfg(unix)]
+            if let Some(job) = memory.as_ref().filter(|j| j.cap_hit()) {
+                warn!("native_memory_cap", {"capBytes": job.cap(), "peakBytes": job.peak()});
+                return Err(NativeOutcome::Unsupported(format!(
+                    "the native indexer reached its memory cap of {} MiB and was stopped; raise the nativeMemoryMb setting if this project needs more",
+                    job.cap() >> 20
+                )));
+            }
             warn!("native_indexer_crashed", {"status": out.status.to_string()});
             Err(NativeOutcome::Unsupported(format!(
                 "native indexer crashed ({}); a source file may be too deeply nested, or the run exceeded its memory cap",
