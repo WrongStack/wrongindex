@@ -4,6 +4,24 @@ Last updated: 2026-11-14. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-03 — Linux/macOS: everything the service starts dies with it (2026-11-14)
+
+Two of the gaps WI-M8-02 left open, both INV-01 (nothing may write an index after the ownership lock died with the service):
+
+- **The compatibility worker.** On Unix it went on after the service died: its stdin closed, but `worker.ts` finishes the request in flight before it exits, and that request may be writing an index. It now runs under `wrongindexd --engine-shim <bun> <args>`: the shim leads a process group, watches the service as a native child does, and kills the group (itself, bun, anything bun started) when the service is gone; the worker reads and writes the shim's own standard handles, so nothing is relayed. Windows is unchanged (job object).
+- **Helpers of a run the service stops.** A native run past its deadline, and a compatibility worker the service restarts or stops, were killed by their own pid only; their helpers ran on until their pipes broke. The service now kills the process group (`confine::kill_tree`), and only while the leader is not reaped yet, so the group id cannot belong to anyone else. For the native deadline the child is now waited for in place (`select!`), not under `timeout`, so it is still unreaped when the deadline fires.
+
+| Check | Result |
+|---|---|
+| `child_lifetime.rs` (Unix): service killed with SIGKILL, shim and its program gone | PASS on Linux: both gone 114 ms after the service; handles and exit code pass through; a shim whose service is gone refuses (exit 70) |
+| `confine::unix_tests::kill_tree_takes_the_whole_group` | PASS on Linux |
+| Linux fmt / clippy / `cargo test --workspace --locked` | PASS: 309 passed, 0 failed, 36 ignored |
+| Linux daemon tests, five consecutive runs | PASS 5/5 (35 binaries, 107 tests each run; 20:05-20:18) |
+| Windows fmt / clippy / workspace tests | PASS (55 test binaries) |
+| Windows daemon tests, five consecutive runs | PASS 5/5 (35 binaries each run; 20:22-20:39, no gap) |
+
+NOT RUN on Unix: the compatibility worker itself under the shim (no Linux bun here; the engine tests need a recorded WrongStack engine directory on every platform). Still open: no memory cap is enforced on Unix.
+
 ## WI-M8-02 — Linux/macOS: the daemon's integration tests, and what they found (2026-11-14)
 
 Of the 28 daemon integration files still built for Windows only, 27 now run on Unix; `real_disk_full.rs` stays Windows-only (CI attaches a small NTFS volume; a Unix run needs a small file system of its own). Measured one file at a time on Linux before any fix: 19 passed as they were, 7 failed, 2 did not compile. The failures were real gaps, not test spelling:
@@ -23,7 +41,7 @@ Of the 28 daemon integration files still built for Windows only, 27 now run on U
 | Windows `cargo test -p wrongindexd --tests`, five consecutive runs | PASS 5/5 (34 test binaries each run; 18:54-19:14, no gap) |
 | macOS | only the portability CI job (this push) |
 
-Open on Unix: no memory cap is enforced (Windows: job object); the compatibility engine's processes are not tied to the service's life; a canceled or timed-out run's parser helpers are not killed with it (they lose their pipes); `real_disk_full.rs`; `process_tree.rs` runs with a PATH naming no directory, which shows nothing about a system PATH.
+Open on Unix at that point: no memory cap is enforced (Windows: job object); the compatibility engine's processes were not tied to the service's life and a timed-out run's helpers were not killed with it (both closed in WI-M8-03); `real_disk_full.rs`; `process_tree.rs` runs with a PATH naming no directory, which shows nothing about a system PATH.
 
 ## WI-M8-01 — Linux/macOS slice 1: Unix transport and a portable daemon (2026-11-14)
 

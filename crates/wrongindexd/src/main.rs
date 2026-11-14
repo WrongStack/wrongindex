@@ -207,6 +207,31 @@ fn confined_or_reply() -> Option<ExitCode> {
     }
 }
 
+/// `wrongindexd --engine-shim <program> <args>` (Unix): runs the
+/// compatibility worker so that it dies with the service, as the job object
+/// does on Windows. This process leads a process group, watches the service
+/// (`confine::confine_current_process`: the whole group is killed when it is
+/// gone) and runs `<program>` in that group with its own standard handles.
+#[cfg(unix)]
+fn engine_shim(program: &str, args: &[String]) -> ExitCode {
+    // SAFETY: setpgid on this process only. The service already starts it in
+    // a group of its own; this makes a direct start lead one too.
+    unsafe {
+        libc::setpgid(0, 0);
+    }
+    if let Err(e) = confine::confine_current_process() {
+        eprintln!("wrongindexd: {e}");
+        return ExitCode::from(70);
+    }
+    match std::process::Command::new(program).args(args).status() {
+        Ok(s) => ExitCode::from(s.code().and_then(|c| u8::try_from(c).ok()).unwrap_or(1)),
+        Err(e) => {
+            eprintln!("wrongindexd: cannot start {program}: {e}");
+            ExitCode::from(127)
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
     if matches!(
@@ -216,6 +241,10 @@ fn main() -> ExitCode {
         && let Some(code) = confined_or_reply()
     {
         return code;
+    }
+    #[cfg(unix)]
+    if raw.get(1).map(String::as_str) == Some("--engine-shim") && raw.len() >= 3 {
+        return engine_shim(&raw[2], &raw[3..]);
     }
     if raw.get(1).map(String::as_str) == Some("--native-rebuild-replace") && raw.len() == 4 {
         return native_replace_child(&raw[2], &raw[3]);

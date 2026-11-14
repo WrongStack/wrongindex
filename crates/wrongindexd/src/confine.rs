@@ -466,6 +466,31 @@ pub fn confine_current_process() -> Result<usize, String> {
     Err("process confinement is implemented for Windows and Unix only".into())
 }
 
+/// Stop `child` and, on Unix, the process group it leads (it was started
+/// in one of its own), then reap it. The group is signalled only while the
+/// child is not reaped yet (`id()` turns `None` once it is), so its id
+/// cannot have passed to anyone else. On Windows the job object ends the
+/// tree.
+pub async fn kill_tree(child: &mut tokio::process::Child) {
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        kill_group(pid);
+    }
+    let _ = child.kill().await;
+}
+
+/// `SIGKILL` to the process group `leader` leads. The caller makes sure the
+/// leader is not reaped yet.
+#[cfg(unix)]
+pub fn kill_group(leader: u32) {
+    if let Ok(pid) = libc::pid_t::try_from(leader) {
+        // SAFETY: a signal to a process group; no memory is involved.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
+
 #[cfg(not(windows))]
 pub fn kill_children_with_me() -> Result<(), String> {
     Ok(())
@@ -602,5 +627,50 @@ mod tests {
         assert_eq!(parallel_for_budget(8, 512 << 20, 8 << 30), 8);
         assert_eq!(parallel_for_budget(0, 4 << 30, 8 << 30), 1);
         assert_eq!(parallel_for_budget(8, 4 << 30, 2 << 30), 1);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod unix_tests {
+    use super::*;
+
+    fn alive(pid: u32) -> bool {
+        // A zombie is not alive: `ps` shows it as `Z`.
+        let out = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        let stat = String::from_utf8_lossy(&out.stdout);
+        !stat.trim().is_empty() && !stat.trim().starts_with('Z')
+    }
+
+    /// Killing a child that leads its own group takes its own children too;
+    /// `kill` alone leaves them running.
+    #[tokio::test]
+    async fn kill_tree_takes_the_whole_group() {
+        let mut child = tokio::process::Command::new("sh")
+            .args(["-c", "sleep 600 & echo $!; wait"])
+            .process_group(0)
+            .stdout(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let mut out = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        tokio::io::AsyncBufReadExt::read_line(&mut out, &mut line)
+            .await
+            .unwrap();
+        let grandchild: u32 = line.trim().parse().unwrap();
+        assert!(alive(grandchild));
+        kill_tree(&mut child).await;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while alive(grandchild) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the group's other process survived"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(child.id().is_none(), "reaped");
     }
 }
