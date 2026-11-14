@@ -17,7 +17,7 @@ node scripts/release/manifest.mjs manifest --bin target/release --bundle $out --
 if($LASTEXITCODE){throw 'Signed release manifest generation failed'}
 & scripts/release/check-pe-metadata.ps1 -Directory $shipped -Version $inputs.version
 $manifest=Get-Content $manifestFile -Raw|ConvertFrom-Json
-foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','wrongindex-desktop.exe')){
+foreach($name in @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe')){
   $null=Get-ApprovedSigningIdentity (Join-Path $shipped $name) $inputs.certificateSha256
   if($manifest.binaries.$name.authenticode -cne 'Valid'){throw 'Extracted signature is not valid'}
 }

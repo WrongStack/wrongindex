@@ -107,7 +107,7 @@ function Initialize-SigningCourier {
   if (Test-Path -LiteralPath $Directory) { throw 'Preserve existing signing state' }
   if ($Version -notmatch '^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.+-]+)?$') { throw 'Invalid signing version' }
   $allowed = @{}
-  foreach ($name in @('wrongindex.exe', 'wrongindexd.exe', 'wrongindex-gpui.exe', 'wrongindex-desktop.exe')) {
+  foreach ($name in @('wrongindex.exe', 'wrongindexd.exe', 'wrongindex-gpui.exe')) {
     $file = Join-Path $PayloadDirectory $name
     $product = Read-ProductIdentity $file
     if ($product.ProductName -cne 'WrongIndex' -or $product.ProductVersion -cne $Version -or $product.FileVersion -cne $Version) { throw 'Signed payload product/version mismatch' }

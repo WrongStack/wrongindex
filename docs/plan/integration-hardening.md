@@ -33,7 +33,7 @@ This is the execution plan, not a claim that the milestones have passed.
 
 ## GPUI steering
 
-The user requested GPUI while integration hardening was active. Implement a separate GPUI Rust client using the existing authenticated IPC contracts. This replaces the Tauri-only framework decision (WI-ADR-008) for the new GUI; it does not change daemon lifetime, ownership or storage rules. Keep the existing Tauri app usable while the new client earns its own acceptance. No WebView or token-bearing view model is needed in the GPUI client. Finish already-running lifecycle gates before adding the new member to the workspace/lockfile, and re-run the workspace gates after integration.
+The user requested GPUI while integration hardening was active. Implement a separate GPUI Rust client using the existing authenticated IPC contracts. This replaces the Tauri-only framework decision (WI-ADR-008) for the new GUI; it does not change daemon lifetime, ownership or storage rules. Keep the existing Tauri app usable while the new client earns its own acceptance (superseded 2026-11-14 by WI-ADR-023: the GPUI window replaces it). No WebView or token-bearing view model is needed in the GPUI client. Finish already-running lifecycle gates before adding the new member to the workspace/lockfile, and re-run the workspace gates after integration.
 
 The initial GPUI milestone covers real service/project state and working project actions. Existing packaged Tauri acceptance is not GPUI acceptance. Record any missing screens, packaging and manual accessibility/DPI work explicitly.
 

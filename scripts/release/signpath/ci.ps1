@@ -8,7 +8,7 @@ Set-Location $repo
 $work = Join-Path $repo 'target/signpath-ci'
 $courier = Join-Path $work 'courier'
 $receiptFile = Join-Path $work 'inputs.json'
-$names = @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe','wrongindex-desktop.exe')
+$names = @('wrongindex.exe','wrongindexd.exe','wrongindex-gpui.exe')
 Import-Module (Join-Path $PSScriptRoot 'Signing.psm1') -Force
 function Output-Value([string]$Name, [string]$Value) {
   if ($Value -match "[\r\n]") { throw 'Unsafe workflow output' }
@@ -51,7 +51,7 @@ if ($Mode -eq 'AcceptPayloads') {
   Expand-SigningArchive -ArchiveDirectory $SignedDirectory -Destination $decoded -UnsignedFiles $originals
   $SignedDirectory = $decoded
   $files = @(Get-ChildItem -LiteralPath $SignedDirectory -File)
-  if ($files.Count -ne 4 -or @($files | Where-Object { $_.Name -cnotin $names }).Count) { throw 'Expected exactly the four signed payload files' }
+  if ($files.Count -ne 3 -or @($files | Where-Object { $_.Name -cnotin $names }).Count) { throw 'Expected exactly the three signed payload files' }
   $verified = @{}
   foreach ($name in $names) {
     $original = Join-Path $work "unsigned/$name"
@@ -66,7 +66,9 @@ if ($Mode -eq 'AcceptPayloads') {
   foreach ($name in $names) {
     $signed = Join-Path $SignedDirectory $name
     Copy-Item -LiteralPath $signed -Destination (Join-Path $repo "target/release/$name")
-    if ($name -ne 'wrongindex-desktop.exe') { Copy-Item -LiteralPath $signed -Destination (Join-Path $repo ('crates/wrongindex-desktop/binaries/' + $name.Replace('.exe', "-$triple.exe"))) }
+    # The desktop is the bundle's main binary (target/release); the service
+    # and the CLI are its sidecars, named <name>-<triple>.exe.
+    if ($name -ne 'wrongindex-gpui.exe') { Copy-Item -LiteralPath $signed -Destination (Join-Path $repo ('crates/wrongindex-gpui/binaries/' + $name.Replace('.exe', "-$triple.exe"))) }
     if ((Get-FileHash -LiteralPath (Join-Path $repo "target/release/$name")).Hash.ToLowerInvariant() -cne $verified[$name]) { throw 'Signed payload changed while staged' }
   }
   Initialize-SigningCourier -Directory $courier -PayloadDirectory $SignedDirectory -BuildRoot (Join-Path $repo 'target') -Version $inputs.version -CertificateSha256 $inputs.certificateSha256

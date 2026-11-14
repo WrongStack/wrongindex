@@ -1,16 +1,20 @@
 # Packaged smoke (WI-408): install the built installer silently into a
 # throw-away directory, run the INSTALLED service, CLI and desktop against a
-# throw-away data root, drive the installed desktop's WebView2 over CDP, then
-# stop everything and uninstall.
+# throw-away data root, then stop everything and uninstall.
 #
-#   pwsh scripts/release/smoke-installed.ps1 -PlaywrightCore <dir with playwright-core index.mjs>
+#   pwsh scripts/release/smoke-installed.ps1 [-Installer <setup.exe>]
+#
+# The desktop (wrongindex-gpui.exe) is a native GPUI window with no remote
+# automation surface (the retired Tauri desktop was driven over WebView2's
+# CDP port). This smoke checks what can be checked without a person: its
+# version, its sign-in mode (`--start-service`) and that its window opens and
+# closing it leaves the service running. Rendered screens and actions are the
+# manual gate M06 (scripts/release/certify.mjs).
 #
 # Refuses to run when WrongIndex is already installed for this user (it would
 # replace that installation's uninstall entry).
 param(
-  [Parameter(Mandatory)] [string] $PlaywrightCore,
-  [string] $Installer,
-  [int] $Port = 9333
+  [string] $Installer
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
@@ -33,13 +37,12 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ("wi-smoke-" + [guid]::NewGuid().To
 $dir = Join-Path $work 'app'
 $home_ = Join-Path $work 'home'
 $proj = Join-Path $work 'proj'
-$shots = Join-Path $work 'shots'
-New-Item -ItemType Directory -Force $work, $shots | Out-Null
+New-Item -ItemType Directory -Force $work | Out-Null
 Copy-Item -Recurse (Join-Path $root 'tests\fixtures\projects\treesitter-mix') $proj
 $env:WRONGINDEX_HOME = $home_
 # WrongStack's index locations resolve into the work folder too: a click in
-# the test's window (Add project, by a person or anything reaching its
-# remote-debugging port) can never claim one of this machine's real indexes.
+# the test's window (Add project, by a person) can never claim one of this
+# machine's real indexes.
 $env:WRONGSTACK_HOME = Join-Path $work 'wrongstack-home'
 $result = [ordered]@{ installer = $Installer; work = $work }
 $desktop = $null
@@ -48,8 +51,11 @@ try {
   $result.install = $p.ExitCode
   # The license inventory ships next to the binaries (WI-703).
   $result.licensesInstalled = Test-Path (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
-  $result.nativeGuiInstalled = Test-Path (Join-Path $dir 'wrongindex-gpui.exe')
-  if (-not $result.nativeGuiInstalled) { throw 'Native GPUI client missing from installer' }
+  $gpui = Join-Path $dir 'wrongindex-gpui.exe'
+  $result.desktopInstalled = Test-Path $gpui
+  if (-not $result.desktopInstalled) { throw 'Desktop (wrongindex-gpui.exe) missing from installer' }
+  # The retired Tauri desktop is not shipped any more.
+  $result.tauriDesktopInstalled = Test-Path (Join-Path $dir 'wrongindex-desktop.exe')
   # The install directory goes on the user's PATH (and comes off on uninstall).
   $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   $result.onUserPath = @(($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dir.TrimEnd('\') }).Count -gt 0
@@ -66,24 +72,31 @@ try {
   $result.freshness = $st.freshness
   $result.generation = $st.generation
 
-  $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$Port"
-  $desktop = Start-Process (Join-Path $dir 'wrongindex-desktop.exe') -PassThru
+  # PowerShell does not capture a Windows-subsystem application's output
+  # reliably; Node waits for the child and reads its stdout.
+  $result.desktopVersion = ((node -e 'process.stdout.write(require("node:child_process").execFileSync(process.argv[1], ["--version"], {windowsHide:true}));' $gpui) -split ' ')[-1]
+  # Sign-in mode against the running service: reports it, starts nothing new.
+  $before = (& $cli --json daemon status | ConvertFrom-Json).daemonInstanceId
+  $signIn = Start-Process $gpui -ArgumentList '--start-service' -Wait -PassThru
+  $result.signInExit = $signIn.ExitCode
+  $result.sameServiceAfterSignIn = [bool]$before -and (& $cli --json daemon status | ConvertFrom-Json).daemonInstanceId -eq $before
+  # The window opens, and closing it leaves the service running.
+  $desktop = Start-Process $gpui -PassThru
   $deadline = (Get-Date).AddSeconds(30)
   do {
     Start-Sleep -Milliseconds 500
-    try { $ok = (Invoke-WebRequest "http://127.0.0.1:$Port/json/version" -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch { $ok = $false }
-  } until ($ok -or (Get-Date) -gt $deadline)
-  $gui = node (Join-Path $root 'scripts\release\smoke-gui.mjs') $PlaywrightCore $Port $pid_ $shots
-  $result.guiExit = $LASTEXITCODE
-  $result.gui = $gui | Select-Object -Last 1 | ConvertFrom-Json
-  # What the GUI changed is what the service holds.
-  $settings = & $cli --json settings get | ConvertFrom-Json
-  $result.settingsRevision = $settings.revision
-  $result.pausedAfterGui = $settings.settings.paused
-  $result.parallelJobsAfterGui = $settings.settings.parallelJobs
+    $desktop.Refresh()
+  } until ($desktop.HasExited -or $desktop.MainWindowHandle -ne [IntPtr]::Zero -or (Get-Date) -gt $deadline)
+  $result.windowOpened = -not $desktop.HasExited -and $desktop.MainWindowHandle -ne [IntPtr]::Zero
+  $result.windowTitle = $desktop.MainWindowTitle
+  if ($result.windowOpened) {
+    $null = $desktop.CloseMainWindow()
+    $result.windowClosed = $desktop.WaitForExit(15000)
+  }
+  & $cli daemon status | Out-Null
+  $result.serviceAfterWindowClosed = $LASTEXITCODE -eq 0
 } finally {
   if ($desktop -and -not $desktop.HasExited) { Stop-Process -Id $desktop.Id -Force }
-  Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
   $cli = Join-Path $dir 'wrongindex.exe'
   if (Test-Path $cli) { & $cli daemon stop --wait-seconds 30 | Out-Null }
   Start-Sleep -Seconds 2
@@ -110,9 +123,13 @@ if (-not $result.licensesInstalled) { $failures += 'THIRD-PARTY-LICENSES.txt not
 if (-not $result.onUserPath) { $failures += 'install directory not put on the user PATH' }
 if ($result.leftOnUserPath) { $failures += 'install directory left on the user PATH after uninstall' }
 if ($result.freshness -ne 'current') { $failures += "freshness $($result.freshness)" }
-if ($result.guiExit -ne 0) { $failures += "GUI checks exit $($result.guiExit)" }
-if ($result.pausedAfterGui -ne $false) { $failures += 'GUI pause not undone' }
-if ($result.parallelJobsAfterGui -ne 2) { $failures += 'refused setting was applied' }
+if ($result.tauriDesktopInstalled) { $failures += 'retired wrongindex-desktop.exe installed' }
+if (-not $result.desktopVersion) { $failures += 'desktop --version gave no version' }
+if ($result.signInExit -ne 0) { $failures += "desktop --start-service exit $($result.signInExit)" }
+if (-not $result.sameServiceAfterSignIn) { $failures += 'sign-in start replaced the running service' }
+if (-not $result.windowOpened) { $failures += 'desktop window did not open' }
+if (-not $result.windowClosed) { $failures += 'desktop window did not close' }
+if (-not $result.serviceAfterWindowClosed) { $failures += 'service stopped with the window' }
 if ($result.uninstall -ne 0) { $failures += "uninstall exit $($result.uninstall)" }
 if ($result.filesLeft -ne 0) { $failures += "$($result.filesLeft) files left after uninstall" }
 if ($result.uninstallEntryLeft) { $failures += 'uninstall entry left' }

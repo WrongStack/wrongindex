@@ -1,4 +1,4 @@
-//! Wire contracts shared by the WrongIndex daemon, CLI, desktop bridge, and
+//! Wire contracts shared by the WrongIndex daemon, CLI, desktop window, and
 //! the TypeScript client adapter.
 //!
 //! Framing: every frame is a 32-bit unsigned little-endian byte length followed
