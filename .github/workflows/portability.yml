@@ -1,6 +1,6 @@
 name: portability
 
-# Linux and macOS are not supported platforms yet (plan: L4). This workflow
+# Linux and macOS are not supported platforms yet (plan: M8). This workflow
 # measures where the workspace stands on them: whether it builds, and which
 # tests pass. It is not a release gate and does not claim support; the
 # Windows jobs in ci.yml remain the gate.
@@ -33,8 +33,5 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked --no-fail-fast
       - name: Clippy
-        # Measured, not yet enforced: code paths built only for Windows leave
-        # dead code here until the Unix service exists.
-        continue-on-error: true
         if: ${{ !cancelled() }}
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
