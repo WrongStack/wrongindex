@@ -95,15 +95,37 @@ impl DataRoot {
         }
         let digest = Sha256::digest(format!("{user}\0{key}").as_bytes());
         let short = hex::encode(&digest[..8]);
-        Ok(if cfg!(windows) {
-            format!(r"\\.\pipe\wrongindex-{short}")
-        } else {
-            self.runtime_dir()
-                .join(format!("wrongindex-{short}.sock"))
+        #[cfg(windows)]
+        {
+            Ok(format!(r"\\.\pipe\wrongindex-{short}"))
+        }
+        #[cfg(not(windows))]
+        {
+            Ok(socket_path(Path::new(&key), &short)
                 .to_string_lossy()
-                .into_owned()
-        })
+                .into_owned())
+        }
     }
+}
+
+/// Longest socket path `bind` accepts: `sun_path` less its NUL.
+#[cfg(target_os = "macos")]
+const MAX_SOCKET_PATH: usize = 103;
+#[cfg(all(not(windows), not(target_os = "macos")))]
+const MAX_SOCKET_PATH: usize = 107;
+
+/// Where the socket of the root spelled `root` ([`one_spelling`]) lives: in
+/// its private runtime directory, so it is one per directory like the name;
+/// when that path is too long for `sun_path`, in `/tmp/wrongindex-<euid>`
+/// (created owner-only by the service, refused when someone else owns it).
+#[cfg(not(windows))]
+fn socket_path(root: &Path, short: &str) -> PathBuf {
+    let file = format!("wrongindex-{short}.sock");
+    let beside = root.join("runtime").join(&file);
+    if beside.as_os_str().len() <= MAX_SOCKET_PATH {
+        return beside;
+    }
+    PathBuf::from(format!("/tmp/wrongindex-{}", effective_uid())).join(file)
 }
 
 impl DataRoot {
@@ -140,6 +162,12 @@ impl DataRoot {
 /// written, without `.` components or a trailing separator. A data root that
 /// does not exist yet is named through its parent.
 fn one_spelling(path: &Path) -> PathBuf {
+    // Windows resolves `..` in a path whose components do not exist; Unix
+    // does not, so `root/sub/..` (no `sub`) would name a second endpoint.
+    #[cfg(not(windows))]
+    let collapsed = collapse_parent_dirs(path);
+    #[cfg(not(windows))]
+    let path = collapsed.as_path();
     let mut rest: Vec<std::ffi::OsString> = Vec::new();
     let mut cur = path.to_path_buf();
     loop {
@@ -177,16 +205,50 @@ fn strip_verbatim(path: &Path) -> PathBuf {
     }
 }
 
-/// Stable identity of the current OS user (SID on Windows).
+/// `path` with `.` dropped and each `..` applied: to the real directory
+/// when what precedes it exists (a link's `..` is its target's parent), and
+/// lexically when it does not (a path that does not exist is no link).
+#[cfg(not(windows))]
+fn collapse_parent_dirs(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if let Ok(real) = std::fs::canonicalize(&out) {
+                    out = real;
+                }
+                if !out.pop() {
+                    out.push("..");
+                }
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// Stable identity of the current OS user (SID on Windows, effective uid
+/// elsewhere).
 pub fn user_identity() -> io::Result<String> {
     #[cfg(windows)]
     {
         crate::win::current_user_sid()
     }
+    // Not `$USER`: it may be unset (launchd, systemd user units, CI) and
+    // any process can set it, so two clients of one user could name two
+    // endpoints for one root.
     #[cfg(not(windows))]
     {
-        Ok(std::env::var("USER").unwrap_or_default())
+        Ok(format!("uid:{}", effective_uid()))
     }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn effective_uid() -> u32 {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    unsafe { libc_geteuid() }
 }
 
 fn create_private_dir(dir: &Path) -> io::Result<()> {
@@ -199,9 +261,7 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
         {
             use std::os::unix::fs::{MetadataExt, PermissionsExt};
             let meta = std::fs::metadata(dir)?;
-            // SAFETY: getuid has no preconditions.
-            let uid = unsafe { libc_getuid() };
-            if meta.uid() != uid {
+            if meta.uid() != effective_uid() {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     format!("{} is not owned by the current user", dir.display()),
@@ -235,8 +295,8 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
 
 #[cfg(not(windows))]
 unsafe extern "C" {
-    #[link_name = "getuid"]
-    fn libc_getuid() -> u32;
+    #[link_name = "geteuid"]
+    fn libc_geteuid() -> u32;
 }
 
 fn temp_sibling(path: &Path) -> io::Result<std::path::PathBuf> {
@@ -378,6 +438,35 @@ mod tests {
         let b = DataRoot::resolve(Some(Path::new("C:/x/b"))).unwrap();
         assert_ne!(a.endpoint_name().unwrap(), b.endpoint_name().unwrap());
         assert_eq!(a.endpoint_name().unwrap(), a.endpoint_name().unwrap());
+    }
+
+    /// The user part of the name is the effective uid, not `$USER`, which a
+    /// launchd or systemd service may lack and any process may change.
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_identity_is_the_effective_uid() {
+        assert_eq!(user_identity().unwrap(), format!("uid:{}", effective_uid()));
+    }
+
+    /// A socket path that would not fit `sun_path` moves to a short per-user
+    /// directory; a short one stays in the root's runtime directory.
+    #[cfg(not(windows))]
+    #[test]
+    fn socket_path_fits_sun_path() {
+        let short = "0123456789abcdef";
+        let near = socket_path(Path::new("/home/u/.wrongindex"), short);
+        assert_eq!(
+            near,
+            Path::new("/home/u/.wrongindex/runtime/wrongindex-0123456789abcdef.sock")
+        );
+        let deep = format!("/home/u/{}", "d".repeat(120));
+        let far = socket_path(Path::new(&deep), short);
+        assert_eq!(
+            far,
+            Path::new(&format!("/tmp/wrongindex-{}", effective_uid()))
+                .join("wrongindex-0123456789abcdef.sock")
+        );
+        assert!(far.as_os_str().len() <= MAX_SOCKET_PATH);
     }
 
     /// The 8.3 spelling of `p` (`None` when the call fails).
