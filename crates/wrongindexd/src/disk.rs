@@ -107,7 +107,23 @@ fn os_free_bytes(path: &Path) -> Option<u64> {
     (ok != 0).then_some(available)
 }
 
-#[cfg(not(windows))]
+/// `statvfs`: the blocks available to an unprivileged user (`f_bavail`,
+/// not `f_bfree`, which counts the reserve only root may use).
+#[cfg(unix)]
+#[allow(clippy::unnecessary_cast)] // the field types differ per platform
+fn os_free_bytes(path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let name = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: an all-zero statvfs is a valid value to be overwritten.
+    let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: `name` is NUL-terminated and `s` is writable; both outlive the call.
+    if unsafe { libc::statvfs(name.as_ptr(), &mut s) } != 0 {
+        return None;
+    }
+    Some((s.f_bavail as u64).saturating_mul(s.f_frsize as u64))
+}
+
+#[cfg(not(any(windows, unix)))]
 fn os_free_bytes(_path: &Path) -> Option<u64> {
     None
 }
@@ -129,11 +145,21 @@ pub fn volume_of(path: &Path) -> Option<PathBuf> {
     Some(PathBuf::from(std::ffi::OsString::from_wide(&buf[..n])))
 }
 
+/// Unix: the topmost ancestor of the resolved path on the same device, which
+/// is its mount point (a bind mount of the same device reads as one volume).
 #[cfg(not(windows))]
 pub fn volume_of(path: &Path) -> Option<PathBuf> {
-    path.ancestors()
-        .find(|p| p.exists())
-        .map(|p| p.ancestors().last().unwrap_or(p).to_path_buf())
+    use std::os::unix::fs::MetadataExt;
+    let start = std::fs::canonicalize(path.ancestors().find(|p| p.exists())?).ok()?;
+    let dev = std::fs::metadata(&start).ok()?.dev();
+    let mut mount = start.clone();
+    for a in start.ancestors().skip(1) {
+        match std::fs::metadata(a) {
+            Ok(m) if m.dev() == dev => mount = a.to_path_buf(),
+            _ => break,
+        }
+    }
+    Some(mount)
 }
 
 /// Bytes of `index.db` and its WAL.
@@ -529,13 +555,19 @@ mod tests {
         assert_eq!(needed(JobKind::Full, &dir.path().join("new")), FULL_BYTES);
     }
 
-    #[cfg(windows)]
     #[test]
     fn free_space_and_volume_of_a_real_directory() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("not").join("yet");
         let v = volume_of(&missing).unwrap();
-        assert!(dir.path().starts_with(&v), "{v:?}");
+        // macOS: the temporary folder is reached through `/var` -> `/private/var`.
+        let resolved = std::fs::canonicalize(dir.path()).unwrap();
+        assert!(
+            dir.path().starts_with(&v) || resolved.starts_with(&v),
+            "{v:?}"
+        );
+        #[cfg(unix)]
+        assert_eq!(volume_of(Path::new("/")).unwrap(), Path::new("/"));
         if std::env::var_os("WRONGINDEX_FAULT_FREE_BYTES_FILE").is_none() {
             assert!(free_bytes(&missing).unwrap() > 0);
         }

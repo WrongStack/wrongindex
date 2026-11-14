@@ -6415,6 +6415,7 @@ dependencies = [
  "anyhow",
  "clap",
  "hex",
+ "libc",
  "notify",
  "rusqlite",
  "serde",
