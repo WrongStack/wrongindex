@@ -17,6 +17,8 @@ Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../c
 | fmt, clippy `-D warnings` | PASS |
 | `cargo test --workspace --locked`, then `cargo test -p wrongindexd --locked` five consecutive runs | PASS (workspace once, then 5/5) |
 
+**Also fixed (found by this PR's CI).** `index_corruption::the_scheduled_check_finds_damage_nobody_asked_about` failed once on the hosted runner: the first scheduled check reported the index `missing`. Just after a claim, before the first run is admitted, a project looks idle, so the scheduler could admit a check of an index not yet written. The scheduler now skips a project whose `index.db` does not exist yet (looked up on the blocking pool). After the change: that test 10/10, `cargo test --workspace --locked` PASS, `cargo test -p wrongindexd --locked` 5/5 consecutive PASS. The original failure did not reproduce in 5 local runs before the change; the hosted rerun passed too, so the fix is reasoned from the code path, not from a local reproduction.
+
 ## WI-RELEASE-020 — unsigned 0.2.0 by the owner's decision (2026-11-13)
 
 **Decision.** On 2026-11-13 the owner was asked how to publish 0.2.0. The question stated that signing is not ready, that the unsigned build is blocked on clean Windows with Smart App Control enforced, and that the 24-hour soak did not complete. The owner chose "Tüm çalışma ağacı imzasız": publish the whole shared working tree unsigned, built by the release workflow.
