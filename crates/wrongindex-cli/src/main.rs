@@ -443,6 +443,16 @@ async fn run(cli: Cli) -> Outcome {
         Command::Index(args) => index(&root, args, json).await,
         Command::Job { action } => job(&root, action, json).await,
         Command::Doctor => doctor(&root, json).await,
+        // Releases carry a Windows installer only: off Windows there is
+        // nothing to check, download or run.
+        Command::SelfUpdate { .. } if !cfg!(windows) => Err(fail(
+            exit_code::INVALID_INPUT,
+            "self-update installs the Windows installer; on Linux and macOS replace the unpacked archive with a newer one by hand",
+        )),
+        Command::Setup { .. } if !cfg!(windows) => Err(fail(
+            exit_code::INVALID_INPUT,
+            "setup is support for the Windows installer",
+        )),
         Command::SelfUpdate {
             check,
             version,

@@ -35,3 +35,33 @@ jobs:
       - name: Clippy
         if: ${{ !cancelled() }}
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # The headless archive (service and CLI, no window) as a user gets it,
+  # and a smoke of the unpacked copy (WI-M8-06). A CI artifact for testing,
+  # not a release: neither platform is supported and nothing is signed.
+  archive:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - name: Install pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Build the headless archive
+        run: scripts/release/package-unix.sh
+      - name: Smoke the unpacked archive
+        run: scripts/release/smoke-unix.sh target/release/unix/wrongindex-*.tar.gz target/release/unix/SMOKE.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: wrongindex-unix-preview-${{ matrix.os }}
+          path: target/release/unix/
+          if-no-files-found: error

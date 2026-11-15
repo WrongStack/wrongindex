@@ -1,11 +1,12 @@
 // Release manifest and third-party licenses (WI-703).
 //
-//   node scripts/release/manifest.mjs licenses --out <file>
+//   node scripts/release/manifest.mjs licenses --out <file> [--target <triple> --headless]
 //       THIRD-PARTY-LICENSES.txt for what the shipped binaries contain: every
 //       crate the service, CLI and desktop (wrongindex-gpui) link (normal dependencies for
-//       x86_64-pc-windows-msvc; build scripts, proc macros and dev
+//       x86_64-pc-windows-msvc, or `--target`; build scripts, proc macros and dev
 //       dependencies are not shipped), with the license texts found in each
-//       crate's source, plus the bundled tree-sitter assets.
+//       crate's source, plus the bundled tree-sitter assets. `--headless`:
+//       the service and the CLI only (the Linux/macOS archive).
 //
 //   node scripts/release/manifest.mjs manifest --bin <release dir> --bundle <installer dir> --out <file> [--shipped-out <dir>]
 //       RELEASE-MANIFEST.json: source commit, the supported index profile
@@ -20,6 +21,13 @@
 //       was built and what changed.
 //       Any other difference, or a binary missing from the installer, fails.
 //       `--shipped-out` keeps those shipped copies (the release attests them).
+//
+//   node scripts/release/manifest.mjs archive --bin <release dir> --archive <file.tar.gz> --target <triple> --out <file>
+//       RELEASE-MANIFEST.json for a Linux/macOS headless archive (WI-M8-06):
+//       the same source, profile and toolchain record, the archive's SHA-256,
+//       and each binary as the archive ships it, which must be the build
+//       byte for byte. Also the platform floor the binaries need (Linux: the
+//       newest glibc symbol version they import; macOS: the minimum OS).
 //
 // Reads only (the installer is unpacked into a temporary directory, removed
 // afterwards); runs `cargo metadata --locked`, `git` and 7-Zip.
@@ -166,15 +174,17 @@ function peImports(file) {
 // shipped.
 const VC_REDIST = /^(vcruntime|msvcp|vccorlib|concrt|vcomp|ucrtbased)/;
 
+// The Windows installer ships all three; a Linux/macOS archive is headless.
+const target = opt('--target') ?? 'x86_64-pc-windows-msvc';
+const shippedPackages = rest.includes('--headless') || mode === 'archive' ? SHIPPED.filter((p) => p !== 'wrongindex-gpui') : SHIPPED;
+
 function shippedCrates() {
-  const meta = JSON.parse(
-    sh('cargo', ['metadata', '--format-version', '1', '--locked', '--filter-platform', 'x86_64-pc-windows-msvc']),
-  );
+  const meta = JSON.parse(sh('cargo', ['metadata', '--format-version', '1', '--locked', '--filter-platform', target]));
   const byId = new Map(meta.packages.map((p) => [p.id, p]));
   const nodes = new Map(meta.resolve.nodes.map((n) => [n.id, n]));
   const isProcMacro = (p) => p.targets.some((t) => t.kind.includes('proc-macro'));
   const seen = new Set();
-  const stack = meta.packages.filter((p) => SHIPPED.includes(p.name) && meta.workspace_members.includes(p.id)).map((p) => p.id);
+  const stack = meta.packages.filter((p) => shippedPackages.includes(p.name) && meta.workspace_members.includes(p.id)).map((p) => p.id);
   while (stack.length) {
     const id = stack.pop();
     if (seen.has(id)) continue;
@@ -208,6 +218,78 @@ const treeSitter = () => {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 };
 
+// The Linux/macOS archive's binaries.
+const UNIX_BINARIES = ['wrongindexd', 'wrongindex'];
+const versionOrder = (a, b) => {
+  const pa = a.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const pb = b.split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  return 0;
+};
+// What a Linux or macOS binary needs from the system: the shared libraries
+// it loads, and its floor (Linux: the newest glibc symbol version it
+// imports, below which it does not start; macOS: the minimum OS version).
+function platformNeeds(file) {
+  if (process.platform === 'darwin') {
+    const libs = (tryRun('otool', ['-L', file]) ?? '').split('\n').slice(1).map((l) => l.trim().split(' (')[0]).filter(Boolean);
+    const minos = /minos ([0-9.]+)/.exec(tryRun('otool', ['-l', file]) ?? '')?.[1];
+    return { needs: libs, floor: minos ? `macOS ${minos}` : null };
+  }
+  const needs = [...(tryRun('readelf', ['-d', '-W', file]) ?? '').matchAll(/\(NEEDED\)\s+Shared library: \[([^\]]+)\]/g)].map((m) => m[1]);
+  const glibc = [...new Set([...(tryRun('readelf', ['-V', '-W', file]) ?? '').matchAll(/Name: (GLIBC_[0-9.]+)/g)].map((m) => m[1]))];
+  const newest = glibc.sort(versionOrder).at(-1);
+  return { needs, floor: newest ? newest.replace('GLIBC_', 'glibc ') : null };
+}
+
+// What every release manifest records: the source, the supported profile,
+// the toolchain and build, the SQLite the service runs, the bundled assets
+// and the third-party summary, around the shipped files in `shipped`.
+function record(crates, histogram, buildInfo, shipped) {
+  const profileDir = path.join(repo, 'contracts', 'profiles', 'wrongstack-index-v5-baseline');
+  const profile = JSON.parse(fs.readFileSync(path.join(profileDir, 'manifest.json'), 'utf8'));
+  const ts = treeSitter();
+  return {
+    schema: 'wrongindex.release-manifest/1',
+    source: {
+      repository: 'https://github.com/WrongStack/wrongindex',
+      commit: sh('git', ['rev-parse', 'HEAD']),
+      dirtyWorktree: sh('git', ['status', '--porcelain']).length > 0,
+      version: JSON.parse(sh('cargo', ['metadata', '--format-version', '1', '--locked', '--no-deps'])).packages.find((p) => p.name === 'wrongindexd')?.version,
+    },
+    supportedProfile: {
+      id: profile.id,
+      manifestSha256: sha256(path.join(profileDir, 'manifest.json')),
+      schemaSha256: sha256(path.join(profileDir, 'schema.sql')),
+      wrongstackCommit: profile.provenance?.wrongstackCommit,
+    },
+    // The Tauri CLI packs the Windows installer only.
+    toolchain: { rustc: sh('rustc', ['-V']), cargo: sh('cargo', ['-V']), ...(shipped.installers ? { tauriCli: tryRun('cargo', ['tauri', '--version']) } : {}), node: process.version },
+    build: process.env.GITHUB_ACTIONS
+      ? {
+          system: 'github-actions',
+          repository: process.env.GITHUB_REPOSITORY,
+          workflow: process.env.GITHUB_WORKFLOW,
+          ref: process.env.GITHUB_REF,
+          runId: process.env.GITHUB_RUN_ID,
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+        }
+      : { system: 'local' },
+    cargoLockSha256: sha256(path.join(repo, 'Cargo.lock')),
+    sqlite: buildInfo?.sqlite ?? null,
+    sqliteRequired: profile.sqliteRequirements ?? null,
+    ...shipped,
+    bundledAssets: {
+      treeSitter: {
+        wrongstackCommit: ts.wrongstackCommit,
+        provenanceSha256: sha256(path.join(repo, 'crates', 'wrongindex-engine', 'tree-sitter', 'provenance.json')),
+        licenses: Object.fromEntries(assetLicenses().components.map((c) => [c.component, `${c.version} ${c.license}`])),
+        licensesSha256: sha256(path.join(assetLicensesDir, 'licenses.json')),
+      },
+    },
+    thirdParty: { crates: crates.length, licenses: histogram, file: 'THIRD-PARTY-LICENSES.txt' },
+  };
+}
+
 if (mode === 'licenses') {
   const out = opt('--out');
   if (!out) throw new Error('--out <file>');
@@ -220,7 +302,7 @@ if (mode === 'licenses') {
     '',
     'WrongIndex itself: MIT License, Copyright (c) 2026 ECOSTACK TECHNOLOGY OÜ (see LICENSE).',
     '',
-    `Rust crates linked into wrongindexd, wrongindex and wrongindex-gpui: ${crates.length}.`,
+    `Rust crates linked into ${shippedPackages.includes('wrongindex-gpui') ? 'wrongindexd, wrongindex and wrongindex-gpui' : 'wrongindexd and wrongindex'} (${target}): ${crates.length}.`,
     '',
     `Bundled JavaScript and WebAssembly (the tree-sitter route, from WrongStack ${ts.wrongstackCommit}):`,
     ...assets.components.map((c) => `  ${c.component} ${c.version} (${c.license})`),
@@ -264,8 +346,6 @@ if (mode === 'licenses') {
   const crates = shippedCrates();
   const histogram = {};
   for (const c of crates) histogram[c.license ?? '(none)'] = (histogram[c.license ?? '(none)'] ?? 0) + 1;
-  const profileDir = path.join(repo, 'contracts', 'profiles', 'wrongstack-index-v5-baseline');
-  const profile = JSON.parse(fs.readFileSync(path.join(profileDir, 'manifest.json'), 'utf8'));
   const binaries = {};
   for (const n of BINARIES) {
     const p = path.join(bin, n);
@@ -307,50 +387,10 @@ if (mode === 'licenses') {
       }
     }
   }
-  const ts = treeSitter();
   // The SQLite the shipped service runs (probed by the binary itself): the
   // profile needs FTS5 with the trigram tokenizer.
   const buildInfo = binaries['wrongindexd.exe'] ? JSON.parse(execFileSync(path.join(bin, 'wrongindexd.exe'), ['--build-info'], { encoding: 'utf8' })) : null;
-  const manifest = {
-    schema: 'wrongindex.release-manifest/1',
-    source: {
-      repository: 'https://github.com/WrongStack/wrongindex',
-      commit: sh('git', ['rev-parse', 'HEAD']),
-      dirtyWorktree: sh('git', ['status', '--porcelain']).length > 0,
-      version: JSON.parse(sh('cargo', ['metadata', '--format-version', '1', '--locked', '--no-deps'])).packages.find((p) => p.name === 'wrongindexd')?.version,
-    },
-    supportedProfile: {
-      id: profile.id,
-      manifestSha256: sha256(path.join(profileDir, 'manifest.json')),
-      schemaSha256: sha256(path.join(profileDir, 'schema.sql')),
-      wrongstackCommit: profile.provenance?.wrongstackCommit,
-    },
-    toolchain: { rustc: sh('rustc', ['-V']), cargo: sh('cargo', ['-V']), tauriCli: tryRun('cargo', ['tauri', '--version']), node: process.version },
-    build: process.env.GITHUB_ACTIONS
-      ? {
-          system: 'github-actions',
-          repository: process.env.GITHUB_REPOSITORY,
-          workflow: process.env.GITHUB_WORKFLOW,
-          ref: process.env.GITHUB_REF,
-          runId: process.env.GITHUB_RUN_ID,
-          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-        }
-      : { system: 'local' },
-    cargoLockSha256: sha256(path.join(repo, 'Cargo.lock')),
-    sqlite: buildInfo?.sqlite ?? null,
-    sqliteRequired: profile.sqliteRequirements ?? null,
-    binaries,
-    installers,
-    bundledAssets: {
-      treeSitter: {
-        wrongstackCommit: ts.wrongstackCommit,
-        provenanceSha256: sha256(path.join(repo, 'crates', 'wrongindex-engine', 'tree-sitter', 'provenance.json')),
-        licenses: Object.fromEntries(assetLicenses().components.map((c) => [c.component, `${c.version} ${c.license}`])),
-        licensesSha256: sha256(path.join(assetLicensesDir, 'licenses.json')),
-      },
-    },
-    thirdParty: { crates: crates.length, licenses: histogram, file: 'THIRD-PARTY-LICENSES.txt' },
-  };
+  const manifest = record(crates, histogram, buildInfo, { binaries, installers });
   fs.writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(out);
   const absent = BINARIES.filter((n) => !binaries[n]);
@@ -367,7 +407,58 @@ if (mode === 'licenses') {
     console.error(`needs the Visual C++ runtime, which a clean Windows does not have: ${needsRedist.join(', ')}`);
     process.exit(1);
   }
+} else if (mode === 'archive') {
+  const bin = opt('--bin');
+  const archive = opt('--archive');
+  const out = opt('--out');
+  if (!bin || !archive || !out || !opt('--target')) throw new Error('--bin <release dir> --archive <file.tar.gz> --target <triple> --out <file>');
+  const crates = shippedCrates();
+  const histogram = {};
+  for (const c of crates) histogram[c.license ?? '(none)'] = (histogram[c.license ?? '(none)'] ?? 0) + 1;
+  const binaries = {};
+  const problems = [];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrongindex-manifest-'));
+  try {
+    execFileSync('tar', ['-xzf', archive, '-C', dir], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const top = fs.readdirSync(dir);
+    if (top.length !== 1) problems.push(`the archive holds ${top.length} top-level entries, expected one directory`);
+    for (const n of UNIX_BINARIES) {
+      const built = path.join(bin, n);
+      const file = top.length === 1 ? path.join(dir, top[0], n) : null;
+      if (!fs.existsSync(built)) {
+        problems.push(`${n} (not built)`);
+        continue;
+      }
+      if (!file || !fs.existsSync(file)) {
+        problems.push(`${n} (not in the archive)`);
+        continue;
+      }
+      const st = fs.statSync(file);
+      binaries[n] = { sha256: sha256(file), bytes: st.size, mode: (st.mode & 0o777).toString(8), ...platformNeeds(file) };
+      if (binaries[n].sha256 !== sha256(built)) problems.push(`${n} (the archived copy differs from the build)`);
+      if (!(st.mode & 0o100)) problems.push(`${n} (not executable in the archive)`);
+      if (!binaries[n].floor) problems.push(`${n} (its platform floor could not be read)`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  const buildInfo = binaries.wrongindexd ? JSON.parse(execFileSync(path.join(bin, 'wrongindexd'), ['--build-info'], { encoding: 'utf8' })) : null;
+  const floors = Object.values(binaries).map((b) => b.floor).filter(Boolean);
+  const manifest = record(crates, histogram, buildInfo, {
+    target,
+    platformFloor: floors.sort(versionOrder).at(-1) ?? null,
+    binaries,
+    archive: { name: path.basename(archive), sha256: sha256(archive), bytes: fs.statSync(archive).size },
+    signing: process.platform === 'darwin' ? 'not signed or notarized: Gatekeeper refuses a downloaded copy until its quarantine flag is removed' : 'not signed',
+  });
+  fs.writeFileSync(out, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(out);
+  if (buildInfo && !buildInfo.sqlite?.fts5Trigram) problems.push('SQLite FTS5 trigram tokenizer');
+  if (problems.length) {
+    console.error(`archive not as built: ${problems.join(', ')}`);
+    process.exit(1);
+  }
 } else {
-  console.error('usage: manifest.mjs licenses --out <file> | manifest --bin <dir> --bundle <dir> --out <file>');
+  console.error('usage: manifest.mjs licenses --out <file> [--target <triple> --headless] | manifest --bin <dir> --bundle <dir> --out <file> | archive --bin <dir> --archive <file> --target <triple> --out <file>');
   process.exit(2);
 }
