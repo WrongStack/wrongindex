@@ -65,3 +65,68 @@ jobs:
           name: wrongindex-unix-preview-${{ matrix.os }}
           path: target/release/unix/
           if-no-files-found: error
+
+  # WrongStack on Linux and macOS (WI-M8-11): its MCP server, built from
+  # current main, indexes and reads through the service over the Unix socket
+  # (scripts/release/wrongstack-live.mjs); and the compatibility worker and
+  # the native/WrongStack differential against a clean oracle of the
+  # recorded baseline. WrongStack is installed without package scripts.
+  wrongstack:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: WrongStack/WrongStack
+          ref: main
+          path: target/ws-main
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: WrongStack/WrongStack
+          ref: 222d23a90ae9c67c2433d7734c6966be7ee4e696
+          path: target/ws-baseline
+          persist-credentials: false
+      - name: Install pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Build the service and the CLI
+        run: cargo build --locked -p wrongindexd -p wrongindex-cli
+      - name: Build WrongStack main
+        working-directory: target/ws-main
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun scripts/build.mjs
+      - name: Live proof through WrongStack
+        run: |
+          set -o pipefail
+          bun scripts/release/wrongstack-live.mjs target/debug/wrongindexd target/debug/wrongindex target/ws-main | tee target/wrongstack-live.json
+      - name: Prepare the baseline oracle
+        run: |
+          (cd target/ws-baseline && bun install --frozen-lockfile --ignore-scripts)
+          bun scripts/oracle/prepare-clean-wrongstack.ts --wrongstack target/ws-baseline --out "$PWD/target/oracle-baseline"
+      - name: Compatibility worker
+        if: ${{ !cancelled() }}
+        env:
+          WRONGINDEX_TEST_ENGINE: ${{ github.workspace }}/target/oracle-baseline
+        run: cargo test --locked -p wrongindexd --test engine --test backend_switch --test watch -- --ignored
+      - name: Native/WrongStack differential (serial)
+        if: ${{ !cancelled() }}
+        env:
+          WRONGINDEX_TEST_ENGINE: ${{ github.workspace }}/target/oracle-baseline
+        run: cargo test --locked -p wrongindex-engine --test differential -- --ignored --test-threads=1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: wrongstack-live-${{ matrix.os }}
+          path: target/wrongstack-live.json
+          if-no-files-found: warn
