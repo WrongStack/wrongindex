@@ -4,6 +4,24 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-10 — Linux: start at sign-in through a systemd user unit (2026-11-15)
+
+The XDG autostart entry (WI-M8-04) needs a graphical session. `wrongindex daemon autostart on|off|status --systemd` writes `$XDG_CONFIG_HOME/systemd/user/wrongindex.service` and enables it for `default.target`. The unit runs `wrongindexd --data-root <resolved root>` in the foreground (`Type=simple`), with the PATH of the shell that enabled it. `KillMode=mixed` lets the service end its workers itself. `Restart=on-failure` and `SuccessExitStatus=3` mean neither `daemon stop` nor finding the service already running is restarted. The design is in WI-ADR-024. Nothing is loaded or started by the command; lingering is the user's choice. `--systemd` off Linux refuses with exit 2.
+
+| Check | Result |
+|---|---|
+| Unit tests (`unit_arg` quoting, the unit's contents, paths under `XDG_CONFIG_HOME`, write/link/remove touching nothing else) | PASS on Linux (7 autostart tests); Windows runs the platform-independent ones |
+| Against the real systemd 259 user manager (WSL; temporary data root; the unit removed afterwards and `~/.config/systemd` gone again) | `systemd-analyze --user verify`: clean. `is-enabled`: enabled |
+| Start through `systemctl --user start` | active; the unit's MainPID is the service's pid |
+| `kill -9` of the service | restarted (`NRestarts=1`), active |
+| `systemctl --user stop` | `signal_shutdown`, then `stopped` in the service log; inactive, result success |
+| `wrongindex daemon stop` | inactive, success, not restarted |
+| Service already started by the CLI, then `systemctl --user start` | exit 3, result success, no restart |
+| `off`, then `daemon-reload` | `is-enabled`: not-found; no process left |
+| Linux fmt / clippy / workspace tests | PASS: 321 passed, 0 failed, 36 ignored |
+| Windows fmt / clippy / workspace tests | PASS (56 test binaries) |
+| A real sign-in (or boot with lingering) starting it | NOT RUN |
+
 ## WI-M8-09 — Linux: WrongStack through the Unix socket, and a peer of another uid refused (2026-11-15)
 
 Two WI-M8-01 NOT RUN items, run on Linux (WSL).

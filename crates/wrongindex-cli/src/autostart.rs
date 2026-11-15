@@ -3,12 +3,13 @@
 //! entry does on Windows.
 //!
 //! - Linux: an XDG autostart entry, `$XDG_CONFIG_HOME/autostart/wrongindex.desktop`
-//!   (graphical sessions; a headless machine uses a systemd user unit instead).
+//!   (graphical sessions), or with `--systemd` a systemd user unit (below),
+//!   also for a machine without one.
 //! - macOS: a LaunchAgent, `~/Library/LaunchAgents/dev.wrongstack.wrongindex.plist`,
 //!   loaded at the next sign-in.
 //!
-//! Both run `wrongindex daemon start` from this copy of the CLI, which starts
-//! the service detached and returns. Nothing else is written, and nothing is
+//! The entry and the LaunchAgent run `wrongindex daemon start` from this
+//! copy of the CLI, which starts the service detached and returns. Nothing else is written, and nothing is
 //! loaded or started now: `daemon start` does that.
 
 use std::io;
@@ -198,6 +199,162 @@ pub fn set(path: &Path, command: &[String], enabled: bool) -> io::Result<Value> 
     Ok(status(path, command))
 }
 
+/// Linux without a graphical session: a systemd user unit,
+/// `$XDG_CONFIG_HOME/systemd/user/wrongindex.service`, enabled for
+/// `default.target` (the link `systemctl --user enable` would make). The
+/// user manager runs the service itself in the foreground, so the unit
+/// names `wrongindexd`, not the CLI: `daemon start` detaches and returns,
+/// and systemd would then stop what it left in the unit.
+pub const UNIT: &str = "wrongindex.service";
+
+/// The service's exit code when another one already serves the data root
+/// (`wrongindexd`'s `EXIT_ALREADY_RUNNING`): not a failure for the unit.
+const EXIT_ALREADY_RUNNING: u8 = 3;
+
+/// The unit file and its `default.target.wants` link.
+pub fn unit_paths(home: &Path, xdg_config: Option<&Path>) -> (PathBuf, PathBuf) {
+    let config = xdg_config
+        .filter(|p| p.is_absolute())
+        .map_or_else(|| home.join(".config"), Path::to_path_buf);
+    let dir = config.join("systemd").join("user");
+    (dir.join(UNIT), dir.join("default.target.wants").join(UNIT))
+}
+
+/// The unit paths for this user (`$HOME`, `$XDG_CONFIG_HOME`).
+pub fn user_unit_paths() -> io::Result<(PathBuf, PathBuf)> {
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+    let xdg = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
+    Ok(unit_paths(&home, xdg.as_deref()))
+}
+
+/// One word of a unit's `ExecStart=`, as systemd reads it back: `%`
+/// (specifiers) and `$` (variables) doubled; in double quotes, with `\` and
+/// `"` escaped, when it holds whitespace, a quote or a backslash.
+pub fn unit_arg(arg: &str) -> String {
+    let arg = arg.replace('%', "%%").replace('$', "$$");
+    if !arg.is_empty()
+        && !arg
+            .chars()
+            .any(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '\\'))
+    {
+        return arg;
+    }
+    let mut out = String::from("\"");
+    for c in arg.chars() {
+        if matches!(c, '"' | '\\') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('"');
+    out
+}
+
+/// The command the unit runs: the service next to this CLI, with the data
+/// root always named (the user manager does not see this shell's
+/// `WRONGINDEX_HOME`).
+pub fn unit_command(daemon: &Path, data_root: &Path) -> Vec<String> {
+    vec![
+        daemon.display().to_string(),
+        "--data-root".into(),
+        data_root.display().to_string(),
+    ]
+}
+
+/// The unit. `path`: this shell's `PATH`, which the service needs to find
+/// the toolchains (bun, Python, Go) it parses some languages with; the
+/// user manager's own is shorter. `KillMode=mixed`: a stop signals the
+/// service only, which ends its workers in order; whatever is left is
+/// killed after it. A clean stop (`daemon stop`) is not restarted.
+pub fn unit_file(command: &[String], path: Option<&str>) -> String {
+    let exec: Vec<String> = command.iter().map(|a| unit_arg(a)).collect();
+    let env = path
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let quoted = p
+                .replace('%', "%%")
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"");
+            format!("Environment=\"PATH={quoted}\"\n")
+        })
+        .unwrap_or_default();
+    format!(
+        "[Unit]\nDescription=WrongIndex codebase indexing service\nDocumentation=https://github.com/WrongStack/wrongindex\n\n[Service]\nType=simple\nExecStart={}\n{env}Restart=on-failure\nSuccessExitStatus={EXIT_ALREADY_RUNNING}\nKillMode=mixed\nTimeoutStopSec=60\n\n[Install]\nWantedBy=default.target\n",
+        exec.join(" ")
+    )
+}
+
+/// Whether the unit is there and enabled (its link names it), and whether
+/// it is the one this copy would write.
+pub fn unit_status(unit: &Path, wants: &Path, contents: &str, command: &[String]) -> Value {
+    let current = std::fs::read_to_string(unit).ok();
+    let linked = std::fs::read_link(wants).is_ok_and(|t| t == unit);
+    json!({
+        "kind": "systemd",
+        "enabled": current.is_some() && linked,
+        "unitPresent": current.is_some(),
+        "matchesThisInstall": current.as_deref() == Some(contents),
+        "path": unit.display().to_string(),
+        "wants": wants.display().to_string(),
+        "command": command,
+    })
+}
+
+/// Write the unit (atomically) and link it, or remove both. Nothing is
+/// loaded or started: the user manager reads it at the next sign-in, or
+/// after `systemctl --user daemon-reload`.
+#[cfg(unix)]
+pub fn set_unit(
+    unit: &Path,
+    wants: &Path,
+    contents: &str,
+    command: &[String],
+    enabled: bool,
+) -> io::Result<Value> {
+    let remove = |p: &Path| match std::fs::remove_file(p) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    };
+    if enabled {
+        let dir = unit
+            .parent()
+            .ok_or_else(|| io::Error::other("the unit has no directory"))?;
+        std::fs::create_dir_all(dir)?;
+        let tmp = dir.join(format!(".{UNIT}.tmp-{}", std::process::id()));
+        std::fs::write(&tmp, contents)?;
+        if let Err(e) = std::fs::rename(&tmp, unit) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+        if let Some(d) = wants.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        remove(wants)?;
+        std::os::unix::fs::symlink(unit, wants)?;
+    } else {
+        remove(wants)?;
+        remove(unit)?;
+    }
+    Ok(unit_status(unit, wants, contents, command))
+}
+
+#[cfg(not(unix))]
+pub fn set_unit(
+    _unit: &Path,
+    _wants: &Path,
+    _contents: &str,
+    _command: &[String],
+    _enabled: bool,
+) -> io::Result<Value> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "systemd user units are a Linux option",
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,5 +437,102 @@ mod tests {
         assert!(!path.exists());
         // Off when already off is fine.
         assert_eq!(set(&path, &cmd, false).unwrap()["enabled"], false);
+    }
+
+    #[test]
+    fn unit_arguments_are_quoted_as_systemd_reads_them() {
+        assert_eq!(unit_arg("/opt/wi/wrongindexd"), "/opt/wi/wrongindexd");
+        assert_eq!(unit_arg("/srv/wi root"), "\"/srv/wi root\"");
+        assert_eq!(unit_arg("50%"), "50%%");
+        assert_eq!(unit_arg("a$b"), "a$$b");
+        assert_eq!(unit_arg(r#"say "hi""#), r#""say \"hi\"""#);
+        assert_eq!(unit_arg(r"a\b"), r#""a\\b""#);
+        assert_eq!(unit_arg(""), "\"\"");
+    }
+
+    #[test]
+    fn the_unit_runs_the_service_in_the_foreground_with_the_root_and_path() {
+        let cmd = unit_command(Path::new("/opt/wi/wrongindexd"), Path::new("/srv/wi root"));
+        let unit = unit_file(&cmd, Some("/home/u/.bun/bin:/usr/bin"));
+        assert!(
+            unit.contains("\nExecStart=/opt/wi/wrongindexd --data-root \"/srv/wi root\"\n"),
+            "{unit}"
+        );
+        assert!(unit.contains("\nType=simple\n"), "{unit}");
+        assert!(unit.contains("\nKillMode=mixed\n"), "{unit}");
+        assert!(unit.contains("\nRestart=on-failure\n"), "{unit}");
+        assert!(unit.contains("\nSuccessExitStatus=3\n"), "{unit}");
+        assert!(unit.contains("\nWantedBy=default.target\n"), "{unit}");
+        assert!(
+            unit.contains("\nEnvironment=\"PATH=/home/u/.bun/bin:/usr/bin\"\n"),
+            "{unit}"
+        );
+        assert!(!unit_file(&cmd, None).contains("Environment="));
+        assert!(!unit_file(&cmd, Some("")).contains("Environment="));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unit_paths_follow_xdg_config_home() {
+        let home = Path::new("/home/u");
+        let (unit, wants) = unit_paths(home, None);
+        assert_eq!(unit, home.join(".config/systemd/user/wrongindex.service"));
+        assert_eq!(
+            wants,
+            home.join(".config/systemd/user/default.target.wants/wrongindex.service")
+        );
+        let (unit, _) = unit_paths(home, Some(Path::new("/x/cfg")));
+        assert_eq!(unit, Path::new("/x/cfg/systemd/user/wrongindex.service"));
+        assert_eq!(
+            unit_paths(home, Some(Path::new("rel"))).0,
+            home.join(".config/systemd/user/wrongindex.service")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_unit_is_written_linked_and_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (unit, wants) = unit_paths(tmp.path(), None);
+        let cmd = unit_command(Path::new("/opt/wi/wrongindexd"), Path::new("/srv/wi"));
+        let contents = unit_file(&cmd, Some("/usr/bin"));
+        assert_eq!(
+            unit_status(&unit, &wants, &contents, &cmd)["enabled"],
+            false
+        );
+        let on = set_unit(&unit, &wants, &contents, &cmd, true).unwrap();
+        assert_eq!(on["enabled"], true);
+        assert_eq!(on["matchesThisInstall"], true);
+        assert_eq!(std::fs::read_link(&wants).unwrap(), unit);
+        assert_eq!(std::fs::read_to_string(&unit).unwrap(), contents);
+        // On again replaces the link and the unit; nothing else is written.
+        set_unit(&unit, &wants, &contents, &cmd, true).unwrap();
+        let names: Vec<_> = std::fs::read_dir(unit.parent().unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert_eq!(names, ["default.target.wants", "wrongindex.service"]);
+        // Another PATH or another copy is not this install's unit.
+        let other = unit_file(&cmd, Some("/other"));
+        assert_eq!(
+            unit_status(&unit, &wants, &other, &cmd)["matchesThisInstall"],
+            false
+        );
+        // A unit without its link is present but not enabled.
+        std::fs::remove_file(&wants).unwrap();
+        let v = unit_status(&unit, &wants, &contents, &cmd);
+        assert_eq!(
+            (v["enabled"].clone(), v["unitPresent"].clone()),
+            (json!(false), json!(true))
+        );
+        let off = set_unit(&unit, &wants, &contents, &cmd, false).unwrap();
+        assert_eq!(off["enabled"], false);
+        assert!(!unit.exists() && std::fs::symlink_metadata(&wants).is_err());
+        assert_eq!(
+            set_unit(&unit, &wants, &contents, &cmd, false).unwrap()["unitPresent"],
+            false
+        );
     }
 }
