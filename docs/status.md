@@ -22,6 +22,8 @@ What its first runs found and fixed:
 
 Run `43714638214` on `unix/ci-wrongstack`. This closes the macOS NOT RUN items of WI-M8-08 and WI-M8-09 (compatibility worker, differential and the WrongStack live proof).
 
+Seen once, not caused here: on this PR's Windows CI (run `43715774834`, first attempt) `native_parity::py_basic_matches_the_wrongstack_oracle` FAILED. Native wrote 4 symbols for `pkg/core.py` where the oracle has 7, and no `file_rank` rows, as when the native Python route falls back to the regex extractor. The rerun of that job PASSED. This change touches no Python-route code. A suspect, not proven: the 5 s `python --version` probe (`parse/py.rs`) timing out on a loaded runner. Not investigated further.
+
 ## WI-M8-10 — Linux: start at sign-in through a systemd user unit (2026-11-15)
 
 The XDG autostart entry (WI-M8-04) needs a graphical session. `wrongindex daemon autostart on|off|status --systemd` writes `$XDG_CONFIG_HOME/systemd/user/wrongindex.service` and enables it for `default.target`. The unit runs `wrongindexd --data-root <resolved root>` in the foreground (`Type=simple`), with the PATH of the shell that enabled it. `KillMode=mixed` lets the service end its workers itself. `Restart=on-failure` and `SuccessExitStatus=3` mean neither `daemon stop` nor finding the service already running is restarted. The design is in WI-ADR-024. Nothing is loaded or started by the command; lingering is the user's choice. `--systemd` off Linux refuses with exit 2.
