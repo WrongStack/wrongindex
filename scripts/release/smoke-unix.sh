@@ -40,7 +40,7 @@ finish() {
   {
     printf '{\n  "status": "%s",\n  "archive": "%s",\n  "platform": "%s",\n' "$status" "$(basename "$archive")" "$(uname -sm)"
     printf '  "boundary": "temporary unpack/core/refusals/autostart-entry/stop proof; sign-in start, the compatibility worker and a clean machine NOT RUN"'
-    for r in "${results[@]}"; do printf ',\n  %s' "$r"; done
+    for r in ${results[@]+"${results[@]}"}; do printf ',\n  %s' "$r"; done
     printf '\n}\n'
   } > "$report"
   cat "$report"
@@ -73,6 +73,9 @@ note sqlite PASS
 
 step=start
 "$cli" daemon start --wait-seconds 20 >/dev/null
+# The leak check below looks for processes by this path; it must see the
+# running service, or it would pass without looking at anything.
+[ -n "$(pgrep -f "$work/app/" || true)" ] || { echo "no running process found under $work/app/; the leak check cannot work" >&2; exit 1; }
 note start PASS
 
 step=index
