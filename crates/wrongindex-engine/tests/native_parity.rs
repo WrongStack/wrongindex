@@ -245,11 +245,13 @@ fn assert_matches_oracle(fixture: &str) -> (usize, usize, usize) {
     assert!(
         d.is_empty(),
         "{fixture}: native index differs from the oracle:
-{}",
+{}
+degraded routes in this run: {:?}",
         d.join(
             "
 "
-        )
+        ),
+        report.degraded
     );
 
     let files: Vec<String> = {
