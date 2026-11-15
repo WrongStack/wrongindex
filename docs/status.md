@@ -4,6 +4,22 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-06 — Linux/macOS: a headless archive and its installed smoke (2026-11-15)
+
+The first Linux/macOS artifact a user could run: `scripts/release/package-unix.sh` builds `wrongindex-<version>-<triple>.tar.gz` with the service and the CLI (no window), `LICENSE`, `README.txt` and `THIRD-PARTY-LICENSES.txt`, plus `SHA256SUMS.txt` and `RELEASE-MANIFEST.json`. The manifest records the archive's hash, each binary's hash (it must equal the build), the shared libraries each loads and its platform floor. Binaries carry no build paths (remapped and checked, as on Windows). The archive is written by `scripts/release/tar.mjs` (sorted entries, owner 0, the commit time) twice and compared. The license inventory takes the target and leaves out the window (`manifest.mjs licenses --target <triple> --headless`); it lists every crate `cargo tree -e normal,no-proc-macro` shows for the two binaries on Linux and macOS (none missing) plus 19 that only workspace feature unification enables, as the Windows inventory already does. Off Windows, `self-update` and `setup` refuse with exit 2 before any request (a release carries the Windows installer only).
+
+A CI artifact of the `portability` workflow, not a release asset: neither platform is supported, and nothing is signed. Open for the owner (WI-ADR-024): the Linux glibc floor and macOS signing/notarization.
+
+| Check | Result |
+|---|---|
+| `scripts/release/smoke-unix.sh` (unpack into a temporary HOME with both data roots inside; start, add, index until current, search, refusals, autostart entry on/off, stop, nothing left running) | PASS on WSL Ubuntu (glibc 2.43); PASS on CI `ubuntu-latest` (x86_64) and `macos-latest` (arm64) |
+| Platform floor in the manifest | Linux x86_64: glibc 2.39 (libc, libm, libgcc_s); macOS arm64: 11.0 (libSystem, libiconv, CoreFoundation, CoreServices) |
+| Reproducible build (WSL: two clones at different paths, two fresh target directories) | PASS: `wrongindexd` and `wrongindex` byte-identical, archive SHA-256 identical (`c8a99b3b…`). Across machines: NOT RUN |
+| `unix_refusals.rs` (self-update makes no request, setup refuses) | PASS on Linux |
+| Linux fmt / clippy / workspace tests | PASS: 316 passed, 0 failed, 36 ignored |
+| Windows fmt / clippy / workspace tests | PASS (56 test binaries) |
+| The archive on a clean machine, sign-in start from it, the compatibility worker from it | NOT RUN |
+
 ## WI-M8-05 — Linux/macOS: the memory cap (2026-11-15)
 
 The last process-confinement gap on Unix: the `nativeMemoryMb` and `workerMemoryMb` caps were recorded and enforced nowhere, so a runaway run could take the machine's memory. A Unix `confine::Job` now watches the process group a native run or the compatibility worker leads (both run in one of their own): every 250 ms it sums the group's resident memory (Linux `/proc/<pid>/stat`, macOS `ps -A -o pid=,pgid=,rss=`), keeps the peak, and over the cap notes the hit and kills the group, only while the leader is still listed in it. The worker's cap may change while it runs (`set_cap`, read at each look). A native run stopped this way fails with "reached its memory cap of N MiB" instead of the generic crash message; the compatibility worker reports a cap hit as on Windows.
