@@ -91,7 +91,12 @@ try {
 
   // The service, not WrongStack, owns and wrote the index.
   const projects = cli('project', 'list').projects;
-  const p = projects.find((x) => path.resolve(x.checkoutRoot).toLowerCase() === proj.toLowerCase());
+  // The service keeps the real path (macOS: /var/folders is /private/var/folders).
+  const realProj = fs.realpathSync(proj).toLowerCase();
+  const p = projects.find((x) => {
+    const root = path.resolve(x.checkoutRoot);
+    return root.toLowerCase() === proj.toLowerCase() || root.toLowerCase() === realProj;
+  });
   check('registeredByWrongStack', Boolean(p), JSON.stringify(projects));
   const status = cli('project', 'status', p.projectId);
   out.ownership = status.ownership;

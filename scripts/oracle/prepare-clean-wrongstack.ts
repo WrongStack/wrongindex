@@ -48,11 +48,14 @@ function run(cmd: string[], cwd: string): string {
 const sha256 = (data: Uint8Array | string) => createHash('sha256').update(data).digest('hex');
 
 const repo = resolve(import.meta.dir, '..', '..');
-const checkout = arg('--wrongstack');
-if (!checkout) {
+const checkoutArg = arg('--wrongstack');
+if (!checkoutArg) {
   console.error('usage: bun scripts/oracle/prepare-clean-wrongstack.ts --wrongstack <checkout> [--commit <sha>] [--out <dir>]');
   process.exit(2);
 }
+// Absolute: the node_modules links below point into the checkout, and on
+// Unix a relative link target is read from the link's own directory.
+const checkout = resolve(checkoutArg);
 const baseline = JSON.parse(readFileSync(join(repo, 'contracts/baseline/wrongstack-baseline.json'), 'utf8')) as {
   commit: string;
 };

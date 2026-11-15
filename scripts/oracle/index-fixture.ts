@@ -45,6 +45,24 @@ async function index(args: Record<string, unknown>) {
   if (owner?.isOwnedByWrongIndex?.(indexDir)) throw new Error('Oracle fixture is owned by a service');
   const { IndexStore, indexStorePool } = await import(join(base, 'writer.ts'));
   const { runIndexerWithStore } = await import(join(base, 'indexer.ts'));
+  // WrongStack loads its tree-sitter grammars on first use, several at once
+  // across a batch, and web-tree-sitter (0.27) can then hand back a language
+  // of version 0 ("Incompatible language version 0"). WrongStack swallows
+  // that and indexes the file with its regex extractor, so a many-language
+  // fixture came out differently from run to run (seen on Linux and macOS).
+  // Loading each grammar once, one at a time, keeps the reference on its
+  // tree-sitter route; what WrongStack writes for a loaded grammar is the same.
+  const treeSitterPath = join(base, 'tree-sitter-parser.ts');
+  if (existsSync(treeSitterPath)) {
+    const treeSitter = await import(treeSitterPath);
+    for (const lang of ['c', 'cpp', 'java', 'csharp', 'php', 'ruby', 'swift', 'kotlin', 'shell', 'elixir']) {
+      try {
+        await treeSitter.loadTreeSitterLanguage?.(lang);
+      } catch {
+        // A language without a grammar keeps WrongStack's own fallback.
+      }
+    }
+  }
   indexStorePool.evict(projectRoot, indexDir);
   const store = new IndexStore(projectRoot, { indexDir });
   try {
