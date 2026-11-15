@@ -32,7 +32,7 @@ jobs:
           path: target/wrongstack-source
           persist-credentials: false
       - name: Refuse unreviewed WrongStack contract drift
-        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-cbcf590a5307.json --out target/wrongstack-drift.json
+        run: bun run baseline:check --wrongstack target/wrongstack-source --baseline contracts/baseline/wrongstack-0b49140d91a2.json --out target/wrongstack-drift.json
       - name: Install pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - name: Test

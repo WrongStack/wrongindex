@@ -98,6 +98,12 @@ Open on Unix at that point: no memory cap is enforced (Windows: job object); the
 - NOT RUN on Unix at that point: the other 28 daemon integration files (opened in WI-M8-02), the owner-lock holder test (Windows holder only), `--ipc-bridge` end to end (implemented, never run on Unix), refusal of a peer running as another uid (implemented, not exercised), anything on macOS beyond the CI job.
 - Recorded difference, macOS only (first portability run, `a51fb0a`): search `score` values differ from the oracle by one or two ulps (`2.672547483196222` recorded, `2.6725474831962215` on macOS). They are SQLite's `bm25()`, whose `log()` is the platform libm; Linux matches exactly. `query_oracle.rs` accepts at most 8 ulps on the `score` field off Windows only; order and every other field stay exact, and Windows stays exact. Fixtures unchanged.
 - Known limits recorded in WI-ADR-024: `/tmp` fallback squatting and cleaning, `flock` on network file systems, and case-insensitive macOS volumes (two case spellings of one data root give two services).
+## WI-CONTRACT-0B49 — WrongStack `0b49140` contract snapshot (2026-11-15)
+
+WrongStack `main` moved to `0b49140d91a2e5eb3fe80d41ac01efa2dbc58835` (through `339b620` "release: 1.7.2"), and the drift gate FAILED on one path: `packages/codebase-index-mcp/package.json`, whose `version` went from 1.7.1 to 1.7.2. Nothing else in the contract scope changed; the other commits (intake recovery, LSP and overflow tests) are outside it.
+
+Recorded as `contracts/baseline/wrongstack-0b49140d91a2.json` with the committed exporter from a clean detached clone: 282 files, 0 dirty. `bun run baseline:check`: PASS; `bun run test:baseline`: PASS. `ci.yml` and `release.yml` gate on it. Oracle fixtures unchanged.
+
 ## WI-CONTRACT-CBCF — WrongStack `cbcf590` contract snapshot (2026-11-15)
 
 WrongStack `main` moved to `cbcf590a5307f21591525ad1e122478d77890e12` ("fix: harden prototype-safe lookups, cyclic data handling and long timeouts across runtime packages"), and the drift gate FAILED on three paths. Reviewed, all three are cycle protection that leaves acyclic input unchanged:
