@@ -4,6 +4,12 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-CONTRACT-4D92 — WrongStack `4d92ef9` contract snapshot (2026-11-15)
+
+WrongStack `main` moved to `4d92ef9e0467e10625a47da869a1acbc4540b356` ("release: 1.7.3"), and the drift gate FAILED on one path: `packages/codebase-index-mcp/package.json`, whose `version` went from 1.7.2 to 1.7.3. Nothing else in the contract scope changed.
+
+Recorded as `contracts/baseline/wrongstack-4d92ef9e0467.json` with the committed exporter from a clean detached clone: 282 files, 0 dirty. `bun run baseline:check`: PASS; `bun run test:baseline`: PASS. `ci.yml` and `release.yml` gate on it. Oracle fixtures unchanged.
+
 ## WI-M8-11 — CI: WrongStack on Linux and macOS; a WrongStack grammar-loading race (2026-11-15)
 
 The `portability` workflow gains a `wrongstack` job (Ubuntu, macOS). It builds WrongStack `main` without package scripts (`bun install --frozen-lockfile --ignore-scripts`, `bun scripts/build.mjs`) and runs `scripts/release/wrongstack-live.mjs` (WI-M8-09) through the Unix socket. It then prepares a clean oracle of the baseline `222d23a90ae9` and runs the compatibility worker (`engine`, `backend_switch`, `watch`) and the native/WrongStack differential, serially. Like the rest of `portability`, it measures and is not a release gate.
