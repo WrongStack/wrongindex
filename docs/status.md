@@ -4,6 +4,29 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-09 — Linux: WrongStack through the Unix socket, and a peer of another uid refused (2026-11-15)
+
+Two WI-M8-01 NOT RUN items, run on Linux (WSL).
+
+**WrongStack end to end.** WrongStack's adapter does not start `--ipc-bridge` off Windows: it connects to the socket named in `endpoint.json` itself (the bridge exists to check the server's SID on Windows). So the Unix integration path is that direct connection. `scripts/release/wrongstack-live.mjs` now runs on Linux/macOS under `bun`; its lock check takes the `flock` through `python3` there (Windows keeps its sharing check). It was run against WrongStack `2026a19c4` (1.7.2), built in WSL from a clean clone (`bun install --frozen-lockfile --ignore-scripts`, `bun scripts/build.mjs`), and debug `wrongindexd`/`wrongindex` from this branch.
+
+| Check | Result |
+|---|---|
+| WrongStack's MCP server (22 tools) indexes through the service; the project is registered by WrongStack, owned by the service, written by native (`full:succeeded`, generation 1); the owner lock is held | PASS |
+| Search, stats and per-call publication metadata through WrongStack | PASS |
+| Service stopped: the same WrongStack surface indexes and finds a new symbol on its own engine (stale lock file present, not counted) | PASS |
+| The `python3` lock probe itself | free: 0, held by `flock`: 1, after: 0 |
+| `--ipc-bridge` on Unix | Still NOT RUN; WrongStack does not use it there |
+| The same on macOS | NOT RUN |
+
+**Peer of another uid.** A service of uid 1000 (socket directory 0700, socket 0600); root (uid 0), which can pass the directory permissions, connected:
+
+| Check | Result |
+|---|---|
+| Raw connection as root, nothing sent | Closed by the service after 3 ms; the service logs `accept_failed` "refused a client running as uid 0 (service uid 1000)". The same probe as uid 1000 stays open (waiting for hello) |
+| The CLI as root, `--data-root` of that service | Refused by the client: "... is served by uid 1000, not by this user (uid 0)" (the service logged the refusal of that connection too) |
+| The service afterwards | Still serving (`daemon status`), stopped cleanly, no process left |
+
 ## WI-M8-08 — Linux: the compatibility worker and the engine differential, run (2026-11-15)
 
 Closes the WI-M8-03 NOT RUN "the compatibility worker itself under the shim": WSL has a Linux bun (1.4.2 at `~/.bun/bin/bun`; it was missed before). Two clean oracles were prepared on Linux with `scripts/oracle/prepare-clean-wrongstack.ts` from WrongStack checkouts installed with `bun install --frozen-lockfile --ignore-scripts`: the baseline `222d23a90ae9` and `9ec93ad7f306`, whose archive SHA-256 (`965eb3c8…`) equals the one recorded on Windows in WI-ORACLE-01. With a target directory outside the checkout, the service finds no worker script next to its binary; `WRONGINDEX_ENGINE_WORKER=<checkout>/packages/legacy-worker/worker.ts` names it.
