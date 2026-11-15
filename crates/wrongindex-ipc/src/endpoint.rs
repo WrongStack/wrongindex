@@ -93,6 +93,14 @@ impl DataRoot {
         if cfg!(windows) {
             key = key.replace('/', "\\").to_lowercase();
         }
+        // A case-insensitive macOS volume: the existing part is already the
+        // volume's spelling, but a root not created yet is spelled as
+        // written, so two spellings would name two services until it
+        // exists. Folded, as on Windows.
+        #[cfg(target_os = "macos")]
+        if case_insensitive_volume(Path::new(&key)) {
+            key = key.to_lowercase();
+        }
         let digest = Sha256::digest(format!("{user}\0{key}").as_bytes());
         let short = hex::encode(&digest[..8]);
         #[cfg(windows)]
@@ -297,6 +305,26 @@ fn create_private_dir(dir: &Path) -> io::Result<()> {
 unsafe extern "C" {
     #[link_name = "geteuid"]
     fn libc_geteuid() -> u32;
+}
+
+/// macOS: whether the volume holding `path`'s deepest existing ancestor
+/// ignores letter case (`pathconf(_PC_CASE_SENSITIVE)` is 0; the APFS and
+/// HFS+ default). Unknown counts as case-sensitive.
+#[cfg(target_os = "macos")]
+fn case_insensitive_volume(path: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    unsafe extern "C" {
+        fn pathconf(path: *const std::ffi::c_char, name: i32) -> std::ffi::c_long;
+    }
+    const PC_CASE_SENSITIVE: i32 = 11;
+    let Some(existing) = path.ancestors().find(|p| p.exists()) else {
+        return false;
+    };
+    let Ok(c) = std::ffi::CString::new(existing.as_os_str().as_bytes()) else {
+        return false;
+    };
+    // SAFETY: a valid NUL-terminated path.
+    unsafe { pathconf(c.as_ptr(), PC_CASE_SENSITIVE) == 0 }
 }
 
 fn temp_sibling(path: &Path) -> io::Result<std::path::PathBuf> {
@@ -599,5 +627,48 @@ mod tests {
         assert!(token_eq("abc", "abc"));
         assert!(!token_eq("abc", "abd"));
         assert!(!token_eq("abc", "abcd"));
+    }
+
+    /// On a case-insensitive volume (the macOS default) two spellings of one
+    /// existing data root that differ only in letter case name one endpoint.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn letter_case_of_an_existing_root_names_one_endpoint() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join("CaseRoot")).unwrap();
+        if !tmp.path().join("caseroot").exists() {
+            // The CI runner's volume is the default, case-insensitive one:
+            // there the check must not be skipped.
+            assert!(
+                std::env::var_os("GITHUB_ACTIONS").is_none(),
+                "expected a case-insensitive volume on the runner"
+            );
+            eprintln!("case-sensitive volume: nothing to check");
+            return;
+        }
+        let names: Vec<String> = ["CaseRoot", "caseroot", "CASEROOT"]
+            .iter()
+            .map(|n| {
+                DataRoot::resolve(Some(&tmp.path().join(n)))
+                    .unwrap()
+                    .endpoint_name()
+                    .unwrap()
+            })
+            .collect();
+        eprintln!("{names:?}");
+        assert!(names.iter().all(|n| n == &names[0]), "{names:?}");
+        // A root not created yet, spelled two ways, is one service too; and
+        // it stays the same one once created.
+        let name = |n: &str| {
+            DataRoot::resolve(Some(&tmp.path().join(n)))
+                .unwrap()
+                .endpoint_name()
+                .unwrap()
+        };
+        let before = name("NewRoot/Svc");
+        assert_eq!(before, name("newroot/svc"));
+        std::fs::create_dir_all(tmp.path().join("newROOT/SVC")).unwrap();
+        assert_eq!(before, name("NewRoot/Svc"));
+        assert_eq!(before, name("newroot/svc"));
     }
 }

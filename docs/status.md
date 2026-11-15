@@ -4,6 +4,18 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-12 — macOS: one service per data root on a case-insensitive volume (2026-11-15)
+
+WI-ADR-024 recorded as a limit that two spellings of one data root differing only in letter case would be two services on a case-insensitive macOS volume. A probe on the macOS runner showed that half of this was not so: `std::fs::canonicalize` (`realpath`) already returns the volume's spelling for a root that exists, and `CaseRoot`, `caseroot` and `CASEROOT` named one endpoint. The other half was so: a root not created yet keeps its spelling as written (`one_spelling` resolves only its existing ancestor). Before the first start, `NewRoot/Svc` and `newroot/svc` therefore gave two keys, and two services could start together and create the same directory. On macOS the key is now folded when the volume of the deepest existing ancestor ignores case (`pathconf(_PC_CASE_SENSITIVE)` is 0), as Windows folds it. That volume is the default; a case-sensitive one keeps the spelling.
+
+| Check | Result |
+|---|---|
+| `endpoint::tests::letter_case_of_an_existing_root_names_one_endpoint` on the macOS runner: three spellings of an existing root; a root not created yet, spelled two ways, before and after it is created | PASS. The test refuses to skip on the runner, so the volume was case-insensitive |
+| The same test without the fold | NOT RUN on macOS. It follows from `one_spelling`: the part that does not exist is appended as written, so the two spellings hash differently |
+| Linux / Windows | Unchanged (the fold is macOS-only); `wrongindex-ipc` tests PASS on Linux (15), clippy clean on both |
+
+Also in this change: `native_parity` names the run's degraded routes when an index differs from the oracle. Two Windows CI runs today failed `py_basic` (native 4 symbols in `pkg/core.py`, oracle 7) and `treesitter_mix` (native 2 in `src/util.c`, oracle 3), both passing on rerun. The message did not say whether the Python or tree-sitter route had fallen back to the regex extractor; the next failure will.
+
 ## WI-CONTRACT-4D92 — WrongStack `4d92ef9` contract snapshot (2026-11-15)
 
 WrongStack `main` moved to `4d92ef9e0467e10625a47da869a1acbc4540b356` ("release: 1.7.3"), and the drift gate FAILED on one path: `packages/codebase-index-mcp/package.json`, whose `version` went from 1.7.2 to 1.7.3. Nothing else in the contract scope changed.
