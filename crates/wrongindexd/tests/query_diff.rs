@@ -37,6 +37,12 @@ fn repo() -> PathBuf {
 }
 
 fn work_root() -> PathBuf {
+    // Off Windows the copy cannot be placed where its recorded paths point
+    // (and `C:\wrongindex-oracle` would be a relative directory name).
+    assert!(
+        cfg!(windows),
+        "UNSUPPORTED off Windows: the recorded oracle indexes store absolute C:\\wrongindex-oracle paths"
+    );
     std::env::var_os("WRONGINDEX_ORACLE_WORK_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(r"C:\wrongindex-oracle"))
