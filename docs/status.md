@@ -4,6 +4,19 @@ Last updated: 2026-11-15. **0.3.0 is published (WI-RELEASE-030).** Historical re
 
 Baseline: WrongStack `222d23a90ae9c67c2433d7734c6966be7ee4e696` ([manifest](../contracts/baseline/wrongstack-baseline.json)). The plan was written against `ad9f79d`; the two intervening commits touch no contract file (`git diff --stat ad9f79d 222d23a` over the contract scope is empty) and the regenerated DDL fingerprint is unchanged (`d98114d3…`). Oracle fixtures are built under the fixed path `C:/wrongindex-oracle/<fixture>` so committed databases embed no user paths. Profile: `wrongstack-index-v5-baseline` ([manifest](../contracts/profiles/wrongstack-index-v5-baseline/manifest.json)).
 
+## WI-M8-07 — Unix: a released ownership lock is free at once (2026-11-15)
+
+`owner_lock::tests::guard_is_exclusive_and_released_on_drop` failed on macOS CI in 3 recent runs (on `main` after #15 too): right after the guard was dropped, `is_held` still saw the index as owned. Cause: a `flock` belongs to the open file description, and a child forked by another thread holds a copy of every descriptor until it execs, so closing only the guard's copy left the lock held until then. In the service that is an index that looks owned (and refuses a new acquire) for a moment after release, while other threads start processes. The guard now unlocks (`LOCK_UN`) in `Drop`, and the `is_held` probe unlocks before it closes; unlocking releases the lock for every copy.
+
+| Check | Result |
+|---|---|
+| Diagnostic loop on CI (branch `diag/owner-lock-macos`: the storage tests 30 times, 3000 acquire/release/probe rounds each; macOS and Ubuntu, parallel and serial) | Before: macOS parallel 30 of 30 runs late (1-5 per run, cleared after 35-87 ms; `lsof` showed no holder); macOS serial and Ubuntu 0 of 30. After: 0 of 30 everywhere |
+| New `a_released_lock_is_free_while_other_threads_fork` (children forked without pause, 2 ms before exec) on Linux | Without the unlock: FAIL 3 of 3 (575-883 late of 1000 checks). With it: PASS 5 of 5 |
+| Linux fmt / clippy / workspace tests | PASS: 317 passed, 0 failed, 36 ignored |
+| Linux daemon tests, five consecutive runs | PASS 5/5 (109 tests each) |
+| Windows fmt / clippy / workspace tests; daemon tests five consecutive runs | PASS; PASS 5/5 (`unlock` does nothing on Windows: the handle is not shared with children) |
+| CI (ubuntu, macos, windows, archive, contract) | PASS |
+
 ## WI-M8-06 — Linux/macOS: a headless archive and its installed smoke (2026-11-15)
 
 The first Linux/macOS artifact a user could run: `scripts/release/package-unix.sh` builds `wrongindex-<version>-<triple>.tar.gz` with the service and the CLI (no window), `LICENSE`, `README.txt` and `THIRD-PARTY-LICENSES.txt`, plus `SHA256SUMS.txt` and `RELEASE-MANIFEST.json`. The manifest records the archive's hash, each binary's hash (it must equal the build), the shared libraries each loads and its platform floor. Binaries carry no build paths (remapped and checked, as on Windows). The archive is written by `scripts/release/tar.mjs` (sorted entries, owner 0, the commit time) twice and compared. The license inventory takes the target and leaves out the window (`manifest.mjs licenses --target <triple> --headless`); it lists every crate `cargo tree -e normal,no-proc-macro` shows for the two binaries on Linux and macOS (none missing) plus 20 that only workspace feature unification enables (`value-bag`/`sval` and their helpers among them), as the Windows inventory already does. Off Windows, `self-update` and `setup` refuse with exit 2 before any request (a release carries the Windows installer only).
