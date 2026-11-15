@@ -2,7 +2,10 @@
 // codebase-index MCP server, built from a WrongStack checkout with the
 // WrongIndex adapter - indexes and answers through a running wrongindexd.
 //
-//   node scripts/release/wrongstack-live.mjs <wrongindexd.exe> <wrongindex.exe> <WrongStack checkout>
+//   node scripts/release/wrongstack-live.mjs <wrongindexd> <wrongindex> <WrongStack checkout>
+//
+// On Linux/macOS (no Node needed) `bun` runs it the same way; the lock
+// check there needs python3.
 //
 // Everything runs on throw-away directories (data root, project copy, index).
 // Prints one JSON object; exits non-zero when a check fails.
@@ -99,11 +102,23 @@ try {
   const jobs = cli('job', 'list', '--project', p.projectId).jobs;
   out.jobs = jobs.map((j) => `${j.kind}:${j.state}`);
   check('jobRanInService', jobs.some((j) => j.state === 'succeeded' && j.kind !== 'check'), out.jobs.join(','));
+  const lockFile = path.join(idx, '.wrongindex-owner.lock');
   let held = false;
-  try {
-    fs.closeSync(fs.openSync(path.join(idx, '.wrongindex-owner.lock'), 'r'));
-  } catch (e) {
-    held = ['EBUSY', 'EPERM', 'EACCES'].includes(e.code);
+  if (process.platform === 'win32') {
+    // Windows: the service holds the file open without sharing.
+    try {
+      fs.closeSync(fs.openSync(lockFile, 'r'));
+    } catch (e) {
+      held = ['EBUSY', 'EPERM', 'EACCES'].includes(e.code);
+    }
+  } else {
+    // Unix: an flock, which Node cannot take; Python can (a free lock is
+    // taken and let go at once).
+    try {
+      execFileSync('python3', ['-c', 'import fcntl,sys; fcntl.flock(open(sys.argv[1]), fcntl.LOCK_EX | fcntl.LOCK_NB)', lockFile], { stdio: 'ignore' });
+    } catch (e) {
+      held = e.status === 1;
+    }
   }
   check('lockHeld', held);
 
