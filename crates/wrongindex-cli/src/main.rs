@@ -178,11 +178,16 @@ enum DaemonAction {
         #[arg(long, default_value_t = 20)]
         wait_seconds: u64,
     },
-    /// Start the service at sign-in (Linux: XDG autostart entry; macOS:
-    /// LaunchAgent). On Windows the desktop window's Settings do this.
+    /// Start the service at sign-in (Linux: XDG autostart entry, or a
+    /// systemd user unit with --systemd; macOS: LaunchAgent). On Windows the
+    /// desktop window's Settings do this.
     Autostart {
         #[arg(value_enum, default_value_t = AutostartState::Status)]
         state: AutostartState,
+        /// Linux: a systemd user unit (also without a graphical session)
+        /// instead of the XDG autostart entry.
+        #[arg(long)]
+        systemd: bool,
     },
 }
 
@@ -436,7 +441,10 @@ async fn run(cli: Cli) -> Outcome {
     let json = cli.json;
     match cli.command {
         Command::Daemon {
-            action: DaemonAction::Autostart { state },
+            action: DaemonAction::Autostart { state, systemd },
+        } if systemd => daemon_autostart_systemd(&root, state, json),
+        Command::Daemon {
+            action: DaemonAction::Autostart { state, .. },
         } => daemon_autostart(cli.data_root.as_ref().map(|_| root.path()), state, json),
         Command::Daemon { action } => daemon(&root, action, json).await,
         Command::Project { action } => project(&root, action, json).await,
@@ -732,6 +740,59 @@ fn daemon_autostart(
     Ok(exit_code::SUCCESS)
 }
 
+/// `daemon autostart --systemd` (Linux): a user unit that runs the service
+/// next to this CLI for the resolved data root, with this shell's PATH.
+fn daemon_autostart_systemd(root: &DataRoot, state: AutostartState, json: bool) -> Outcome {
+    if !cfg!(target_os = "linux") {
+        return Err(fail(
+            exit_code::INVALID_INPUT,
+            "autostart --systemd: systemd user units are a Linux option",
+        ));
+    }
+    let daemon = wrongindex_ipc::launch::sibling_daemon_exe()
+        .map_err(|e| fail(exit_code::INTERNAL, format!("this program: {e}")))?;
+    let (unit, wants) = autostart::user_unit_paths()
+        .map_err(|e| fail(exit_code::INTERNAL, format!("autostart: {e}")))?;
+    let cmd = autostart::unit_command(&daemon, root.path());
+    let path_env = std::env::var("PATH").ok();
+    let contents = autostart::unit_file(&cmd, path_env.as_deref());
+    let v = match state {
+        AutostartState::Status => autostart::unit_status(&unit, &wants, &contents, &cmd),
+        AutostartState::On | AutostartState::Off => autostart::set_unit(
+            &unit,
+            &wants,
+            &contents,
+            &cmd,
+            matches!(state, AutostartState::On),
+        )
+        .map_err(|e| {
+            fail(
+                exit_code::INTERNAL,
+                format!("autostart: {}: {e}", unit.display()),
+            )
+        })?,
+    };
+    if json {
+        print_json(&v);
+    } else if v["enabled"] == true {
+        let note = if v["matchesThisInstall"] == true {
+            ""
+        } else {
+            " (it differs from what this copy would write, with these options and this PATH; `daemon autostart on --systemd` rewrites it)"
+        };
+        println!(
+            "autostart on: {} (starts at the next sign-in, or now with `systemctl --user daemon-reload && systemctl --user start {}`){note}",
+            unit.display(),
+            autostart::UNIT
+        );
+    } else if v["unitPresent"] == true {
+        println!("autostart off: {} is there but not enabled", unit.display());
+    } else {
+        println!("autostart off ({} absent)", unit.display());
+    }
+    Ok(exit_code::SUCCESS)
+}
+
 async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
     match action {
         DaemonAction::Status => {
@@ -812,7 +873,13 @@ async fn daemon(root: &DataRoot, action: DaemonAction, json: bool) -> Outcome {
             }
         }
         // `run` answers this one (it needs to know whether a root was named).
-        DaemonAction::Autostart { state } => daemon_autostart(None, state, json),
+        DaemonAction::Autostart { state, systemd } => {
+            if systemd {
+                daemon_autostart_systemd(root, state, json)
+            } else {
+                daemon_autostart(None, state, json)
+            }
+        }
         DaemonAction::Stop { wait_seconds } => {
             let mut c = match Client::connect(root, CLIENT_NAME).await {
                 Ok(c) => c,
